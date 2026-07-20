@@ -1,49 +1,54 @@
 <script setup>
-definePageMeta({ middleware: ['auth', 'onboarded'] })
+import { activeModuleCount, hasActiveModules } from '~/utils/module-view'
 
-const { loadSession, user } = useCurrentSession()
-const { logout, signingOut, signOutError } = useAuthActions()
+definePageMeta({ layout: 'app', middleware: ['auth', 'onboarded'] })
+useSeoMeta({ title: 'Overview · Northstar', description: 'Your current academic foundation in Northstar.' })
+
+const { user, loadSession } = useCurrentSession()
 const { state: onboarding, load: loadOnboarding } = useOnboarding()
+const { state: modules, load: loadModules } = useModules()
 
-await loadSession()
-await loadOnboarding()
+await Promise.all([loadSession(), loadOnboarding(), loadModules()])
 
 const summary = computed(() => ({
   university: onboarding.value?.academicProfile?.university?.name,
   programme: onboarding.value?.academicProfile?.programme?.name,
-  term: onboarding.value?.semester?.academicTerm?.name,
+  term: modules.value?.semester?.label,
   targetGpa: onboarding.value?.semester?.targetSemesterGpa
 }))
+const hasModules = computed(() => hasActiveModules(modules.value))
+const moduleCount = computed(() => activeModuleCount(modules.value))
 </script>
 
 <template>
-  <main class="app-home">
-    <header class="app-home__header">
-      <div>
-        <p class="app-home__eyebrow">Northstar</p>
-        <h1>Hello, {{ onboarding?.profile?.displayName || user?.name || user?.email }}</h1>
-        <p>Your academic foundation is in place.</p>
-      </div>
-      <div class="app-home__actions">
-        <UButton to="/app/settings" color="neutral" variant="outline">Settings</UButton>
-        <UButton color="neutral" variant="ghost" :loading="signingOut" :disabled="signingOut" @click="logout">Log out</UButton>
-      </div>
+  <main class="app-page overview-page">
+    <header class="app-page__header">
+      <div><p class="app-page__eyebrow">Overview</p><h1>Hello, {{ onboarding?.profile?.displayName || user?.name || user?.email }}</h1><span>Your academic foundation, grounded in the records you have added.</span></div>
+      <UButton to="/app/modules" icon="i-lucide-library-big" size="lg">Manage modules</UButton>
     </header>
 
-    <section class="app-summary" aria-labelledby="academic-summary-title">
-      <h2 id="academic-summary-title">Academic profile</h2>
+    <section class="overview-summary" aria-labelledby="academic-summary-title">
+      <div class="overview-summary__heading"><p>Active semester</p><h2 id="academic-summary-title">Academic profile</h2></div>
       <dl>
         <div><dt>University</dt><dd>{{ summary.university }}</dd></div>
         <div><dt>Programme</dt><dd>{{ summary.programme }}</dd></div>
         <div><dt>Current semester</dt><dd>{{ summary.term }}</dd></div>
-        <div><dt>Target GPA</dt><dd>{{ summary.targetGpa }}</dd></div>
+        <div><dt>Target GPA</dt><dd>{{ summary.targetGpa ?? 'Not set' }}</dd></div>
+        <div><dt>Active modules</dt><dd>{{ moduleCount }}</dd></div>
       </dl>
     </section>
 
-    <p class="app-home__notice">Modules will be added in the next phase.</p>
+    <section v-if="!hasModules" class="overview-next-step">
+      <span aria-hidden="true"><UIcon name="i-lucide-compass" /></span>
+      <div><p>Recommended next step</p><h2>Add your first module</h2><p>Module setup gives Northstar the academic structure needed for the timetable and assessment phases that follow.</p></div>
+      <UButton to="/app/modules" trailing-icon="i-lucide-arrow-right">Set up modules</UButton>
+    </section>
 
-    <p v-if="signOutError" role="alert" class="mt-4 text-sm text-error">
-      {{ signOutError }}
-    </p>
+    <section v-else class="overview-modules" aria-labelledby="overview-modules-title">
+      <div class="overview-modules__heading"><div><p>Current load</p><h2 id="overview-modules-title">Your modules</h2></div><NuxtLink to="/app/modules">View all <UIcon name="i-lucide-arrow-right" /></NuxtLink></div>
+      <NuxtLink v-for="module in modules.modules" :key="module.enrolmentId" :to="`/app/modules/${module.enrolmentId}`" class="overview-module-row">
+        <span :class="`module-colour--${module.colour.toLowerCase()}`" aria-hidden="true" /><strong>{{ module.code }}</strong><p>{{ module.title }}</p><small>{{ module.targetGrade ? `Target ${module.targetGrade}` : 'No target grade' }}</small><UIcon name="i-lucide-chevron-right" />
+      </NuxtLink>
+    </section>
   </main>
 </template>

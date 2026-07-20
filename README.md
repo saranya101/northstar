@@ -2,7 +2,7 @@
 
 Northstar is a behavioural academic operating system for university students. It is intended to bring academic planning, progress, and evidence into one coherent application while helping students understand and improve how they study.
 
-This repository currently contains the application foundation, Neon/Prisma infrastructure, Phase 2 email/password authentication, and Phase 3 authenticated academic onboarding. It does not yet contain modules, assessments, behavioural activity, AI, or vector search.
+This repository currently contains the application foundation, Neon/Prisma infrastructure, email/password authentication, authenticated academic onboarding, and the Phase 4A module catalogue and semester-enrolment foundation. It does not yet contain timetables, assessments, behavioural activity, AI, or vector search.
 
 ## Locked stack
 
@@ -130,6 +130,46 @@ New authenticated users are sent to `/onboarding` before `/app`. Each profile, a
 All user ownership comes from the Better Auth session on the server. API bodies never accept a `userId`. University, school, and programme relationships are checked server-side, and the current semester is switched in a transaction so application logic leaves only one active semester per user.
 
 The onboarding API is server-only and exposed through authenticated routes under `/api/onboarding`. Completed users can update the same foundation at `/app/settings`; these edits reuse the onboarding forms and validation but do not reset completion.
+
+## Module catalogue and enrolments
+
+Phase 4A separates reusable academic records from each student's private semester state:
+
+- `Module` is the university-scoped, permanent catalogue identity for a module.
+- `ModuleOffering` represents that module in one academic term and section. Blank sections are normalised to the stable `DEFAULT` label.
+- `UserModuleEnrolment` belongs to the authenticated student and active `UserSemester`. It contains private target grade, colour, notes, and enrolment status.
+- `Instructor` is a university-scoped teaching-person record. `InstructorAssignment` connects that instructor to an offering in a specific role.
+
+Dropping or archiving changes only `UserModuleEnrolment`; it never deletes the shared module, offering, instructor, or assignment records. Server services derive ownership from the Better Auth session and never accept a client-supplied user ID.
+
+Source status is explicit. `USER_ENTERED` data was supplied by a Northstar user and is never presented as official. `UNVERIFIED`, `OFFICIAL_HISTORICAL`, and `OFFICIAL_CURRENT` leave room for reviewed enrichment. Official NTU catalogue and instructor enrichment will be introduced later from approved public sources; Phase 4A neither scrapes nor guesses that information.
+
+Module colours are semantic identifiers stored as `MINERAL`, `OCEAN`, `FOREST`, `AMBER`, `TERRACOTTA`, `INDIGO`, `SLATE`, or `ROSE`. Interfaces always display a text label alongside colour selection.
+
+Authenticated, onboarded module routes:
+
+```text
+GET    /api/modules                    List the student's active-semester enrolments
+GET    /api/modules/search?q=          Search the student's university catalogue
+POST   /api/modules                    Create/reuse a manual module and enrol
+POST   /api/modules/enrol              Enrol in an existing catalogue module
+GET    /api/modules/:id                Read an owned enrolment dossier
+PATCH  /api/modules/:id                Update private enrolment settings
+DELETE /api/modules/:id?mode=drop      Soft-drop or archive an enrolment
+POST   /api/modules/:id/instructors    Add/reuse teaching staff for an owned offering
+```
+
+After changing the module schema, use the normal committed-migration workflow:
+
+```bash
+npm run db:validate
+npm run db:migrate -- --name <migration-name>
+npm run db:generate
+npm run db:seed
+npm run test:run
+```
+
+Production applies reviewed migrations with `npm run db:deploy`; never use `prisma db push`. Timetable and recurring class sessions are the next planned phase.
 
 ## Planned architecture
 
