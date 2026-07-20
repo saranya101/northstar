@@ -2,31 +2,63 @@
 import { normaliseAuthError } from '~/utils/auth-error'
 import { signInEmail } from '~/utils/auth-client'
 import { safeLocalRedirect } from '~/utils/auth-redirect'
-import { firstValidationError, loginSchema } from '~/utils/auth-validation'
+import { loginSchema, validationErrors } from '~/utils/auth-validation'
 
-definePageMeta({ middleware: 'guest' })
+definePageMeta({ layout: 'auth', middleware: 'guest' })
 
 const route = useRoute()
+const heading = ref(null)
 const form = reactive({
   email: '',
   password: ''
 })
-const errorMessage = ref('')
+const fieldErrors = reactive({
+  email: '',
+  password: ''
+})
+const touched = reactive({
+  email: false,
+  password: false
+})
+const serverError = ref('')
 const submitting = ref(false)
 const { loadSession } = useCurrentSession()
 
-async function submit() {
-  if (submitting.value) {
-    return
-  }
+function validateField(field) {
+  const errors = validationErrors(loginSchema.safeParse(form))
+  fieldErrors[field] = errors[field] ?? ''
+}
 
-  errorMessage.value = ''
+function touchField(field) {
+  touched[field] = true
+  validateField(field)
+}
+
+function validateIfTouched(field) {
+  if (touched[field]) {
+    validateField(field)
+  }
+}
+
+function validateForm() {
   const validation = loginSchema.safeParse(form)
+  const errors = validationErrors(validation)
 
-  if (!validation.success) {
-    errorMessage.value = firstValidationError(validation)
-    return
-  }
+  fieldErrors.email = errors.email ?? ''
+  fieldErrors.password = errors.password ?? ''
+  touched.email = true
+  touched.password = true
+
+  return validation
+}
+
+async function submit() {
+  if (submitting.value) return
+
+  serverError.value = ''
+  const validation = validateForm()
+
+  if (!validation.success) return
 
   submitting.value = true
 
@@ -34,62 +66,65 @@ async function submit() {
     const { error } = await signInEmail(validation.data)
 
     if (error) {
-      errorMessage.value = normaliseAuthError(error)
+      serverError.value = normaliseAuthError(error)
       return
     }
 
     await loadSession(true)
     await navigateTo(safeLocalRedirect(route.query.redirect))
   } catch (error) {
-    errorMessage.value = normaliseAuthError(error)
+    serverError.value = normaliseAuthError(error)
   } finally {
     submitting.value = false
   }
 }
+
+onMounted(() => heading.value?.focus({ preventScroll: true }))
 </script>
 
 <template>
-  <main class="mx-auto flex min-h-screen max-w-md items-center px-6 py-16">
-    <section class="w-full">
-      <h1 class="text-3xl font-semibold tracking-tight">
-        Log in to Northstar
+  <div class="auth-form-content">
+    <header class="auth-form-header">
+      <p class="auth-form-eyebrow">Welcome back</p>
+      <h1 id="auth-page-title" ref="heading" tabindex="-1" class="auth-form-title focus:outline-none">
+        Continue your semester
       </h1>
-
-      <form class="mt-8 space-y-5" @submit.prevent="submit">
-        <UFormField label="Email" name="email" required>
-          <UInput
-            v-model="form.email"
-            autocomplete="email"
-            inputmode="email"
-            type="email"
-            class="w-full"
-          />
-        </UFormField>
-
-        <UFormField label="Password" name="password" required>
-          <UInput
-            v-model="form.password"
-            autocomplete="current-password"
-            type="password"
-            class="w-full"
-          />
-        </UFormField>
-
-        <p v-if="errorMessage" role="alert" class="text-sm text-error">
-          {{ errorMessage }}
-        </p>
-
-        <UButton type="submit" block :loading="submitting" :disabled="submitting">
-          Log in
-        </UButton>
-      </form>
-
-      <p class="mt-6 text-sm text-muted">
-        New to Northstar?
-        <NuxtLink to="/signup" class="text-primary hover:underline">
-          Create an account
-        </NuxtLink>
+      <p class="auth-form-description">
+        Sign in to return to your plan, progress and academic workspace.
       </p>
-    </section>
-  </main>
+    </header>
+
+    <form class="auth-form" novalidate @submit.prevent="submit">
+      <AuthField
+        v-model="form.email"
+        name="email"
+        label="Email address"
+        type="email"
+        inputmode="email"
+        autocomplete="email"
+        required
+        :error="fieldErrors.email"
+        @blur="touchField('email')"
+        @update:model-value="validateIfTouched('email')"
+      />
+
+      <AuthPasswordField
+        v-model="form.password"
+        name="password"
+        label="Password"
+        autocomplete="current-password"
+        :error="fieldErrors.password"
+        @blur="touchField('password')"
+        @update:model-value="validateIfTouched('password')"
+      />
+
+      <AuthError :message="serverError" />
+      <AuthSubmitButton label="Sign in" loading-label="Signing in…" :pending="submitting" />
+    </form>
+
+    <p class="auth-route-switch">
+      New to Northstar?
+      <NuxtLink to="/signup">Create an account</NuxtLink>
+    </p>
+  </div>
 </template>

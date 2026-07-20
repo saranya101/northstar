@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { loginSchema, signupSchema } from '../app/utils/auth-validation'
+import { loginSchema, signupSchema, validationErrors } from '../app/utils/auth-validation'
 
 describe('login validation', () => {
   it('accepts a valid email and password and trims the email', () => {
@@ -14,6 +14,18 @@ describe('login validation', () => {
 
   it('rejects invalid email and short passwords', () => {
     expect(loginSchema.safeParse({ email: 'invalid', password: 'short' }).success).toBe(false)
+  })
+
+  it('maps validation messages to their form fields', () => {
+    const errors = validationErrors(loginSchema.safeParse({
+      email: 'invalid',
+      password: 'short'
+    }))
+
+    expect(errors).toEqual({
+      email: 'Enter a valid email address.',
+      password: 'Password must be at least 8 characters.'
+    })
   })
 })
 
@@ -38,5 +50,15 @@ describe('signup validation', () => {
 
     expect(result.success).toBe(false)
     expect(result.error.issues[0].path).toEqual(['confirmPassword'])
+  })
+
+  it('requires password confirmation', () => {
+    const result = signupSchema.safeParse({
+      ...validSignup,
+      confirmPassword: ''
+    })
+
+    expect(result.success).toBe(false)
+    expect(result.error.issues.some(issue => issue.path[0] === 'confirmPassword')).toBe(true)
   })
 })

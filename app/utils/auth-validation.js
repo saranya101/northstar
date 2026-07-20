@@ -13,7 +13,7 @@ export const signupSchema = z.object({
   name: z.string().trim().min(1, 'Enter your full name.'),
   email: z.string().trim().email('Enter a valid email address.'),
   password: passwordSchema,
-  confirmPassword: z.string()
+  confirmPassword: z.string().min(1, 'Confirm your password.')
 }).refine(({ password, confirmPassword }) => password === confirmPassword, {
   message: 'Passwords do not match.',
   path: ['confirmPassword']
@@ -21,4 +21,20 @@ export const signupSchema = z.object({
 
 export function firstValidationError(result) {
   return result.error?.issues?.[0]?.message ?? 'Check the form and try again.'
+}
+
+export function validationErrors(result) {
+  if (result.success) {
+    return {}
+  }
+
+  return result.error.issues.reduce((errors, issue) => {
+    const field = issue.path[0]
+
+    if (typeof field === 'string' && !errors[field]) {
+      errors[field] = issue.message
+    }
+
+    return errors
+  }, {})
 }
