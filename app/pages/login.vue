@@ -8,6 +8,7 @@ import { loginSchema, validationErrors } from '~/utils/auth-validation'
 definePageMeta({ layout: 'auth', middleware: 'guest' })
 
 const route = useRoute()
+const nuxtApp = useNuxtApp()
 const heading = ref(null)
 const form = reactive({
   email: '',
@@ -74,10 +75,12 @@ async function submit() {
 
     await loadSession(true)
     await loadOnboarding(true)
-    await navigateTo(authenticatedLanding(
+    const destination = authenticatedLanding(
       onboarding.value?.onboardingCompleted,
-      safeLocalRedirect(route.query.redirect)
-    ))
+      safeLocalRedirect(route.query.redirect, '/app', route.path),
+      route.path
+    )
+    await nuxtApp.runWithContext(() => navigateTo(destination))
   } catch (error) {
     serverError.value = normaliseAuthError(error)
   } finally {

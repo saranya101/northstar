@@ -1,11 +1,11 @@
 <script setup>
 definePageMeta({ layout: 'app', middleware: ['auth', 'onboarded'] })
 useSeoMeta({ title: 'Settings · Northstar' })
-const { state, saving, error, fieldErrors, load, save } = useOnboarding()
+const { state, saving, error, fieldErrors, save } = useOnboarding()
 const { state: modules, load: loadModules } = useModules()
 const savedMessage = ref('')
 const currentTerms = computed(() => state.value?.universities?.find(item => item.id === state.value?.academicProfile?.universityId)?.academicTerms || [])
-await Promise.all([load(), loadModules()])
+await loadModules()
 
 async function saveSetting(path, payload) {
   savedMessage.value = ''

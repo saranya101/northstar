@@ -2,10 +2,12 @@ import { normaliseAuthError } from '~/utils/auth-error'
 import { signOut } from '~/utils/auth-client'
 
 export function useAuthActions() {
+  const nuxtApp = useNuxtApp()
   const signingOut = ref(false)
   const signOutError = ref('')
   const { clearSession } = useCurrentSession()
   const { clear: clearOnboarding } = useOnboarding()
+  const { clear: clearModules } = useModules()
 
   async function logout() {
     if (signingOut.value) {
@@ -25,7 +27,8 @@ export function useAuthActions() {
 
       clearSession()
       clearOnboarding()
-      await navigateTo('/login')
+      clearModules()
+      await nuxtApp.runWithContext(() => navigateTo('/login'))
     } catch (error) {
       signOutError.value = normaliseAuthError(error, 'Unable to sign out. Please try again.')
     } finally {

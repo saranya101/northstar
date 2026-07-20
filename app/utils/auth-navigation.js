@@ -9,6 +9,10 @@ export function protectedRouteDestination(user, intendedDestination) {
   return `/login?redirect=${encodeURIComponent(destination)}`
 }
 
-export function guestRouteDestination(user) {
-  return user ? '/app' : null
+export function guestRouteDestination(user, completed, requestedDestination, currentPath) {
+  if (!user) return null
+  if (!completed) return currentPath === '/onboarding' ? null : '/onboarding'
+
+  const destination = safeLocalRedirect(requestedDestination, '/app', currentPath)
+  return destination === currentPath ? null : destination
 }

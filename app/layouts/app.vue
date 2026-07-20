@@ -1,11 +1,8 @@
 <script setup>
-const { state: onboarding, load: loadOnboarding } = useOnboarding()
-const { user, loadSession } = useCurrentSession()
+const { state: onboarding } = useOnboarding()
+const { user } = useCurrentSession()
 const { logout, signingOut, signOutError } = useAuthActions()
 const mobileOpen = ref(false)
-
-await Promise.all([loadSession(), loadOnboarding()])
-
 const navigation = [
   { label: 'Overview', to: '/app', icon: 'i-lucide-layout-dashboard' },
   { label: 'Modules', to: '/app/modules', icon: 'i-lucide-library-big' },

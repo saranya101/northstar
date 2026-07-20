@@ -196,3 +196,9 @@ tests/            Vitest and Playwright tests and supporting fixtures
 ```
 
 Keep route handlers thin: validate input, call a service, and shape the response. Shared schemas define boundary contracts, while server-only credentials and infrastructure logic stay under `server/`.
+
+## Nuxt composable safety
+
+Initialise all Nuxt, Vue and Nuxt UI composables synchronously before the first await. Async methods must use references captured when the composable, page, layout or middleware was entered.
+
+Custom composables are synchronous factories. They capture `useNuxtApp`, `useRequestFetch`, shared state, routing, and UI helpers before returning async methods. Middleware restores Nuxt context only around navigation that occurs after an async boundary. Session, onboarding, and module request promises are kept on the current Nuxt application instance, never in serialised state or a server-global promise, so concurrent callers deduplicate without leaking data between SSR requests.

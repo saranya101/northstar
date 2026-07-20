@@ -18,11 +18,22 @@ describe('auth middleware decisions', () => {
 })
 
 describe('guest middleware decisions', () => {
-  it('redirects an authenticated user to the app', () => {
-    expect(guestRouteDestination({ id: 'user-id' })).toBe('/app')
+  it('redirects a completed user to a safe requested destination', () => {
+    expect(guestRouteDestination({ id: 'user-id' }, true, '/app/settings', '/login'))
+      .toBe('/app/settings')
+  })
+
+  it('redirects an incomplete user to onboarding', () => {
+    expect(guestRouteDestination({ id: 'user-id' }, false, '/app', '/login'))
+      .toBe('/onboarding')
+  })
+
+  it('does not preserve an auth route that would loop', () => {
+    expect(guestRouteDestination({ id: 'user-id' }, true, '/login', '/login'))
+      .toBe('/app')
   })
 
   it('allows a guest through', () => {
-    expect(guestRouteDestination(null)).toBeNull()
+    expect(guestRouteDestination(null, false, '/app', '/login')).toBeNull()
   })
 })

@@ -2,6 +2,7 @@
 definePageMeta({ layout: 'app', middleware: ['auth', 'onboarded'] })
 
 const route = useRoute()
+const nuxtApp = useNuxtApp()
 const { dossiers, loading, saving, error, fieldErrors, loadDossier, update, close, clearErrors } = useModules()
 const instructorOpen = ref(false)
 const confirmMode = ref(null)
@@ -10,8 +11,6 @@ const dossier = computed(() => dossiers.value[route.params.id])
 const settings = reactive({ targetGrade: '', colour: 'MINERAL', personalNotes: '', status: 'ACTIVE' })
 
 useSeoMeta({ title: () => dossier.value ? `${dossier.value.module.code} · Northstar` : 'Module · Northstar' })
-await loadDossier(route.params.id)
-
 watch(dossier, (value) => {
   if (!value) return
   Object.assign(settings, {
@@ -21,6 +20,8 @@ watch(dossier, (value) => {
     status: value.enrolment.status
   })
 }, { immediate: true })
+
+await loadDossier(route.params.id)
 
 function humanize(value) {
   return value?.replaceAll('_', ' ').toLowerCase().replace(/\b\w/g, letter => letter.toUpperCase())
@@ -36,7 +37,7 @@ async function saveSettings() {
 async function confirmClose() {
   const mode = confirmMode.value
   const result = await close(route.params.id, mode)
-  if (result) await navigateTo('/app/modules')
+  if (result) await nuxtApp.runWithContext(() => navigateTo('/app/modules'))
 }
 </script>
 

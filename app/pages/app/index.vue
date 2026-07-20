@@ -4,12 +4,9 @@ import { activeModuleCount, hasActiveModules } from '~/utils/module-view'
 definePageMeta({ layout: 'app', middleware: ['auth', 'onboarded'] })
 useSeoMeta({ title: 'Overview · Northstar', description: 'Your current academic foundation in Northstar.' })
 
-const { user, loadSession } = useCurrentSession()
-const { state: onboarding, load: loadOnboarding } = useOnboarding()
+const { user } = useCurrentSession()
+const { state: onboarding } = useOnboarding()
 const { state: modules, load: loadModules } = useModules()
-
-await Promise.all([loadSession(), loadOnboarding(), loadModules()])
-
 const summary = computed(() => ({
   university: onboarding.value?.academicProfile?.university?.name,
   programme: onboarding.value?.academicProfile?.programme?.name,
@@ -18,6 +15,8 @@ const summary = computed(() => ({
 }))
 const hasModules = computed(() => hasActiveModules(modules.value))
 const moduleCount = computed(() => activeModuleCount(modules.value))
+
+await loadModules()
 </script>
 
 <template>
