@@ -5,6 +5,7 @@ export function useAuthActions() {
   const signingOut = ref(false)
   const signOutError = ref('')
   const { clearSession } = useCurrentSession()
+  const { clear: clearOnboarding } = useOnboarding()
 
   async function logout() {
     if (signingOut.value) {
@@ -23,6 +24,7 @@ export function useAuthActions() {
       }
 
       clearSession()
+      clearOnboarding()
       await navigateTo('/login')
     } catch (error) {
       signOutError.value = normaliseAuthError(error, 'Unable to sign out. Please try again.')

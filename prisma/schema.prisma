@@ -1,4 +1,3 @@
-
 generator client {
   provider = "prisma-client"
   output   = "../server/generated/prisma"
@@ -9,18 +8,159 @@ datasource db {
 }
 
 model User {
-  id            String    @id
-  name          String
-  email         String
-  emailVerified Boolean   @default(false)
-  image         String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  sessions      Session[]
-  accounts      Account[]
+  id              String               @id
+  name            String
+  email           String
+  emailVerified   Boolean              @default(false)
+  image           String?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  sessions        Session[]
+  accounts        Account[]
+  profile         Profile?
+  academicProfile UserAcademicProfile?
+  studyPreference StudyPreference?
+  semesters       UserSemester[]
 
   @@unique([email])
   @@map("user")
+}
+
+enum PreferredStudyPeriod {
+  MORNING
+  AFTERNOON
+  EVENING
+  FLEXIBLE
+}
+
+model Profile {
+  id                  String   @id @default(cuid())
+  userId              String   @unique
+  displayName         String?
+  timezone            String   @default("Asia/Singapore")
+  onboardingStep      Int      @default(1)
+  onboardingCompleted Boolean  @default(false)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model University {
+  id               String                @id @default(cuid())
+  name             String
+  shortName        String?
+  country          String
+  website          String?
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  schools          School[]
+  academicTerms    AcademicTerm[]
+  academicProfiles UserAcademicProfile[]
+
+  @@unique([name, country])
+}
+
+model School {
+  id               String                @id @default(cuid())
+  universityId     String
+  name             String
+  shortName        String?
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  university       University            @relation(fields: [universityId], references: [id], onDelete: Cascade)
+  programmes       Programme[]
+  academicProfiles UserAcademicProfile[]
+
+  @@unique([universityId, name])
+  @@index([universityId])
+}
+
+model Programme {
+  id               String                @id @default(cuid())
+  schoolId         String
+  name             String
+  degreeType       String?
+  durationYears    Int?
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  school           School                @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  academicProfiles UserAcademicProfile[]
+
+  @@unique([schoolId, name])
+  @@index([schoolId])
+}
+
+model AcademicTerm {
+  id                String         @id @default(cuid())
+  universityId      String
+  academicYear      String
+  name              String
+  semesterNumber    Int?
+  startDate         DateTime
+  endDate           DateTime
+  teachingStartDate DateTime?
+  recessStartDate   DateTime?
+  recessEndDate     DateTime?
+  examStartDate     DateTime?
+  examEndDate       DateTime?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  university        University     @relation(fields: [universityId], references: [id], onDelete: Cascade)
+  userSemesters     UserSemester[]
+
+  @@unique([universityId, academicYear, name])
+  @@index([universityId])
+}
+
+model UserAcademicProfile {
+  id                     String     @id @default(cuid())
+  userId                 String     @unique
+  universityId           String
+  schoolId               String
+  programmeId            String
+  admissionYear          Int
+  expectedGraduationYear Int?
+  currentYearOfStudy     Int        @default(1)
+  createdAt              DateTime   @default(now())
+  updatedAt              DateTime   @updatedAt
+  user                   User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  university             University @relation(fields: [universityId], references: [id])
+  school                 School     @relation(fields: [schoolId], references: [id])
+  programme              Programme  @relation(fields: [programmeId], references: [id])
+
+  @@index([universityId])
+  @@index([schoolId])
+  @@index([programmeId])
+}
+
+model StudyPreference {
+  id                       String               @id @default(cuid())
+  userId                   String               @unique
+  preferredStudyPeriod     PreferredStudyPeriod
+  typicalSessionMinutes    Int                  @default(60)
+  maximumDailyStudyMinutes Int                  @default(240)
+  weekStartsOn             Int                  @default(1)
+  notificationsEnabled     Boolean              @default(true)
+  createdAt                DateTime             @default(now())
+  updatedAt                DateTime             @updatedAt
+  user                     User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model UserSemester {
+  id                   String       @id @default(cuid())
+  userId               String
+  academicTermId       String
+  targetSemesterGpa    Decimal?     @db.Decimal(3, 2)
+  currentCumulativeGpa Decimal?     @db.Decimal(3, 2)
+  isActive             Boolean      @default(true)
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+  user                 User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  academicTerm         AcademicTerm @relation(fields: [academicTermId], references: [id])
+
+  @@unique([userId, academicTermId])
+  @@index([userId, isActive])
+  @@index([academicTermId])
 }
 
 model Session {

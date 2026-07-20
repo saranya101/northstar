@@ -2,6 +2,7 @@
 import { normaliseAuthError } from '~/utils/auth-error'
 import { signInEmail } from '~/utils/auth-client'
 import { safeLocalRedirect } from '~/utils/auth-redirect'
+import { authenticatedLanding } from '~/utils/onboarding-navigation'
 import { loginSchema, validationErrors } from '~/utils/auth-validation'
 
 definePageMeta({ layout: 'auth', middleware: 'guest' })
@@ -23,6 +24,7 @@ const touched = reactive({
 const serverError = ref('')
 const submitting = ref(false)
 const { loadSession } = useCurrentSession()
+const { state: onboarding, load: loadOnboarding } = useOnboarding()
 
 function validateField(field) {
   const errors = validationErrors(loginSchema.safeParse(form))
@@ -71,7 +73,11 @@ async function submit() {
     }
 
     await loadSession(true)
-    await navigateTo(safeLocalRedirect(route.query.redirect))
+    await loadOnboarding(true)
+    await navigateTo(authenticatedLanding(
+      onboarding.value?.onboardingCompleted,
+      safeLocalRedirect(route.query.redirect)
+    ))
   } catch (error) {
     serverError.value = normaliseAuthError(error)
   } finally {

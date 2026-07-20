@@ -27,6 +27,7 @@ const touched = reactive({
 const serverError = ref('')
 const submitting = ref(false)
 const { loadSession, user } = useCurrentSession()
+const { load: loadOnboarding } = useOnboarding()
 
 function validateField(field) {
   const errors = validationErrors(signupSchema.safeParse(form))
@@ -82,7 +83,8 @@ async function submit() {
     await loadSession(true)
 
     if (user.value) {
-      await navigateTo('/app')
+      await loadOnboarding(true)
+      await navigateTo('/onboarding')
       return
     }
 

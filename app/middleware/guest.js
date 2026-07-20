@@ -1,11 +1,9 @@
-import { guestRouteDestination } from '~/utils/auth-navigation'
-
 export default defineNuxtRouteMiddleware(async () => {
   const { loadSession, user } = useCurrentSession()
+  const { state, load } = useOnboarding()
   await loadSession()
 
-  const destination = guestRouteDestination(user.value)
-  if (destination) {
-    return navigateTo(destination)
-  }
+  if (!user.value) return
+  await load()
+  return navigateTo(state.value?.onboardingCompleted ? '/app' : '/onboarding')
 })

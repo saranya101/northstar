@@ -2,7 +2,7 @@
 
 Northstar is a behavioural academic operating system for university students. It is intended to bring academic planning, progress, and evidence into one coherent application while helping students understand and improve how they study.
 
-This repository currently contains the application foundation, Neon/Prisma infrastructure, and Phase 2 email/password authentication. It does not yet contain academic product features, sample data, AI, or vector search.
+This repository currently contains the application foundation, Neon/Prisma infrastructure, Phase 2 email/password authentication, and Phase 3 authenticated academic onboarding. It does not yet contain modules, assessments, behavioural activity, AI, or vector search.
 
 ## Locked stack
 
@@ -34,6 +34,7 @@ npm run preview    # Preview the production build locally
 npm run db:validate # Validate the Prisma schema and configuration
 npm run db:generate # Generate the server-only Prisma Client
 npm run db:migrate  # Create and apply a development migration
+npm run db:seed     # Idempotently load approved reference data
 npm run db:deploy   # Apply committed migrations in production
 npm run db:studio   # Open Prisma Studio
 npm run auth:generate # Regenerate the Better Auth Prisma schema
@@ -78,7 +79,9 @@ npm run db:migrate -- --name <migration-name> # Development only
 npm run db:deploy                              # Production and CI/CD
 ```
 
-Do not use `prisma db push`. Northstar uses reviewed, committed SQL migrations. Phase 2 adds only Better Auth's `User`, `Session`, `Account`, and `Verification` models; academic domain models remain intentionally absent.
+Do not use `prisma db push`. Northstar uses reviewed, committed SQL migrations. Better Auth owns the `User`, `Session`, `Account`, and `Verification` identity models. Phase 3 adds separate academic profile models without changing Better Auth's authentication fields.
+
+The Phase 3 seed contains only approved reference data for Nanyang Technological University, Nanyang Business School, and the Business programme. It is idempotent. No `AcademicTerm` is seeded because official dates have not been supplied; students enter a custom term from their official university calendar until reviewed term reference data is added.
 
 `GET /api/health/database` executes a parameter-free `SELECT 1` and returns only `{"status":"healthy"}` or `{"status":"unhealthy"}`. Failed checks use HTTP 503 and log only a generic server-side message.
 
@@ -119,6 +122,14 @@ npm run db:deploy                              # Production
 8. Log out and confirm `GET /api/auth/me` returns HTTP 401.
 
 Email verification, password-reset email, and social login are intentionally deferred.
+
+## Student onboarding
+
+New authenticated users are sent to `/onboarding` before `/app`. Each profile, academic, semester, and study-preference step is validated with shared Zod schemas and saved independently to PostgreSQL. The saved `Profile.onboardingStep` supports resuming after refresh, sign-out, or a later session. Completion is a separate server action and succeeds only after all mandatory records exist.
+
+All user ownership comes from the Better Auth session on the server. API bodies never accept a `userId`. University, school, and programme relationships are checked server-side, and the current semester is switched in a transaction so application logic leaves only one active semester per user.
+
+The onboarding API is server-only and exposed through authenticated routes under `/api/onboarding`. Completed users can update the same foundation at `/app/settings`; these edits reuse the onboarding forms and validation but do not reset completion.
 
 ## Planned architecture
 
