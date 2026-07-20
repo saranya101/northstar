@@ -8,19 +8,20 @@ datasource db {
 }
 
 model User {
-  id              String               @id
-  name            String
-  email           String
-  emailVerified   Boolean              @default(false)
-  image           String?
-  createdAt       DateTime             @default(now())
-  updatedAt       DateTime             @updatedAt
-  sessions        Session[]
-  accounts        Account[]
-  profile         Profile?
-  academicProfile UserAcademicProfile?
-  studyPreference StudyPreference?
-  semesters       UserSemester[]
+  id               String                @id
+  name             String
+  email            String
+  emailVerified    Boolean               @default(false)
+  image            String?
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  sessions         Session[]
+  accounts         Account[]
+  profile          Profile?
+  academicProfile  UserAcademicProfile?
+  studyPreference  StudyPreference?
+  semesters        UserSemester[]
+  moduleEnrolments UserModuleEnrolment[]
 
   @@unique([email])
   @@map("user")
@@ -56,6 +57,8 @@ model University {
   schools          School[]
   academicTerms    AcademicTerm[]
   academicProfiles UserAcademicProfile[]
+  modules          Module[]
+  instructors      Instructor[]
 
   @@unique([name, country])
 }
@@ -70,6 +73,7 @@ model School {
   university       University            @relation(fields: [universityId], references: [id], onDelete: Cascade)
   programmes       Programme[]
   academicProfiles UserAcademicProfile[]
+  modules          Module[]
 
   @@unique([universityId, name])
   @@index([universityId])
@@ -91,7 +95,7 @@ model Programme {
 }
 
 model AcademicTerm {
-  id                String         @id @default(cuid())
+  id                String           @id @default(cuid())
   universityId      String
   academicYear      String
   name              String
@@ -103,10 +107,11 @@ model AcademicTerm {
   recessEndDate     DateTime?
   examStartDate     DateTime?
   examEndDate       DateTime?
-  createdAt         DateTime       @default(now())
-  updatedAt         DateTime       @updatedAt
-  university        University     @relation(fields: [universityId], references: [id], onDelete: Cascade)
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  university        University       @relation(fields: [universityId], references: [id], onDelete: Cascade)
   userSemesters     UserSemester[]
+  moduleOfferings   ModuleOffering[]
 
   @@unique([universityId, academicYear, name])
   @@index([universityId])
@@ -147,20 +152,162 @@ model StudyPreference {
 }
 
 model UserSemester {
-  id                   String       @id @default(cuid())
+  id                   String                @id @default(cuid())
   userId               String
   academicTermId       String
-  targetSemesterGpa    Decimal?     @db.Decimal(3, 2)
-  currentCumulativeGpa Decimal?     @db.Decimal(3, 2)
-  isActive             Boolean      @default(true)
-  createdAt            DateTime     @default(now())
-  updatedAt            DateTime     @updatedAt
-  user                 User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  academicTerm         AcademicTerm @relation(fields: [academicTermId], references: [id])
+  targetSemesterGpa    Decimal?              @db.Decimal(3, 2)
+  currentCumulativeGpa Decimal?              @db.Decimal(3, 2)
+  isActive             Boolean               @default(true)
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  user                 User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  academicTerm         AcademicTerm          @relation(fields: [academicTermId], references: [id])
+  moduleEnrolments     UserModuleEnrolment[]
 
   @@unique([userId, academicTermId])
   @@index([userId, isActive])
   @@index([academicTermId])
+}
+
+enum ModuleSourceStatus {
+  OFFICIAL_CURRENT
+  OFFICIAL_HISTORICAL
+  USER_ENTERED
+  UNVERIFIED
+}
+
+enum ModuleEnrolmentStatus {
+  ACTIVE
+  COMPLETED
+  DROPPED
+  ARCHIVED
+}
+
+enum InstructorRole {
+  LECTURER
+  TUTOR
+  SEMINAR_INSTRUCTOR
+  TEACHING_ASSISTANT
+  COORDINATOR
+  OTHER
+}
+
+enum ModuleColour {
+  MINERAL
+  OCEAN
+  FOREST
+  AMBER
+  TERRACOTTA
+  INDIGO
+  SLATE
+  ROSE
+}
+
+model Module {
+  id             String             @id @default(cuid())
+  universityId   String
+  schoolId       String?
+  code           String
+  title          String
+  description    String?
+  academicUnits  Decimal?           @db.Decimal(5, 2)
+  level          String?
+  gradingBasis   String?
+  officialUrl    String?
+  sourceStatus   ModuleSourceStatus @default(USER_ENTERED)
+  lastVerifiedAt DateTime?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  university     University         @relation(fields: [universityId], references: [id])
+  school         School?            @relation(fields: [schoolId], references: [id])
+  offerings      ModuleOffering[]
+
+  @@unique([universityId, code])
+  @@index([universityId])
+  @@index([schoolId])
+  @@index([code])
+  @@index([title])
+}
+
+model ModuleOffering {
+  id                    String                 @id @default(cuid())
+  moduleId              String
+  academicTermId        String
+  sectionLabel          String                 @default("DEFAULT")
+  gradingType           String?
+  syllabusUrl           String?
+  courseOutlineFileUrl  String?
+  assessmentInformation String?
+  notes                 String?
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  module                Module                 @relation(fields: [moduleId], references: [id])
+  academicTerm          AcademicTerm           @relation(fields: [academicTermId], references: [id])
+  instructorAssignments InstructorAssignment[]
+  enrolments            UserModuleEnrolment[]
+
+  @@unique([moduleId, academicTermId, sectionLabel])
+  @@index([moduleId])
+  @@index([academicTermId])
+}
+
+model Instructor {
+  id                 String                 @id @default(cuid())
+  universityId       String
+  fullName           String
+  title              String?
+  schoolName         String?
+  officialProfileUrl String?
+  officialEmail      String?
+  biography          String?
+  researchInterests  String?
+  sourceStatus       ModuleSourceStatus     @default(USER_ENTERED)
+  lastVerifiedAt     DateTime?
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+  university         University             @relation(fields: [universityId], references: [id])
+  assignments        InstructorAssignment[]
+
+  @@index([universityId])
+  @@index([fullName])
+  @@index([officialEmail])
+}
+
+model InstructorAssignment {
+  id           String         @id @default(cuid())
+  offeringId   String
+  instructorId String
+  role         InstructorRole @default(LECTURER)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  offering     ModuleOffering @relation(fields: [offeringId], references: [id])
+  instructor   Instructor     @relation(fields: [instructorId], references: [id])
+
+  @@unique([offeringId, instructorId, role])
+  @@index([offeringId])
+  @@index([instructorId])
+}
+
+model UserModuleEnrolment {
+  id             String                @id @default(cuid())
+  userId         String
+  userSemesterId String
+  offeringId     String
+  targetGrade    String?
+  personalNotes  String?
+  colour         ModuleColour          @default(MINERAL)
+  status         ModuleEnrolmentStatus @default(ACTIVE)
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+  user           User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userSemester   UserSemester          @relation(fields: [userSemesterId], references: [id], onDelete: Cascade)
+  offering       ModuleOffering        @relation(fields: [offeringId], references: [id])
+
+  @@unique([userId, offeringId])
+  @@index([userId])
+  @@index([userSemesterId])
+  @@index([status])
+  @@index([offeringId])
 }
 
 model Session {

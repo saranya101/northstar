@@ -3,8 +3,8 @@ import { resumeOnboardingStep } from '~/utils/onboarding-navigation'
 
 definePageMeta({ layout: 'onboarding', middleware: ['auth', 'onboarding'] })
 
-const { state, loading, saving, error, fieldErrors, load, save, complete, clearErrors } = useOnboarding()
-await load()
+const nuxtApp = useNuxtApp()
+const { state, loading, saving, error, fieldErrors, save, complete, clearErrors } = useOnboarding()
 const currentStep = ref(resumeOnboardingStep(state.value?.onboardingStep, state.value?.onboardingCompleted))
 
 const currentTerms = computed(() => {
@@ -19,7 +19,9 @@ async function saveStep(path, payload, nextStep) {
 }
 async function finish() {
   const result = await complete()
-  if (result?.redirectTo) await navigateTo(result.redirectTo)
+  if (result?.redirectTo) {
+    await nuxtApp.runWithContext(() => navigateTo(result.redirectTo))
+  }
 }
 </script>
 

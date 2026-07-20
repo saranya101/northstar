@@ -5,6 +5,7 @@ import { signupSchema, validationErrors } from '~/utils/auth-validation'
 
 definePageMeta({ layout: 'auth', middleware: 'guest' })
 
+const nuxtApp = useNuxtApp()
 const heading = ref(null)
 const form = reactive({
   name: '',
@@ -84,7 +85,7 @@ async function submit() {
 
     if (user.value) {
       await loadOnboarding(true)
-      await navigateTo('/onboarding')
+      await nuxtApp.runWithContext(() => navigateTo('/onboarding'))
       return
     }
 
