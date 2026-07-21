@@ -2,19 +2,30 @@ import { createError } from 'h3'
 import { prisma } from '../utils/prisma'
 import { normalizeOpportunityUrl } from '~~/shared/schemas/opportunities'
 
-const personalInclude = userId => ({ userOpportunities: { where: { userId }, take: 1 } })
-const visibleWhere = userId => ({ OR: [{ createdByUserId: userId }, { createdByUserId: null }] })
+const personalInclude = userId => ({
+  userOpportunities: { where: { userId }, take: 1 },
+  sourceListings: { include: { source: { select: { id: true, name: true, slug: true } } } }
+})
+const visibleWhere = userId => ({ OR: [{ createdByUserId: userId }, { createdByUserId: null, sourceType: 'PUBLIC_SOURCE' }] })
 const dateValue = value => value instanceof Date ? value.toISOString() : value ?? null
 
 export function serializeOpportunity(record, userId) {
   const personal = record.userOpportunities?.find(item => item.userId === userId) || record.userOpportunities?.[0] || null
+  const listings = record.sourceListings || []
+  const firstSeenAt = listings.length ? new Date(Math.min(...listings.map(item => new Date(item.firstSeenAt).getTime()))) : null
+  const lastSeenAt = listings.length ? new Date(Math.max(...listings.map(item => new Date(item.lastSeenAt).getTime()))) : null
+  const lastVerifiedAt = listings.length ? new Date(Math.max(...listings.map(item => new Date(item.lastVerifiedAt).getTime()))) : null
+  const publicSourceNames = [...new Set(listings.map(item => item.source?.name).filter(Boolean))]
+  const isPublic = record.createdByUserId === null && record.sourceType === 'PUBLIC_SOURCE'
   return {
     id: record.id, title: record.title, organisation: record.organisation, category: record.category, description: record.description,
     sourceType: record.sourceType, sourceName: record.sourceName, sourceUrl: record.sourceUrl, applicationUrl: record.applicationUrl,
     publishedAt: dateValue(record.publishedAt), deadline: dateValue(record.deadline), startAt: dateValue(record.startAt), endAt: dateValue(record.endAt),
     location: record.location, mode: record.mode, commitment: record.commitment, eligibilityText: record.eligibilityText,
     requirements: record.requirements, benefits: record.benefits, tags: record.tags, createdByUserId: record.createdByUserId,
-    isOwner: record.createdByUserId === userId, createdAt: dateValue(record.createdAt), updatedAt: dateValue(record.updatedAt),
+    isOwner: record.createdByUserId === userId, isPublic, active: isPublic ? listings.some(item => item.active) : true,
+    firstSeenAt: dateValue(firstSeenAt), lastSeenAt: dateValue(lastSeenAt), lastVerifiedAt: dateValue(lastVerifiedAt),
+    publicSourceNames, createdAt: dateValue(record.createdAt), updatedAt: dateValue(record.updatedAt),
     personal: personal ? { id: personal.id, status: personal.status, personalDeadline: dateValue(personal.personalDeadline), notes: personal.notes, savedAt: dateValue(personal.savedAt), appliedAt: dateValue(personal.appliedAt) } : null
   }
 }
@@ -26,32 +37,29 @@ function toDates(input) {
 }
 
 function opportunityOrder(sort) {
-  if (sort === 'newest') return [{ opportunity: { createdAt: 'desc' } }]
-  if (sort === 'title') return [{ opportunity: { title: 'asc' } }]
-  return [{ opportunity: { deadline: { sort: 'asc', nulls: 'last' } } }, { opportunity: { createdAt: 'desc' } }]
+  if (sort === 'newest') return [{ createdAt: 'desc' }]
+  if (sort === 'title') return [{ title: 'asc' }]
+  return [{ deadline: { sort: 'asc', nulls: 'last' } }, { createdAt: 'desc' }]
 }
 
 export async function listOpportunities(userId, filters, database = prisma, now = new Date()) {
   const where = {
-    userId,
-    ...(filters.status && { status: filters.status }),
-    opportunity: {
-      ...visibleWhere(userId),
-      ...(filters.category && { category: filters.category }),
-      ...(filters.search && { OR: [{ title: { contains: filters.search, mode: 'insensitive' } }, { organisation: { contains: filters.search, mode: 'insensitive' } }, { description: { contains: filters.search, mode: 'insensitive' } }] }),
-      ...(filters.closingSoon && { deadline: { gte: now, lte: new Date(now.getTime() + 7 * 86_400_000) } }),
-      ...(filters.upcoming && { startAt: { gt: now } }),
-      ...(filters.expired && { deadline: { lt: now } })
-    }
+    ...visibleWhere(userId),
+    ...(filters.status && { userOpportunities: { some: { userId, status: filters.status } } }),
+    ...(filters.category && { category: filters.category }),
+    ...(filters.search && { AND: [{ OR: [{ title: { contains: filters.search, mode: 'insensitive' } }, { organisation: { contains: filters.search, mode: 'insensitive' } }, { description: { contains: filters.search, mode: 'insensitive' } }] }] }),
+    ...(filters.closingSoon && { deadline: { gte: now, lte: new Date(now.getTime() + 7 * 86_400_000) } }),
+    ...(filters.upcoming && { startAt: { gt: now } }),
+    ...(filters.expired && { deadline: { lt: now } })
   }
   const skip = (filters.page - 1) * filters.pageSize
   const [rows, total, closingSoonCount, applicationsInProgress] = await Promise.all([
-    database.userOpportunity.findMany({ where, include: { opportunity: true }, orderBy: opportunityOrder(filters.sort), skip, take: filters.pageSize }),
-    database.userOpportunity.count({ where }),
-    database.userOpportunity.count({ where: { userId, opportunity: { ...visibleWhere(userId), deadline: { gte: now, lte: new Date(now.getTime() + 7 * 86_400_000) } } } }),
+    database.opportunity.findMany({ where, include: personalInclude(userId), orderBy: opportunityOrder(filters.sort), skip, take: filters.pageSize }),
+    database.opportunity.count({ where }),
+    database.opportunity.count({ where: { ...visibleWhere(userId), deadline: { gte: now, lte: new Date(now.getTime() + 7 * 86_400_000) } } }),
     database.userOpportunity.count({ where: { userId, status: { in: ['APPLYING', 'APPLIED'] }, opportunity: visibleWhere(userId) } })
   ])
-  const items = rows.map(row => serializeOpportunity({ ...row.opportunity, userOpportunities: [row] }, userId))
+  const items = rows.map(row => serializeOpportunity(row, userId))
   return { items, total, page: filters.page, pageSize: filters.pageSize, pageCount: Math.ceil(total / filters.pageSize), summary: { closingSoonCount, applicationsInProgress } }
 }
 

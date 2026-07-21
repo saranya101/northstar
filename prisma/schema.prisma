@@ -8,22 +8,22 @@ datasource db {
 }
 
 model User {
-  id               String                @id
-  name             String
-  email            String
-  emailVerified    Boolean               @default(false)
-  image            String?
-  createdAt        DateTime              @default(now())
-  updatedAt        DateTime              @updatedAt
-  sessions         Session[]
-  accounts         Account[]
-  profile          Profile?
-  academicProfile  UserAcademicProfile?
-  studyPreference  StudyPreference?
-  semesters        UserSemester[]
-  moduleEnrolments UserModuleEnrolment[]
-  timetableImports TimetableImport[]
-  createdOpportunities Opportunity[]     @relation("OpportunityCreator")
+  id                   String                @id
+  name                 String
+  email                String
+  emailVerified        Boolean               @default(false)
+  image                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  sessions             Session[]
+  accounts             Account[]
+  profile              Profile?
+  academicProfile      UserAcademicProfile?
+  studyPreference      StudyPreference?
+  semesters            UserSemester[]
+  moduleEnrolments     UserModuleEnrolment[]
+  timetableImports     TimetableImport[]
+  createdOpportunities Opportunity[]         @relation("OpportunityCreator")
   userOpportunities    UserOpportunity[]
 
   @@unique([email])
@@ -333,36 +333,118 @@ enum UserOpportunityStatus {
 }
 
 model Opportunity {
-  id                String              @id @default(cuid())
-  title             String
-  organisation      String
-  category          OpportunityCategory
-  description       String?
-  sourceType        OpportunitySourceType @default(MANUAL)
-  sourceName        String?
-  sourceUrl         String?
-  applicationUrl    String?
-  publishedAt       DateTime?
-  deadline          DateTime?
-  startAt           DateTime?
-  endAt             DateTime?
-  location          String?
-  mode              OpportunityMode     @default(UNKNOWN)
-  commitment        String?
-  eligibilityText   String?
-  requirements      String?
-  benefits          String?
-  tags              String[]            @default([])
-  createdByUserId   String?
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
-  createdBy         User?               @relation("OpportunityCreator", fields: [createdByUserId], references: [id], onDelete: Cascade)
-  userOpportunities UserOpportunity[]
+  id                  String                       @id @default(cuid())
+  title               String
+  organisation        String
+  category            OpportunityCategory
+  description         String?
+  sourceType          OpportunitySourceType        @default(MANUAL)
+  sourceName          String?
+  sourceUrl           String?
+  applicationUrl      String?
+  publishedAt         DateTime?
+  deadline            DateTime?
+  startAt             DateTime?
+  endAt               DateTime?
+  location            String?
+  mode                OpportunityMode              @default(UNKNOWN)
+  commitment          String?
+  eligibilityText     String?
+  requirements        String?
+  benefits            String?
+  tags                String[]                     @default([])
+  createdByUserId     String?
+  createdAt           DateTime                     @default(now())
+  updatedAt           DateTime                     @updatedAt
+  createdBy           User?                        @relation("OpportunityCreator", fields: [createdByUserId], references: [id], onDelete: Cascade)
+  userOpportunities   UserOpportunity[]
+  sourceListings      OpportunitySourceListing[]
+  duplicateCandidates OpportunityDuplicateReview[] @relation("DuplicateCandidate")
+  probableDuplicates  OpportunityDuplicateReview[] @relation("ProbableDuplicate")
 
   @@index([createdByUserId])
   @@index([deadline])
   @@index([category])
   @@index([category, deadline])
+}
+
+enum OpportunitySyncStatus {
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+model OpportunitySource {
+  id               String                     @id @default(cuid())
+  name             String
+  slug             String                     @unique
+  adapterKey       String                     @unique
+  baseUrl          String
+  enabled          Boolean                    @default(true)
+  lastAttemptedAt  DateTime?
+  lastSuccessfulAt DateTime?
+  createdAt        DateTime                   @default(now())
+  updatedAt        DateTime                   @updatedAt
+  listings         OpportunitySourceListing[]
+  syncRuns         OpportunitySyncRun[]
+}
+
+model OpportunitySourceListing {
+  id                  String                      @id @default(cuid())
+  sourceId            String
+  opportunityId       String
+  externalId          String?
+  normalizedSourceUrl String
+  contentHash         String
+  firstSeenAt         DateTime
+  lastSeenAt          DateTime
+  lastVerifiedAt      DateTime
+  active              Boolean                     @default(true)
+  createdAt           DateTime                    @default(now())
+  updatedAt           DateTime                    @updatedAt
+  source              OpportunitySource           @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  opportunity         Opportunity                 @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  duplicateReview     OpportunityDuplicateReview?
+
+  @@unique([sourceId, externalId])
+  @@unique([sourceId, normalizedSourceUrl])
+  @@index([sourceId, active])
+  @@index([opportunityId])
+  @@index([lastSeenAt])
+}
+
+model OpportunitySyncRun {
+  id               String                @id @default(cuid())
+  sourceId         String
+  status           OpportunitySyncStatus @default(RUNNING)
+  startedAt        DateTime              @default(now())
+  completedAt      DateTime?
+  fetchedCount     Int                   @default(0)
+  createdCount     Int                   @default(0)
+  updatedCount     Int                   @default(0)
+  duplicateCount   Int                   @default(0)
+  invalidCount     Int                   @default(0)
+  closedCount      Int                   @default(0)
+  safeErrorMessage String?
+  source           OpportunitySource     @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+
+  @@index([sourceId, startedAt])
+  @@index([status])
+}
+
+model OpportunityDuplicateReview {
+  id                         String                   @id @default(cuid())
+  sourceListingId            String                   @unique
+  candidateOpportunityId     String
+  probableMatchOpportunityId String
+  fingerprint                String
+  createdAt                  DateTime                 @default(now())
+  resolvedAt                 DateTime?
+  sourceListing              OpportunitySourceListing @relation(fields: [sourceListingId], references: [id], onDelete: Cascade)
+  candidateOpportunity       Opportunity              @relation("DuplicateCandidate", fields: [candidateOpportunityId], references: [id], onDelete: Cascade)
+  probableMatchOpportunity   Opportunity              @relation("ProbableDuplicate", fields: [probableMatchOpportunityId], references: [id], onDelete: Cascade)
+
+  @@index([probableMatchOpportunityId, resolvedAt])
 }
 
 model UserOpportunity {

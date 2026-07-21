@@ -30,10 +30,10 @@ describe('opportunity service', () => {
   })
 
   it('applies search/category filters and keeps expired opportunities visible', async () => {
-    const findMany = vi.fn().mockResolvedValue([{ ...personal, opportunity }])
-    const database = { userOpportunity: { findMany, count: vi.fn().mockResolvedValue(1) } }
+    const findMany = vi.fn().mockResolvedValue([{ ...opportunity, userOpportunities: [personal], sourceListings: [] }])
+    const database = { opportunity: { findMany, count: vi.fn().mockResolvedValue(1) }, userOpportunity: { count: vi.fn().mockResolvedValue(1) } }
     const result = await listOpportunities('u1', { search: 'hack', category: 'HACKATHON', expired: true, closingSoon: false, upcoming: false, sort: 'deadline', page: 1, pageSize: 20 }, database, now)
-    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ userId: 'u1', opportunity: expect.objectContaining({ category: 'HACKATHON', deadline: { lt: now } }) }) }))
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ category: 'HACKATHON', deadline: { lt: now } }) }))
     expect(result.items).toHaveLength(1)
     expect(result.items[0].id).toBe('o1')
   })
