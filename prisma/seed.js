@@ -48,6 +48,24 @@ try {
     update: { name: 'Devpost', slug: 'devpost', baseUrl: 'https://devpost.com/hackathons' },
     create: { name: 'Devpost', slug: 'devpost', adapterKey: 'devpost', baseUrl: 'https://devpost.com/hackathons', enabled: true }
   })
+
+  await prisma.opportunitySource.upsert({
+    where: { adapterKey: 'volunteer-gov-sg' },
+    update: {
+      name: 'Volunteer.gov.sg',
+      slug: 'volunteer-gov-sg',
+      baseUrl: 'https://www.volunteer.gov.sg/volunteer',
+      enabled: true
+    },
+    create: {
+      name: 'Volunteer.gov.sg',
+      slug: 'volunteer-gov-sg',
+      adapterKey: 'volunteer-gov-sg',
+      baseUrl: 'https://www.volunteer.gov.sg/volunteer',
+      enabled: true
+    }
+  })
+
 } finally {
   await prisma.$disconnect()
 }
