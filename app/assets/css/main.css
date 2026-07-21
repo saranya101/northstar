@@ -495,7 +495,7 @@ body {
 .opportunity-summary div { display: grid; gap: .2rem; padding: 1rem 1.2rem; background: white; }
 .opportunity-summary strong { color: var(--ns-ink); font-size: 1.55rem; }
 .opportunity-summary span { color: var(--ns-text-muted); font-size: .78rem; }
-.opportunity-filters { display: grid; grid-template-columns: minmax(12rem,2fr) repeat(3,minmax(9rem,1fr)); align-items: end; gap: .75rem; padding: 1rem; border: 1px solid var(--ns-border); border-radius: .9rem; background: white; }
+.opportunity-filters { display: grid; grid-template-columns: minmax(12rem,2fr) repeat(4,minmax(8rem,1fr)); align-items: end; gap: .75rem; padding: 1rem; border: 1px solid var(--ns-border); border-radius: .9rem; background: white; }
 .opportunity-filters label, .opportunity-form label, .opportunity-personal label, .paste-panel label { display: grid; min-width: 0; gap: .4rem; color: var(--ns-text-muted); font-size: .76rem; font-weight: 650; }
 .opportunity-filters input:not([type="checkbox"]), .opportunity-form input:not([type="checkbox"]), .opportunity-form textarea, .opportunity-personal textarea, .paste-panel textarea { min-height: 44px; }
 .opportunity-form__actions button, .paste-panel button, .opportunity-personal button { min-height: 44px; }
@@ -524,7 +524,7 @@ body {
 .opportunity-tags span { flex: 0 0 auto; padding: .2rem .45rem; border-radius: 999px; background: var(--ns-surface-soft); color: var(--ns-text-muted); font-size: .68rem; }
 .opportunity-card-skeleton { min-height: 13rem; padding: 1rem; }
 .opportunity-card-skeleton span { display: block; height: 1rem; margin-bottom: 1rem; border-radius: .25rem; background: var(--ns-border); }
-.opportunity-tabs { display: inline-grid; grid-template-columns: 1fr 1fr; margin-bottom: 1rem; padding: .25rem; border: 1px solid var(--ns-border); border-radius: .65rem; background: var(--ns-surface-soft); }
+.opportunity-tabs { display: inline-grid; grid-template-columns: repeat(3,1fr); margin-bottom: 1rem; padding: .25rem; border: 1px solid var(--ns-border); border-radius: .65rem; background: var(--ns-surface-soft); }
 .opportunity-tabs button { min-height: 44px; padding: .6rem 1.2rem; border: 0; border-radius: .45rem; background: transparent; color: var(--ns-text-muted); font: inherit; font-weight: 700; cursor: pointer; }
 .opportunity-tabs button[aria-selected="true"] { background: white; color: var(--ns-ink); box-shadow: 0 1px 4px rgb(26 38 48 / 9%); }
 .opportunity-form { display: grid; min-width: 0; gap: 1rem; }
@@ -546,6 +546,15 @@ body {
 .extraction-confidence > span.uncertain { background: #fff8ec; color: #805b20; }
 .extraction-confidence strong { overflow: hidden; color: var(--ns-ink); text-overflow: ellipsis; text-transform: capitalize; }
 .extraction-confidence small { overflow-wrap: anywhere; }
+.extraction-source { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: .7rem; padding: .7rem .8rem; border-radius: .55rem; background: var(--ns-surface-soft); color: var(--ns-text-muted); font-size: .78rem; }
+.extraction-source span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.extraction-source a { display: inline-flex; min-height: 44px; flex: 0 0 auto; align-items: center; gap: .35rem; color: var(--ns-accent); font-weight: 700; text-decoration: none; }
+.duplicate-warning { display: grid; gap: .7rem; padding: 1rem; border: 1px solid #e4c17d; border-radius: .8rem; background: #fff8ec; }
+.duplicate-warning p { margin: 0 0 .15rem; color: #8a5c12; font-size: .7rem; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
+.duplicate-warning h2 { margin: 0; color: var(--ns-ink); font-size: 1.05rem; }
+.duplicate-warning span { color: var(--ns-text-muted); font-size: .8rem; }
+.duplicate-warning a { display: flex; min-height: 44px; align-items: center; justify-content: space-between; gap: .5rem; padding: .55rem .7rem; border-radius: .5rem; background: white; color: var(--ns-ink); font-size: .8rem; font-weight: 650; text-decoration: none; }
+.duplicate-warning > button { min-height: 44px; justify-self: start; }
 .include-original { display: flex; align-items: center; gap: .6rem; min-height: 44px; color: var(--ns-text-muted); font-size: .8rem; }
 .opportunity-detail__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 1.5rem; padding-bottom: 1.3rem; border-bottom: 1px solid var(--ns-border); }
 .opportunity-detail__header h1 { overflow-wrap: anywhere; margin: .65rem 0 .2rem; color: var(--ns-ink); font-size: clamp(1.8rem,4vw,2.7rem); line-height: 1.1; }
@@ -573,6 +582,11 @@ body {
 .overview-opportunity-row small, .overview-opportunity-row em { color: var(--ns-text-muted); font-size: .72rem; font-style: normal; }
 .overview-opportunity-skeleton { display: grid; gap: .5rem; }
 .overview-opportunity-skeleton span { height: 2.8rem; border-radius: .4rem; background: var(--ns-border); }
+.opportunity-pagination { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-top: 2rem; padding: .85rem 1rem; border: 1px solid var(--ns-border); border-radius: .8rem; background: white; }
+.opportunity-pagination p { display: flex; align-items: center; gap: .3rem; margin: 0; color: var(--ns-text-muted); font-size: .8rem; }
+.opportunity-pagination p span { margin-left: .5rem; padding-left: .8rem; border-left: 1px solid var(--ns-border); }
+.opportunity-pagination div { display: flex; gap: .5rem; }
+.opportunity-pagination button { min-height: 44px; }
 
 @media (max-width: 900px) {
   .opportunity-filters { grid-template-columns: repeat(2,minmax(0,1fr)); }
@@ -597,6 +611,11 @@ body {
   .opportunity-detail__facts { grid-template-columns: 1fr; }
   .overview-opportunity-row { grid-template-columns: minmax(0,1fr) auto; }
   .overview-opportunity-row > svg { display: none; }
+  .extraction-source, .opportunity-pagination { align-items: stretch; flex-direction: column; }
+  .extraction-source span { white-space: normal; }
+  .opportunity-pagination div { display: grid; grid-template-columns: 1fr 1fr; }
+  .opportunity-pagination div > * { min-width: 0; justify-content: center; }
+  .opportunity-pagination p { justify-content: space-between; }
 }
 
 @media (prefers-reduced-motion: reduce) {

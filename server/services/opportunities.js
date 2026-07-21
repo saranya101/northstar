@@ -1,5 +1,6 @@
 import { createError } from 'h3'
 import { prisma } from '../utils/prisma'
+import { normalizeOpportunityUrl } from '~~/shared/schemas/opportunities'
 
 const personalInclude = userId => ({ userOpportunities: { where: { userId }, take: 1 } })
 const visibleWhere = userId => ({ OR: [{ createdByUserId: userId }, { createdByUserId: null }] })
@@ -55,11 +56,29 @@ export async function listOpportunities(userId, filters, database = prisma, now 
 }
 
 export async function createOpportunity(userId, input, database = prisma, now = new Date()) {
+  const { allowDuplicate, ...opportunityInput } = input
+  const duplicates = await findOpportunityDuplicates(userId, opportunityInput, database)
+  if (duplicates.length && !allowDuplicate) throw createError({ statusCode: 409, statusMessage: 'You already saved an opportunity with this link.', data: { duplicates } })
   return database.$transaction(async transaction => {
-    const opportunity = await transaction.opportunity.create({ data: { ...toDates(input), createdByUserId: userId } })
+    const opportunity = await transaction.opportunity.create({ data: { ...toDates(opportunityInput), createdByUserId: userId } })
     const personal = await transaction.userOpportunity.create({ data: { userId, opportunityId: opportunity.id, status: 'SAVED', savedAt: now } })
     return serializeOpportunity({ ...opportunity, userOpportunities: [personal] }, userId)
   })
+}
+
+export async function findOpportunityDuplicates(userId, input, database = prisma) {
+  const sourceUrl = input.sourceUrl ? normalizeOpportunityUrl(input.sourceUrl) : null
+  const applicationUrl = input.applicationUrl ? normalizeOpportunityUrl(input.applicationUrl) : null
+  const urlConditions = []
+  if (sourceUrl) urlConditions.push({ sourceUrl })
+  if (applicationUrl) urlConditions.push({ applicationUrl })
+  if (!urlConditions.length) return []
+  const rows = await database.userOpportunity.findMany({
+    where: { userId, opportunity: { OR: [{ sourceUrl: { not: null } }, { applicationUrl: { not: null } }] } },
+    include: { opportunity: true },
+    take: 5
+  })
+  return rows.filter(row => (sourceUrl && normalizeOpportunityUrl(row.opportunity.sourceUrl) === sourceUrl) || (applicationUrl && normalizeOpportunityUrl(row.opportunity.applicationUrl) === applicationUrl)).map(row => ({ id: row.opportunity.id, title: row.opportunity.title, organisation: row.opportunity.organisation, sourceUrl: row.opportunity.sourceUrl, applicationUrl: row.opportunity.applicationUrl }))
 }
 
 export async function getOpportunity(userId, id, database = prisma) {

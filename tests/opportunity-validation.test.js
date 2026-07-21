@@ -19,7 +19,8 @@ describe('opportunity validation', () => {
   })
 
   it('requires HTTPS URLs and valid ISO dates', () => {
-    expect(createOpportunitySchema.safeParse({ ...valid, sourceUrl: 'http://example.com' }).success).toBe(false)
+    expect(createOpportunitySchema.safeParse({ ...valid, sourceUrl: 'http://example.com' }).success).toBe(true)
+    expect(createOpportunitySchema.safeParse({ ...valid, applicationUrl: 'http://example.com/apply' }).success).toBe(false)
     expect(createOpportunitySchema.safeParse({ ...valid, sourceUrl: 'https://example.com' }).success).toBe(true)
     expect(createOpportunitySchema.safeParse({ ...valid, deadline: '12 August 2026' }).success).toBe(false)
     expect(createOpportunitySchema.safeParse({ ...valid, deadline: '2026-08-12T15:59:00+08:00' }).success).toBe(true)

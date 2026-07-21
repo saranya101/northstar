@@ -31,7 +31,7 @@ describe('opportunity UX foundation', () => {
   it('keeps paste extraction separate from confirmation and persistence', () => {
     const page = readFileSync(join(root, 'app/pages/app/opportunities/new.vue'), 'utf8')
     expect(page).toMatch(/const result = await parseText\(paste\.value\)/)
-    expect(page).toMatch(/const result = await create\(form\.value\)/)
+    expect(page).toMatch(/const result = await create\(form\.value, allowDuplicate\)/)
     expect(page).toContain('Nothing is saved during extraction.')
     expect(page).toContain('Include the original pasted text in my private notes')
   })

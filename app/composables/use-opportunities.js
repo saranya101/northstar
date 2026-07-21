@@ -1,5 +1,5 @@
 function opportunityError(cause, fallback) {
-  return { message: cause?.data?.message || cause?.statusMessage || fallback, fields: cause?.data?.fieldErrors || {} }
+  return { message: cause?.data?.message || cause?.statusMessage || fallback, fields: cause?.data?.fieldErrors || {}, duplicates: cause?.data?.duplicates || [] }
 }
 
 export function useOpportunities() {
@@ -8,11 +8,13 @@ export function useOpportunities() {
   const state = useState('northstar-opportunities', () => null)
   const loading = useState('northstar-opportunities-loading', () => false)
   const saving = useState('northstar-opportunities-saving', () => false)
+  const extracting = useState('northstar-opportunities-extracting', () => false)
   const error = useState('northstar-opportunities-error', () => '')
   const fieldErrors = useState('northstar-opportunities-field-errors', () => ({}))
   const details = useState('northstar-opportunity-details', () => ({}))
+  const duplicates = useState('northstar-opportunity-duplicates', () => [])
 
-  function clearErrors() { error.value = ''; fieldErrors.value = {} }
+  function clearErrors() { error.value = ''; fieldErrors.value = {}; duplicates.value = [] }
   async function load(query = {}) {
     loading.value = true; clearErrors()
     try { state.value = await requestFetch('/api/opportunities', { query }); return state.value }
@@ -29,14 +31,21 @@ export function useOpportunities() {
   async function mutate(url, options, fallback) {
     saving.value = true; clearErrors()
     try { return await requestFetch(url, options) }
-    catch (cause) { const result = opportunityError(cause, fallback); error.value = result.message; fieldErrors.value = result.fields; return null }
+    catch (cause) { const result = opportunityError(cause, fallback); error.value = result.message; fieldErrors.value = result.fields; duplicates.value = result.duplicates; return null }
     finally { saving.value = false }
   }
-  async function create(body) { const result = await mutate('/api/opportunities', { method: 'POST', body }, 'Unable to save the opportunity.'); if (result) details.value[result.id] = result; return result }
+  async function create(body, allowDuplicate = false) { const result = await mutate('/api/opportunities', { method: 'POST', body: { ...body, allowDuplicate } }, 'Unable to save the opportunity.'); if (result) details.value[result.id] = result; return result }
   async function update(id, body) { const result = await mutate(`/api/opportunities/${id}`, { method: 'PATCH', body }, 'Unable to update the opportunity.'); if (result) details.value[id] = result; return result }
   async function updateStatus(id, body) { const result = await mutate(`/api/opportunities/${id}/status`, { method: 'PATCH', body }, 'Unable to update your tracking details.'); if (result) details.value[id] = result; return result }
   async function remove(id) { const result = await mutate(`/api/opportunities/${id}`, { method: 'DELETE' }, 'Unable to delete the opportunity.'); if (result) { delete details.value[id]; state.value && (state.value.items = state.value.items.filter(item => item.id !== id)) }; return result }
   async function parseText(text) { return mutate('/api/opportunities/parse-text', { method: 'POST', body: { text } }, 'Unable to extract opportunity details.') }
+  async function parseLink(url) {
+    if (extracting.value) return null
+    extracting.value = true; clearErrors()
+    try { return await requestFetch('/api/opportunities/parse-link', { method: 'POST', body: { url } }) }
+    catch (cause) { const result = opportunityError(cause, 'Unable to import that webpage.'); error.value = result.message; fieldErrors.value = result.fields; return null }
+    finally { extracting.value = false }
+  }
 
-  return { state, details, loading, saving, error, fieldErrors, load, loadOne, create, update, updateStatus, remove, parseText, clearErrors }
+  return { state, details, loading, saving, extracting, error, fieldErrors, duplicates, load, loadOne, create, update, updateStatus, remove, parseText, parseLink, clearErrors }
 }

@@ -91,6 +91,7 @@ export function extractOpportunityFromText(input, { timeZone = 'Asia/Singapore' 
       title: field(clean(titleLine), titleLine ? 0.72 : 0, titleLine ? [] : ['Title was not confidently identified.']),
       organisation: field(organisation, organisation ? 0.88 : 0, organisation ? [] : ['Review and add the organisation.']),
       category: field(category, category ? 0.86 : 0, category ? [] : ['Choose a category during review.']),
+      description: field(),
       deadline: extractDate(lines, ['deadline', 'applications? close', 'closing date', 'apply by'], timeZone),
       startAt: extractDate(lines, ['start date', 'starts', 'event date', 'date'], timeZone),
       endAt: extractDate(lines, ['end date', 'ends'], timeZone),

@@ -15,9 +15,26 @@ const isoDate = label => z.preprocess(
   value => typeof value === 'string' && value.trim() === '' ? null : value,
   z.string().datetime({ offset: true, message: `${label} must be a valid ISO date and time.` }).nullable().optional()
 )
+export function normalizeOpportunityUrl(value) {
+  if (typeof value !== 'string') return value
+  const trimmed = value.trim()
+  if (!trimmed) return trimmed
+  try {
+    const url = new URL(trimmed)
+    url.hash = ''
+    url.hostname = url.hostname.toLowerCase()
+    if ((url.protocol === 'https:' && url.port === '443') || (url.protocol === 'http:' && url.port === '80')) url.port = ''
+    return url.toString()
+  } catch { return trimmed }
+}
+
 const httpsUrl = label => z.preprocess(
   value => typeof value === 'string' && value.trim() === '' ? null : value,
-  z.url(`${label} must be a valid URL.`).refine(value => value.startsWith('https://'), `${label} must use HTTPS.`).nullable().optional()
+  z.url(`${label} must be a valid URL.`).refine(value => value.startsWith('https://'), `${label} must use HTTPS.`).transform(normalizeOpportunityUrl).nullable().optional()
+)
+const publicWebUrl = label => z.preprocess(
+  value => typeof value === 'string' && value.trim() === '' ? null : value,
+  z.url(`${label} must be a valid URL.`).refine(value => value.startsWith('http://') || value.startsWith('https://'), `${label} must use HTTP or HTTPS.`).transform(normalizeOpportunityUrl).nullable().optional()
 )
 const tagsSchema = z.preprocess(value => {
   if (typeof value === 'string') value = value.split(',')
@@ -38,7 +55,7 @@ const opportunityFields = {
   description: nullableText(5000, 'Description'),
   sourceType: z.enum(OPPORTUNITY_SOURCE_TYPES).default('MANUAL'),
   sourceName: nullableText(180, 'Source name'),
-  sourceUrl: httpsUrl('Source URL'),
+  sourceUrl: publicWebUrl('Source URL'),
   applicationUrl: httpsUrl('Application URL'),
   publishedAt: isoDate('Published date'),
   deadline: isoDate('Deadline'),
@@ -59,7 +76,7 @@ function datesInOrder(value, context) {
   }
 }
 
-export const createOpportunitySchema = z.object(opportunityFields).strict().superRefine(datesInOrder)
+export const createOpportunitySchema = z.object({ ...opportunityFields, allowDuplicate: z.boolean().optional().default(false) }).strict().superRefine(datesInOrder)
 
 export const updateOpportunitySchema = z.object(Object.fromEntries(
   Object.entries(opportunityFields).map(([key, schema]) => [key, schema.optional()])
@@ -93,19 +110,30 @@ export const parseOpportunityTextSchema = z.object({
   text: safeString(20_000, 'Pasted text').min(20, 'Paste at least 20 characters.')
 }).strict()
 
-const extractedValue = schema => z.object({
+export const parseOpportunityLinkSchema = z.object({
+  url: z.preprocess(value => typeof value === 'string' ? normalizeOpportunityUrl(value) : value,
+    z.url('Enter a valid public URL.').refine(value => value.startsWith('http://') || value.startsWith('https://'), 'Use an HTTP or HTTPS URL.'))
+}).strict()
+
+export const extractedOpportunityValueSchema = schema => z.object({
   value: schema.nullable(),
   confidence: z.number().min(0).max(1),
   warnings: z.array(z.string().max(240)).max(5)
 }).strict()
 
+export const opportunityExtractionCandidateSchema = z.object({
+  title: extractedOpportunityValueSchema(z.string()), organisation: extractedOpportunityValueSchema(z.string()), category: extractedOpportunityValueSchema(z.enum(OPPORTUNITY_CATEGORIES)),
+  description: extractedOpportunityValueSchema(z.string()), deadline: extractedOpportunityValueSchema(z.string()), startAt: extractedOpportunityValueSchema(z.string()), endAt: extractedOpportunityValueSchema(z.string()), location: extractedOpportunityValueSchema(z.string()),
+  mode: extractedOpportunityValueSchema(z.enum(OPPORTUNITY_MODES)), applicationUrl: extractedOpportunityValueSchema(z.string()), sourceUrl: extractedOpportunityValueSchema(z.string()),
+  eligibilityText: extractedOpportunityValueSchema(z.string()), requirements: extractedOpportunityValueSchema(z.string()), benefits: extractedOpportunityValueSchema(z.string()),
+  tags: extractedOpportunityValueSchema(z.array(z.string()))
+}).strict()
+
 export const pasteTextExtractionResultSchema = z.object({
-  candidate: z.object({
-    title: extractedValue(z.string()), organisation: extractedValue(z.string()), category: extractedValue(z.enum(OPPORTUNITY_CATEGORIES)),
-    deadline: extractedValue(z.string()), startAt: extractedValue(z.string()), endAt: extractedValue(z.string()), location: extractedValue(z.string()),
-    mode: extractedValue(z.enum(OPPORTUNITY_MODES)), applicationUrl: extractedValue(z.string()), sourceUrl: extractedValue(z.string()),
-    eligibilityText: extractedValue(z.string()), requirements: extractedValue(z.string()), benefits: extractedValue(z.string()),
-    tags: extractedValue(z.array(z.string()))
-  }).strict(),
+  candidate: opportunityExtractionCandidateSchema,
   warnings: z.array(z.string().max(240)).max(20)
+}).strict()
+
+export const linkExtractionResultSchema = pasteTextExtractionResultSchema.extend({
+  sourceHost: z.string().min(1).max(253)
 }).strict()
