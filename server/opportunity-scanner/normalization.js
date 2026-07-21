@@ -45,6 +45,7 @@ export function normalizeAdapterCandidate(candidate) {
     endAt: candidate.endAt ? new Date(candidate.endAt) : null,
     location: normalizeScannerText(candidate.location),
     mode: candidate.mode,
+    commitment: normalizeScannerText(candidate.commitment),
     eligibilityText: normalizeScannerText(candidate.eligibilityText),
     requirements: normalizeScannerText(candidate.requirements),
     benefits: normalizeScannerText(candidate.benefits),

@@ -29,6 +29,7 @@ const opportunityData = (candidate, source) => ({
   endAt: candidate.endAt,
   location: candidate.location,
   mode: candidate.mode,
+  commitment: candidate.commitment,
   eligibilityText: candidate.eligibilityText,
   requirements: candidate.requirements,
   benefits: candidate.benefits,

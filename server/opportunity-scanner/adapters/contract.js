@@ -38,6 +38,7 @@ export const adapterCandidateSchema = z.object({
   endAt: nullableDate('End date'),
   location: nullableText(240, 'Location'),
   mode: z.enum(OPPORTUNITY_MODES).default('UNKNOWN'),
+  commitment: nullableText(500, 'Commitment'),
   eligibilityText: nullableText(3000, 'Eligibility'),
   requirements: nullableText(3000, 'Requirements'),
   benefits: nullableText(3000, 'Benefits'),

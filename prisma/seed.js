@@ -66,6 +66,24 @@ try {
     }
   })
 
+
+  await prisma.opportunitySource.upsert({
+    where: { adapterKey: 'ntu-events' },
+    update: {
+      name: 'NTU Events',
+      slug: 'ntu-events',
+      baseUrl: 'https://www.ntu.edu.sg/events/GetEvents/',
+      enabled: true
+    },
+    create: {
+      name: 'NTU Events',
+      slug: 'ntu-events',
+      adapterKey: 'ntu-events',
+      baseUrl: 'https://www.ntu.edu.sg/events/GetEvents/',
+      enabled: true
+    }
+  })
+
 } finally {
   await prisma.$disconnect()
 }

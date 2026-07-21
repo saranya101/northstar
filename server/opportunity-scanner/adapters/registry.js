@@ -1,8 +1,14 @@
 import { devpostOpportunityAdapter } from './devpost'
 import { volunteerGovSgOpportunityAdapter } from './volunteer-gov-sg'
+import { ntuEventsOpportunityAdapter } from './ntu-events'
 import { mockOpportunityAdapter } from './mock'
 
-const adapters = new Map([[mockOpportunityAdapter.key, mockOpportunityAdapter], [devpostOpportunityAdapter.key, devpostOpportunityAdapter], [volunteerGovSgOpportunityAdapter.key, volunteerGovSgOpportunityAdapter]])
+const adapters = new Map([
+  [mockOpportunityAdapter.key, mockOpportunityAdapter],
+  [devpostOpportunityAdapter.key, devpostOpportunityAdapter],
+  [volunteerGovSgOpportunityAdapter.key, volunteerGovSgOpportunityAdapter],
+  [ntuEventsOpportunityAdapter.key, ntuEventsOpportunityAdapter]
+])
 
 export function registerOpportunityAdapter(adapter) {
   if (adapters.has(adapter.key)) throw new Error(`An opportunity adapter is already registered for ${adapter.key}.`)
