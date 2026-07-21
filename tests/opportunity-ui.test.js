@@ -19,11 +19,12 @@ describe('opportunity UX foundation', () => {
   it('provides mobile-safe structure and 44px controls', () => {
     const css = readFileSync(join(root, 'app/assets/css/main.css'), 'utf8')
     const inbox = readFileSync(join(root, 'app/pages/app/opportunities/index.vue'), 'utf8')
+    const categoryPage = readFileSync(join(root, 'app/pages/app/opportunities/category/[slug].vue'), 'utf8')
     expect(css).toMatch(/@media \(max-width: 600px\)[\s\S]*\.opportunity-filters, \.opportunity-grid/)
     expect(css).toMatch(/\.opportunity-tabs button \{ min-height: 44px/)
     expect(css).toMatch(/\.opportunity-filters input:not\(\[type="checkbox"\]\).*min-height: 44px/)
     expect(css).toMatch(/grid-template-columns: minmax\(0,1fr\)/)
-    expect(inbox).toContain('aria-label="Filter opportunities"')
+    expect(categoryPage).toContain('aria-label="Filter opportunities"')
     expect(inbox).toContain('Closing soon')
     expect(inbox).toContain('Saved and applying')
   })

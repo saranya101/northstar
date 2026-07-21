@@ -183,7 +183,7 @@ describe('Devpost opportunity adapter', () => {
     const online = extractDevpostListing(devpostListings.hackathons[0])
     const inPerson = extractDevpostListing(devpostListings.hackathons[1])
     expect(online).toMatchObject({ externalId: '29541', title: 'Build with Gemini XPRIZE', organisation: 'XPRIZE', category: 'COMPETITION', sourceUrl: 'https://xprize.devpost.com/', mode: 'ONLINE', location: null, startAt: '2026-05-19T00:00:00.000Z', deadline: '2026-08-17T23:59:59.999Z' })
-    expect(online.tags).toEqual(['Machine Learning/AI', 'Education'])
+    expect(online.tags).toEqual(['AI', 'Education'])
     expect(inPerson).toMatchObject({ category: 'HACKATHON', mode: 'IN_PERSON', location: 'Singapore' })
     expect(extractDevpostListing(devpostListings.hackathons[2])).toBeNull()
     expect(extractDevpostListing({ ...devpostListings.hackathons[0], url: 'https://secure.devpost.com/users/login' })).toBeNull()

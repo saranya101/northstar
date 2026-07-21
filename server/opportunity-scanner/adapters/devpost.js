@@ -1,5 +1,6 @@
 import { fetchPublicHtml, fetchPublicJson } from '../../services/opportunity-link-fetcher'
 import { defineOpportunityAdapter } from './contract'
+import { normaliseOpportunityTags } from '~~/shared/opportunities/tags'
 
 export const DEVPOST_LISTINGS_URL = 'https://devpost.com/api/hackathons'
 export const DEVPOST_MAX_PAGES = 2
@@ -79,7 +80,7 @@ export function extractDevpostListing(listing) {
     eligibilityText: listing.invite_only ? plain(listing.eligibility_requirement_invite_only_description, 3000) : null,
     requirements: null,
     benefits: null,
-    tags: [...new Set((listing.themes || []).map(theme => plain(theme?.name, 40)).filter(Boolean))].slice(0, 12)
+    tags: normaliseOpportunityTags((listing.themes || []).map(theme => plain(theme?.name, 40)).filter(Boolean))
   }
 }
 

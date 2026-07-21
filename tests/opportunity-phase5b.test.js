@@ -36,7 +36,7 @@ describe('opportunity duplicate and review behaviour', () => {
   })
 
   it('persists pagination and filters in URL query parameters', () => {
-    const page = readFileSync(join(root, 'app/pages/app/opportunities/index.vue'), 'utf8')
+    const page = readFileSync(join(root, 'app/pages/app/opportunities/category/[slug].vue'), 'utf8')
     expect(page).toMatch(/routeFilters\(query\)/)
     expect(page).toMatch(/router\.replace\(\{ query: filterQuery\(filters\) \}\)/)
     expect(page).toMatch(/router\.push\(\{ query: filterQuery\(\{ \.\.\.filters, page \}\) \}\)/)

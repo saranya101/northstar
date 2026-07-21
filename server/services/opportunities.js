@@ -1,12 +1,20 @@
 import { createError } from 'h3'
 import { prisma } from '../utils/prisma'
 import { normalizeOpportunityUrl } from '~~/shared/schemas/opportunities'
+import { getOpportunitySections } from '~~/shared/opportunities/taxonomy'
 
 const personalInclude = userId => ({
   userOpportunities: { where: { userId }, take: 1 },
   sourceListings: { include: { source: { select: { id: true, name: true, slug: true } } } }
 })
 const visibleWhere = userId => ({ OR: [{ createdByUserId: userId }, { createdByUserId: null, sourceType: 'PUBLIC_SOURCE' }] })
+const activeVisibleWhere = userId => ({
+  OR: [
+    { createdByUserId: userId },
+    { createdByUserId: null, sourceType: 'PUBLIC_SOURCE', sourceListings: { some: { active: true } } }
+  ]
+})
+const notIgnoredWhere = userId => ({ NOT: { userOpportunities: { some: { userId, status: 'IGNORED' } } } })
 const dateValue = value => value instanceof Date ? value.toISOString() : value ?? null
 
 export function serializeOpportunity(record, userId) {
@@ -43,10 +51,18 @@ function opportunityOrder(sort) {
 }
 
 export async function listOpportunities(userId, filters, database = prisma, now = new Date()) {
+  const categoryFilter = filters.categories?.length
+    ? { category: { in: filters.categories } }
+    : filters.category
+      ? { category: filters.category }
+      : {}
+
   const where = {
     ...visibleWhere(userId),
+    ...categoryFilter,
+    ...(filters.tag && { tags: { has: filters.tag } }),
+    ...(filters.mode && { mode: filters.mode }),
     ...(filters.status && { userOpportunities: { some: { userId, status: filters.status } } }),
-    ...(filters.category && { category: filters.category }),
     ...(filters.search && { AND: [{ OR: [{ title: { contains: filters.search, mode: 'insensitive' } }, { organisation: { contains: filters.search, mode: 'insensitive' } }, { description: { contains: filters.search, mode: 'insensitive' } }] }] }),
     ...(filters.closingSoon && { deadline: { gte: now, lte: new Date(now.getTime() + 7 * 86_400_000) } }),
     ...(filters.upcoming && { startAt: { gt: now } }),
@@ -61,6 +77,62 @@ export async function listOpportunities(userId, filters, database = prisma, now 
   ])
   const items = rows.map(row => serializeOpportunity(row, userId))
   return { items, total, page: filters.page, pageSize: filters.pageSize, pageCount: Math.ceil(total / filters.pageSize), summary: { closingSoonCount, applicationsInProgress } }
+}
+
+export async function getOpportunityDiscovery(userId, database = prisma, now = new Date()) {
+  const closingSoonEnd = new Date(now.getTime() + 7 * 86_400_000)
+  const activeVisibility = activeVisibleWhere(userId)
+  const notIgnored = notIgnoredWhere(userId)
+  const include = personalInclude(userId)
+
+  const sections = await Promise.all(getOpportunitySections().map(async section => {
+    const sectionWhere = { AND: [activeVisibility, notIgnored, { category: { in: section.categories } }] }
+    const [activeCount, closingSoonCount] = await Promise.all([
+      database.opportunity.count({ where: sectionWhere }),
+      database.opportunity.count({ where: { AND: [sectionWhere, { deadline: { gte: now, lte: closingSoonEnd } }] } })
+    ])
+    return {
+      slug: section.slug,
+      label: section.label,
+      activeCount,
+      closingSoonCount
+    }
+  }))
+
+  const previewBase = { AND: [activeVisibility, notIgnored] }
+  const trackedStatuses = ['SAVED', 'INTERESTED', 'APPLYING', 'APPLIED']
+  const [closingRows, newestRows, savedRows] = await Promise.all([
+    database.opportunity.findMany({
+      where: { AND: [previewBase, { deadline: { gte: now, lte: closingSoonEnd } }] },
+      include,
+      orderBy: [{ deadline: 'asc' }, { createdAt: 'desc' }],
+      take: 6
+    }),
+    database.opportunity.findMany({
+      where: previewBase,
+      include,
+      orderBy: [{ createdAt: 'desc' }],
+      take: 6
+    }),
+    database.opportunity.findMany({
+      where: {
+        AND: [
+          activeVisibility,
+          { userOpportunities: { some: { userId, status: { in: trackedStatuses } } } }
+        ]
+      },
+      include,
+      orderBy: [{ updatedAt: 'desc' }],
+      take: 6
+    })
+  ])
+
+  return {
+    sections,
+    closingSoon: closingRows.map(row => serializeOpportunity(row, userId)),
+    newest: newestRows.map(row => serializeOpportunity(row, userId)),
+    saved: savedRows.map(row => serializeOpportunity(row, userId))
+  }
 }
 
 export async function createOpportunity(userId, input, database = prisma, now = new Date()) {

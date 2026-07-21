@@ -86,9 +86,25 @@ export const updateOpportunitySchema = z.object(Object.fromEntries(
 })
 
 const booleanQuery = z.preprocess(value => value === 'true' || value === true ? true : value === 'false' || value === false || value === undefined ? false : value, z.boolean())
+const categoryListQuery = z.preprocess(value => {
+  if (value === undefined || value === null || value === '') return []
+  const values = (Array.isArray(value) ? value : [value])
+    .flatMap(item => String(item).split(','))
+    .map(item => item.trim())
+    .filter(Boolean)
+  return [...new Set(values)]
+}, z.array(z.enum(OPPORTUNITY_CATEGORIES)).max(8, 'Choose no more than eight categories.').default([]))
+const optionalTagQuery = z.preprocess(
+  value => typeof value === 'string' && value.trim() === '' ? undefined : value,
+  safeString(40, 'Tag').optional()
+)
+
 export const opportunityFiltersSchema = z.object({
   search: z.string().trim().max(120).optional().default(''),
   category: z.enum(OPPORTUNITY_CATEGORIES).optional(),
+  categories: categoryListQuery.optional().default([]),
+  tag: optionalTagQuery,
+  mode: z.enum(OPPORTUNITY_MODES).optional(),
   status: z.enum(USER_OPPORTUNITY_STATUSES).optional(),
   closingSoon: booleanQuery.optional().default(false),
   upcoming: booleanQuery.optional().default(false),
