@@ -1,0 +1,36 @@
+{
+  "hackathons": [
+    {
+      "id": 29541,
+      "title": "Build with Gemini XPRIZE",
+      "displayed_location": { "icon": "globe", "location": "Online" },
+      "open_state": "open",
+      "url": "https://xprize.devpost.com/",
+      "submission_period_dates": "May 19 - Aug 17, 2026",
+      "themes": [{ "id": 6, "name": "Machine Learning/AI" }, { "id": 19, "name": "Education" }],
+      "organization_name": "XPRIZE",
+      "start_a_submission_url": "https://xprize.devpost.com/challenges/start_a_submission",
+      "invite_only": false,
+      "eligibility_requirement_invite_only_description": null
+    },
+    {
+      "id": 31000,
+      "title": "Campus Climate Hackathon",
+      "displayed_location": { "icon": "map-marker-alt", "location": "Singapore" },
+      "open_state": "upcoming",
+      "url": "https://campus-climate.devpost.com/",
+      "submission_period_dates": "Sep 12 - 14, 2026",
+      "themes": [{ "id": 3, "name": "Social Good" }],
+      "organization_name": "Campus Lab",
+      "start_a_submission_url": "https://campus-climate.devpost.com/challenges/start_a_submission",
+      "invite_only": false,
+      "eligibility_requirement_invite_only_description": null
+    },
+    {
+      "id": null,
+      "title": "Malformed listing",
+      "url": "javascript:alert(1)"
+    }
+  ],
+  "meta": { "total_count": 3, "per_page": 9 }
+}

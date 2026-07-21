@@ -1,15 +1,20 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('../server/utils/prisma', () => ({ prisma: {} }))
 import { adapterCandidateSchema } from '../server/opportunity-scanner/adapters/contract'
+import { createDevpostOpportunityAdapter, extractDevpostDetail, extractDevpostListing, parseDevpostSubmissionPeriod } from '../server/opportunity-scanner/adapters/devpost'
 import { createMockOpportunityAdapter } from '../server/opportunity-scanner/adapters/mock'
-import { parseOpportunitySyncArgs } from '../server/opportunity-scanner/cli'
+import { parseOpportunitySyncArgs, runOpportunitySyncCli } from '../server/opportunity-scanner/cli'
 import { deduplicateOpportunity } from '../server/opportunity-scanner/deduplication'
 import { normalizeAdapterCandidate } from '../server/opportunity-scanner/normalization'
 import { runOpportunitySync } from '../server/opportunity-scanner/sync-service'
 import { listOpportunities } from '../server/services/opportunities'
 
 const at = value => new Date(value)
+const devpostListings = JSON.parse(readFileSync(new URL('./fixtures/devpost-hackathons.json', import.meta.url), 'utf8'))
+const devpostOnlineDetail = readFileSync(new URL('./fixtures/devpost-hackathon-detail.html', import.meta.url), 'utf8')
+const devpostInPersonDetail = readFileSync(new URL('./fixtures/devpost-hackathon-in-person-detail.html', import.meta.url), 'utf8')
 const candidate = (overrides = {}) => ({
   externalId: 'listing-1', title: 'Student Builder', organisation: 'Northstar Labs', category: 'INTERNSHIP',
   description: 'Build useful things.', sourceUrl: 'https://MOCK.example/opportunities/1?utm_source=test#details', applicationUrl: 'https://apply.example/1',
@@ -173,3 +178,52 @@ describe('public opportunity visibility and CLI validation', () => {
   })
 })
 
+describe('Devpost opportunity adapter', () => {
+  it('extracts listing fields, conservative dates, and explicit online/in-person modes', () => {
+    const online = extractDevpostListing(devpostListings.hackathons[0])
+    const inPerson = extractDevpostListing(devpostListings.hackathons[1])
+    expect(online).toMatchObject({ externalId: '29541', title: 'Build with Gemini XPRIZE', organisation: 'XPRIZE', category: 'COMPETITION', sourceUrl: 'https://xprize.devpost.com/', mode: 'ONLINE', location: null, startAt: '2026-05-19T00:00:00.000Z', deadline: '2026-08-17T23:59:59.999Z' })
+    expect(online.tags).toEqual(['Machine Learning/AI', 'Education'])
+    expect(inPerson).toMatchObject({ category: 'HACKATHON', mode: 'IN_PERSON', location: 'Singapore' })
+    expect(extractDevpostListing(devpostListings.hackathons[2])).toBeNull()
+    expect(extractDevpostListing({ ...devpostListings.hackathons[0], url: 'https://secure.devpost.com/users/login' })).toBeNull()
+    expect(parseDevpostSubmissionPeriod('Dec 29 - Jan 5, 2027')).toMatchObject({ startAt: '2026-12-29T00:00:00.000Z', deadline: '2027-01-05T23:59:59.999Z' })
+    expect(parseDevpostSubmissionPeriod('sometime soon')).toEqual({ startAt: null, deadline: null, endAt: null })
+  })
+
+  it('extracts bounded plain-text detail fields and exact deadline timestamps', () => {
+    const online = extractDevpostDetail(devpostOnlineDetail, 'https://xprize.devpost.com/')
+    const inPerson = extractDevpostDetail(devpostInPersonDetail, 'https://campus-climate.devpost.com/')
+    expect(online).toMatchObject({ description: 'Build a real product with Gemini and Google Cloud.', applicationUrl: 'https://xprize.devpost.com/register?flow%5Bdata%5D%5Bchallenge_id%5D=29541', deadline: '2026-08-17T20:00:00.000Z', mode: 'ONLINE' })
+    expect(online.eligibilityText).toMatch(/legal age.*individuals and teams/is)
+    expect(online.requirements).toMatch(/Use Gemini.*three-minute demo/is)
+    expect(online.benefits).toMatch(/2,000,000 in cash prizes/i)
+    expect(inPerson).toMatchObject({ mode: 'IN_PERSON', deadline: '2026-09-14T10:00:00.000Z', applicationUrl: 'https://campus-climate.devpost.com/register' })
+    expect(JSON.stringify({ online, inPerson })).not.toMatch(/<\/?(?:html|article|p|li|script)\b/i)
+  })
+
+  it('isolates malformed listings, stays idempotent, and updates changed content through the sync pipeline', async () => {
+    const { database, state } = createScannerDatabase()
+    Object.assign(state.source, { name: 'Devpost', slug: 'devpost', adapterKey: 'devpost', baseUrl: 'https://devpost.com/hackathons' })
+    const payload = structuredClone(devpostListings)
+    const adapter = createDevpostOpportunityAdapter({ maxPages: 1, fetchJson: vi.fn(async () => ({ data: payload })), fetchHtml: vi.fn(async url => ({ html: url.includes('campus-climate') ? devpostInPersonDetail : devpostOnlineDetail })), sleep: vi.fn() })
+    const first = await runOpportunitySync('devpost', { database, adapter, now: at('2026-07-21T00:00:00.000Z') })
+    const second = await runOpportunitySync('devpost', { database, adapter, now: at('2026-07-22T00:00:00.000Z') })
+    payload.hackathons[0].title = 'Build with Gemini XPRIZE — Updated'
+    const changed = await runOpportunitySync('devpost', { database, adapter, now: at('2026-07-23T00:00:00.000Z') })
+    expect(first).toMatchObject({ fetchedCount: 3, createdCount: 2, invalidCount: 1 })
+    expect(second).toMatchObject({ createdCount: 0, updatedCount: 0, duplicateCount: 2, invalidCount: 1 })
+    expect(changed).toMatchObject({ createdCount: 0, updatedCount: 1, duplicateCount: 1, invalidCount: 1 })
+    expect(state.opportunities).toHaveLength(2)
+    expect(state.opportunities.find(item => item.sourceUrl === 'https://xprize.devpost.com/').title).toContain('Updated')
+    expect(JSON.stringify(state.opportunities)).not.toMatch(/<\/?(?:html|article|script)\b/i)
+  })
+
+  it('reports a safe successful CLI summary for the registered Devpost source', async () => {
+    const output = { log: vi.fn(), error: vi.fn() }
+    const code = await runOpportunitySyncCli(['--source=devpost'], output, vi.fn().mockResolvedValue({ fetchedCount: 3, createdCount: 2, updatedCount: 0, duplicateCount: 0, invalidCount: 1, closedCount: 0 }))
+    expect(code).toBe(0)
+    expect(output.log).toHaveBeenCalledWith('Opportunity sync succeeded: fetched=3 created=2 updated=0 duplicates=0 invalid=1 closed=0')
+    expect(output.error).not.toHaveBeenCalled()
+  })
+})

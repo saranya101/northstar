@@ -9,10 +9,10 @@ export function parseOpportunitySyncArgs(args) {
   return { source }
 }
 
-export async function runOpportunitySyncCli(args = process.argv.slice(2), output = console) {
+export async function runOpportunitySyncCli(args = process.argv.slice(2), output = console, sync = runOpportunitySync) {
   try {
     const { source } = parseOpportunitySyncArgs(args)
-    const run = await runOpportunitySync(source)
+    const run = await sync(source)
     output.log(`Opportunity sync succeeded: fetched=${run.fetchedCount} created=${run.createdCount} updated=${run.updatedCount} duplicates=${run.duplicateCount} invalid=${run.invalidCount} closed=${run.closedCount}`)
     return 0
   } catch (cause) {
@@ -20,4 +20,3 @@ export async function runOpportunitySyncCli(args = process.argv.slice(2), output
     return 1
   }
 }
-

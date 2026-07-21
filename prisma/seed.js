@@ -42,6 +42,12 @@ try {
       durationYears: 3
     }
   })
+
+  await prisma.opportunitySource.upsert({
+    where: { adapterKey: 'devpost' },
+    update: { name: 'Devpost', slug: 'devpost', baseUrl: 'https://devpost.com/hackathons' },
+    create: { name: 'Devpost', slug: 'devpost', adapterKey: 'devpost', baseUrl: 'https://devpost.com/hackathons', enabled: true }
+  })
 } finally {
   await prisma.$disconnect()
 }

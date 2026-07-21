@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { assertPublicUrl, fetchPublicHtml, isBlockedIpAddress, normalizePublicUrl } from '../server/services/opportunity-link-fetcher'
+import { assertPublicUrl, fetchPublicHtml, fetchPublicJson, isBlockedIpAddress, normalizePublicUrl } from '../server/services/opportunity-link-fetcher'
 
 const publicLookup = vi.fn().mockResolvedValue([{ address: '93.184.216.34', family: 4 }])
 const htmlResponse = (html = '<html><title>Public</title></html>', init = {}) => { const { headers, ...options } = init; return new Response(html, { status: 200, ...options, headers: { 'content-type': 'text/html; charset=utf-8', ...headers } }) }
@@ -53,5 +53,12 @@ describe('opportunity link SSRF protection', () => {
   it('returns a safe timeout error', async () => {
     const timeout = Object.assign(new Error('network internals'), { name: 'AbortError' })
     await expect(fetchPublicHtml('https://example.com', { fetchImpl: vi.fn().mockRejectedValue(timeout), lookup: publicLookup })).rejects.toMatchObject({ statusCode: 504, statusMessage: 'The website took too long to respond.' })
+  })
+
+  it('fetches bounded public JSON without sending cookies or credentials', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(new Response('{"items":[]}', { status: 200, headers: { 'content-type': 'application/json' } }))
+    await expect(fetchPublicJson('https://example.com/public.json', { fetchImpl, lookup: publicLookup })).resolves.toMatchObject({ data: { items: [] } })
+    expect(fetchImpl).toHaveBeenCalledWith(expect.any(URL), expect.objectContaining({ method: 'GET', redirect: 'manual', headers: { accept: 'application/json', 'user-agent': 'NorthstarOpportunityImporter/1.0' } }))
+    expect(JSON.stringify(fetchImpl.mock.calls[0][1].headers)).not.toMatch(/cookie|credential|authori[sz]ation/i)
   })
 })

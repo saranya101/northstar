@@ -1,7 +1,19 @@
 import { lookup as dnsLookup } from 'node:dns/promises'
 import { isIP } from 'node:net'
 import { createError } from 'h3'
-import { normalizeOpportunityUrl } from '~~/shared/schemas/opportunities'
+
+function normalizeOpportunityUrl(value) {
+  if (typeof value !== 'string') return value
+  const trimmed = value.trim()
+  if (!trimmed) return trimmed
+  try {
+    const url = new URL(trimmed)
+    url.hash = ''
+    url.hostname = url.hostname.toLowerCase()
+    if ((url.protocol === 'https:' && url.port === '443') || (url.protocol === 'http:' && url.port === '80')) url.port = ''
+    return url.toString()
+  } catch { return trimmed }
+}
 
 export const LINK_FETCH_LIMITS = Object.freeze({ redirects: 3, bytes: 1_000_000, timeoutMs: 5_000 })
 const BLOCKED_HOSTS = new Set(['localhost', 'localhost.localdomain', 'metadata.google.internal', 'metadata.aws.internal'])
@@ -95,6 +107,41 @@ export async function fetchPublicHtml(input, { fetchImpl = globalThis.fetch, loo
       const html = await readLimitedBody(response, limits.bytes)
       if (/<input\b[^>]*type=["']password["']/i.test(html)) throw requestError(422, 'This page appears to require authentication.')
       return { html, finalUrl: normalizeOpportunityUrl(current.toString()) }
+    } catch (error) {
+      if (error?.statusCode) throw error
+      if (error?.name === 'AbortError' || controller.signal.aborted) throw requestError(504, 'The website took too long to respond.')
+      throw requestError(422, 'The website could not be reached.')
+    } finally { clearTimeout(timer) }
+  }
+  throw requestError(422, 'The website redirected too many times.')
+}
+
+export async function fetchPublicJson(input, { fetchImpl = globalThis.fetch, lookup = dnsLookup, limits = LINK_FETCH_LIMITS } = {}) {
+  let current = normalizePublicUrl(input)
+  for (let redirect = 0; redirect <= limits.redirects; redirect += 1) {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), limits.timeoutMs)
+    let response
+    try {
+      await Promise.race([
+        assertPublicUrl(current, { lookup }),
+        new Promise((_, reject) => controller.signal.addEventListener('abort', () => reject(Object.assign(new Error('Timed out'), { name: 'AbortError' })), { once: true }))
+      ])
+      response = await fetchImpl(current, { method: 'GET', redirect: 'manual', signal: controller.signal, headers: { accept: 'application/json', 'user-agent': 'NorthstarOpportunityImporter/1.0' } })
+      if ([301, 302, 303, 307, 308].includes(response.status)) {
+        if (redirect === limits.redirects) throw requestError(422, 'The website redirected too many times.')
+        const location = response.headers.get('location')
+        if (!location) throw requestError(422, 'The website returned an invalid redirect.')
+        await response.body?.cancel()
+        current = normalizePublicUrl(new URL(location, current).toString())
+        continue
+      }
+      if ([401, 403].includes(response.status) || /\/(?:login|signin|auth)(?:[/?#]|$)/i.test(current.pathname)) throw requestError(422, 'This page appears to require authentication.')
+      if (!response.ok) throw requestError(422, 'The website could not be imported.')
+      const contentType = (response.headers.get('content-type') || '').toLowerCase()
+      if (!contentType.includes('application/json') && !contentType.includes('+json')) throw requestError(415, 'Only JSON resources can be imported.')
+      const body = await readLimitedBody(response, limits.bytes)
+      try { return { data: JSON.parse(body), finalUrl: normalizeOpportunityUrl(current.toString()) } } catch { throw requestError(422, 'The website returned invalid data.') }
     } catch (error) {
       if (error?.statusCode) throw error
       if (error?.name === 'AbortError' || controller.signal.aborted) throw requestError(504, 'The website took too long to respond.')
