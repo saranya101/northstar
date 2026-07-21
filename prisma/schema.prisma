@@ -22,6 +22,9 @@ model User {
   studyPreference  StudyPreference?
   semesters        UserSemester[]
   moduleEnrolments UserModuleEnrolment[]
+  timetableImports TimetableImport[]
+  createdOpportunities Opportunity[]     @relation("OpportunityCreator")
+  userOpportunities    UserOpportunity[]
 
   @@unique([email])
   @@map("user")
@@ -163,6 +166,7 @@ model UserSemester {
   user                 User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
   academicTerm         AcademicTerm          @relation(fields: [academicTermId], references: [id])
   moduleEnrolments     UserModuleEnrolment[]
+  timetableImports     TimetableImport[]
 
   @@unique([userId, academicTermId])
   @@index([userId, isActive])
@@ -181,6 +185,78 @@ enum ModuleEnrolmentStatus {
   COMPLETED
   DROPPED
   ARCHIVED
+}
+
+enum TimetableImportStatus {
+  PROCESSING
+  NEEDS_REVIEW
+  CONFIRMED
+  FAILED
+  CANCELLED
+}
+
+enum TimetableImportSource {
+  NTU_REGISTERED_COURSES_PDF
+  NTU_REGISTERED_COURSES_IMAGE
+  NTU_TIMETABLE_IMAGE
+  PASTED_TEXT
+  UNKNOWN
+}
+
+enum DayOfWeek {
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+  SUNDAY
+}
+
+enum ClassSessionType {
+  LECTURE
+  TUTORIAL
+  SEMINAR
+  LABORATORY
+  WORKSHOP
+  PROJECT
+  FIELDWORK
+  OTHER
+}
+
+enum ClassSessionSource {
+  IMPORTED
+  MANUAL
+  OFFICIAL
+}
+
+enum SessionRecurrence {
+  WEEKLY
+  ODD_WEEKS
+  EVEN_WEEKS
+  CUSTOM
+}
+
+enum CourseRegistrationStatus {
+  REGISTERED
+  WAITLISTED
+  EXEMPTED
+  UNKNOWN
+}
+
+enum SessionDeliveryMode {
+  IN_PERSON
+  ONLINE
+  HYBRID
+  TBC
+  UNKNOWN
+}
+
+enum ModuleVerificationStatus {
+  USER_CONFIRMED
+  PUBLIC_SOURCE_MATCH
+  PUBLIC_SOURCE_CONFLICT
+  UNVERIFIED
 }
 
 enum InstructorRole {
@@ -203,24 +279,133 @@ enum ModuleColour {
   ROSE
 }
 
+enum OpportunityCategory {
+  INTERNSHIP
+  PART_TIME_JOB
+  GRADUATE_PROGRAMME
+  HACKATHON
+  COMPETITION
+  VOLUNTEERING
+  CLUB
+  LEADERSHIP
+  SCHOLARSHIP
+  GRANT
+  RESEARCH
+  EXCHANGE
+  SUMMER_PROGRAMME
+  MENTORSHIP
+  ENTREPRENEURSHIP
+  WORKSHOP
+  TALK
+  NETWORKING
+  CERTIFICATION
+  AMBASSADOR
+  PROJECT
+  OTHER
+}
+
+enum OpportunitySourceType {
+  MANUAL
+  PASTED_TEXT
+  PASTED_LINK
+  PUBLIC_SOURCE
+  EMAIL
+  SCREENSHOT
+  PDF
+}
+
+enum OpportunityMode {
+  IN_PERSON
+  ONLINE
+  HYBRID
+  UNKNOWN
+}
+
+enum UserOpportunityStatus {
+  SAVED
+  INTERESTED
+  APPLYING
+  APPLIED
+  ACCEPTED
+  REJECTED
+  COMPLETED
+  IGNORED
+}
+
+model Opportunity {
+  id                String              @id @default(cuid())
+  title             String
+  organisation      String
+  category          OpportunityCategory
+  description       String?
+  sourceType        OpportunitySourceType @default(MANUAL)
+  sourceName        String?
+  sourceUrl         String?
+  applicationUrl    String?
+  publishedAt       DateTime?
+  deadline          DateTime?
+  startAt           DateTime?
+  endAt             DateTime?
+  location          String?
+  mode              OpportunityMode     @default(UNKNOWN)
+  commitment        String?
+  eligibilityText   String?
+  requirements      String?
+  benefits          String?
+  tags              String[]            @default([])
+  createdByUserId   String?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  createdBy         User?               @relation("OpportunityCreator", fields: [createdByUserId], references: [id], onDelete: Cascade)
+  userOpportunities UserOpportunity[]
+
+  @@index([createdByUserId])
+  @@index([deadline])
+  @@index([category])
+  @@index([category, deadline])
+}
+
+model UserOpportunity {
+  id               String                @id @default(cuid())
+  userId           String
+  opportunityId    String
+  status           UserOpportunityStatus @default(SAVED)
+  personalDeadline DateTime?
+  notes            String?
+  savedAt          DateTime?
+  appliedAt        DateTime?
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  user             User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  opportunity      Opportunity           @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, opportunityId])
+  @@index([userId])
+  @@index([userId, status])
+  @@index([opportunityId])
+  @@index([personalDeadline])
+}
+
 model Module {
-  id             String             @id @default(cuid())
-  universityId   String
-  schoolId       String?
-  code           String
-  title          String
-  description    String?
-  academicUnits  Decimal?           @db.Decimal(5, 2)
-  level          String?
-  gradingBasis   String?
-  officialUrl    String?
-  sourceStatus   ModuleSourceStatus @default(USER_ENTERED)
-  lastVerifiedAt DateTime?
-  createdAt      DateTime           @default(now())
-  updatedAt      DateTime           @updatedAt
-  university     University         @relation(fields: [universityId], references: [id])
-  school         School?            @relation(fields: [schoolId], references: [id])
-  offerings      ModuleOffering[]
+  id                   String                   @id @default(cuid())
+  universityId         String
+  schoolId             String?
+  code                 String
+  title                String
+  description          String?
+  academicUnits        Decimal?                 @db.Decimal(5, 2)
+  level                String?
+  gradingBasis         String?
+  officialUrl          String?
+  sourceStatus         ModuleSourceStatus       @default(USER_ENTERED)
+  lastVerifiedAt       DateTime?
+  verificationStatus   ModuleVerificationStatus @default(UNVERIFIED)
+  enrichmentProvenance Json?
+  createdAt            DateTime                 @default(now())
+  updatedAt            DateTime                 @updatedAt
+  university           University               @relation(fields: [universityId], references: [id])
+  school               School?                  @relation(fields: [schoolId], references: [id])
+  offerings            ModuleOffering[]
 
   @@unique([universityId, code])
   @@index([universityId])
@@ -289,25 +474,76 @@ model InstructorAssignment {
 }
 
 model UserModuleEnrolment {
-  id             String                @id @default(cuid())
-  userId         String
-  userSemesterId String
-  offeringId     String
-  targetGrade    String?
-  personalNotes  String?
-  colour         ModuleColour          @default(MINERAL)
-  status         ModuleEnrolmentStatus @default(ACTIVE)
-  createdAt      DateTime              @default(now())
-  updatedAt      DateTime              @updatedAt
-  user           User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userSemester   UserSemester          @relation(fields: [userSemesterId], references: [id], onDelete: Cascade)
-  offering       ModuleOffering        @relation(fields: [offeringId], references: [id])
+  id                 String                   @id @default(cuid())
+  userId             String
+  userSemesterId     String
+  offeringId         String
+  targetGrade        String?
+  personalNotes      String?
+  colour             ModuleColour             @default(MINERAL)
+  status             ModuleEnrolmentStatus    @default(ACTIVE)
+  indexNumber        String?
+  courseType         String?
+  registrationStatus CourseRegistrationStatus @default(UNKNOWN)
+  createdAt          DateTime                 @default(now())
+  updatedAt          DateTime                 @updatedAt
+  user               User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userSemester       UserSemester             @relation(fields: [userSemesterId], references: [id], onDelete: Cascade)
+  offering           ModuleOffering           @relation(fields: [offeringId], references: [id])
+  classSessions      ClassSession[]
 
   @@unique([userId, offeringId])
   @@index([userId])
   @@index([userSemesterId])
   @@index([status])
   @@index([offeringId])
+}
+
+model TimetableImport {
+  id                   String                @id @default(cuid())
+  userId               String
+  userSemesterId       String
+  source               TimetableImportSource
+  status               TimetableImportStatus @default(NEEDS_REVIEW)
+  parserVersion        String
+  candidatePayload     Json
+  warnings             Json?
+  detectedModuleCount  Int                   @default(0)
+  detectedSessionCount Int                   @default(0)
+  confirmedAt          DateTime?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  user                 User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userSemester         UserSemester          @relation(fields: [userSemesterId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userSemesterId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model ClassSession {
+  id                    String              @id @default(cuid())
+  userModuleEnrolmentId String
+  classType             ClassSessionType
+  groupLabel            String              @default("DEFAULT")
+  dayOfWeek             DayOfWeek
+  startMinutes          Int
+  endMinutes            Int
+  venue                 String?
+  recurrence            SessionRecurrence   @default(WEEKLY)
+  weekNumbers           Int[]               @default([])
+  source                ClassSessionSource  @default(MANUAL)
+  deliveryMode          SessionDeliveryMode @default(UNKNOWN)
+  confidence            Decimal?            @db.Decimal(3, 2)
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+  userModuleEnrolment   UserModuleEnrolment @relation(fields: [userModuleEnrolmentId], references: [id], onDelete: Cascade)
+
+  @@unique([userModuleEnrolmentId, classType, groupLabel, dayOfWeek, startMinutes, endMinutes])
+  @@index([userModuleEnrolmentId])
+  @@index([dayOfWeek])
+  @@index([startMinutes])
 }
 
 model Session {

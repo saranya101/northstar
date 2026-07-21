@@ -58,8 +58,14 @@ describe('module catalogue boundaries', () => {
     await searchModules('user-1', 'tmp', database)
     expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
       where: expect.objectContaining({ universityId: 'u1' }),
-      include: { offerings: expect.objectContaining({ include: { enrolments: { where: { userId: 'user-1' }, select: { id: true, status: true } } } }) },
-      take: 50
+      select: expect.objectContaining({
+        id: true,
+        code: true,
+        title: true,
+        sourceStatus: true,
+        offerings: expect.objectContaining({ select: { enrolments: { where: { userId: 'user-1' }, select: { id: true } } } })
+      }),
+      take: 20
     }))
   })
 

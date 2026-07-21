@@ -68,6 +68,7 @@ export function useCurrentSession() {
     error,
     loadSession,
     pending,
+    state,
     user
   }
 }

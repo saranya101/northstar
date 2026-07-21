@@ -1,17 +1,50 @@
 <script setup>
-const { state: onboarding } = useOnboarding()
-const { user } = useCurrentSession()
+import { protectedRouteDestination } from '~/utils/auth-navigation'
+import { appOnboardingDestination } from '~/utils/onboarding-navigation'
+
+const route = useRoute()
+const nuxtApp = useNuxtApp()
+const { state: onboarding, load: loadOnboarding } = useOnboarding()
+const { state: session, user, loadSession } = useCurrentSession()
 const { logout, signingOut, signOutError } = useAuthActions()
 const mobileOpen = ref(false)
+const bootstrapPending = ref(!session.value.loaded || !onboarding.value)
 const navigation = [
   { label: 'Overview', to: '/app', icon: 'i-lucide-layout-dashboard' },
   { label: 'Modules', to: '/app/modules', icon: 'i-lucide-library-big' },
+  { label: 'Timetable', to: '/app/timetable', icon: 'i-lucide-calendar-days' },
+  { label: 'Opportunities', to: '/app/opportunities', icon: 'i-lucide-briefcase-business' },
   { label: 'Settings', to: '/app/settings', icon: 'i-lucide-settings-2' }
 ]
 const termLabel = computed(() => {
   const term = onboarding.value?.semester?.academicTerm
-  return term ? `${term.academicYear} · ${term.name}` : 'No active semester'
+  if (term) return `${term.academicYear} · ${term.name}`
+  return bootstrapPending.value ? 'Loading semester…' : 'No active semester'
 })
+const accountLabel = computed(() => onboarding.value?.profile?.displayName || user.value?.name || user.value?.email || 'Loading account…')
+
+async function bootstrapApp() {
+  try {
+    await loadSession()
+    const authDestination = protectedRouteDestination(user.value, route.fullPath)
+    if (authDestination) {
+      await nuxtApp.runWithContext(() => navigateTo(authDestination))
+      return
+    }
+
+    await loadOnboarding()
+    const onboardingDestination = appOnboardingDestination(onboarding.value?.onboardingCompleted, route.path)
+    if (onboardingDestination) {
+      await nuxtApp.runWithContext(() => navigateTo(onboardingDestination))
+    }
+  } catch {
+    // The composables expose request errors to the page; keep the shell usable.
+  } finally {
+    bootstrapPending.value = false
+  }
+}
+
+onMounted(() => { void bootstrapApp() })
 </script>
 
 <template>
@@ -26,7 +59,7 @@ const termLabel = computed(() => {
         </NuxtLink>
       </nav>
       <div class="app-shell__account">
-        <span>{{ onboarding?.profile?.displayName || user?.name || user?.email }}</span>
+        <span>{{ accountLabel }}</span>
         <button type="button" :disabled="signingOut" @click="logout">{{ signingOut ? 'Signing out…' : 'Log out' }}</button>
         <p v-if="signOutError" role="alert">{{ signOutError }}</p>
       </div>
@@ -51,6 +84,11 @@ const termLabel = computed(() => {
       </template>
     </USlideover>
 
-    <div class="app-shell__content"><slot /></div>
+    <div class="app-shell__content">
+      <div v-if="bootstrapPending" class="app-shell__loading" role="status" aria-live="polite">
+        <span aria-hidden="true" /> Preparing your workspace…
+      </div>
+      <slot />
+    </div>
   </div>
 </template>
