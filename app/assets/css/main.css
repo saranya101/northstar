@@ -524,7 +524,7 @@ body {
 .opportunity-tags span { flex: 0 0 auto; padding: .2rem .45rem; border-radius: 999px; background: var(--ns-surface-soft); color: var(--ns-text-muted); font-size: .68rem; }
 .opportunity-card-skeleton { min-height: 13rem; padding: 1rem; }
 .opportunity-card-skeleton span { display: block; height: 1rem; margin-bottom: 1rem; border-radius: .25rem; background: var(--ns-border); }
-.opportunity-tabs { display: inline-grid; grid-template-columns: repeat(3,1fr); margin-bottom: 1rem; padding: .25rem; border: 1px solid var(--ns-border); border-radius: .65rem; background: var(--ns-surface-soft); }
+.opportunity-tabs { display: inline-grid; grid-template-columns: repeat(4,1fr); margin-bottom: 1rem; padding: .25rem; border: 1px solid var(--ns-border); border-radius: .65rem; background: var(--ns-surface-soft); }
 .opportunity-tabs button { min-height: 44px; padding: .6rem 1.2rem; border: 0; border-radius: .45rem; background: transparent; color: var(--ns-text-muted); font: inherit; font-weight: 700; cursor: pointer; }
 .opportunity-tabs button[aria-selected="true"] { background: white; color: var(--ns-ink); box-shadow: 0 1px 4px rgb(26 38 48 / 9%); }
 .opportunity-form { display: grid; min-width: 0; gap: 1rem; }
@@ -539,6 +539,15 @@ body {
 .paste-panel > div > span, .extraction-review > div > span { color: var(--ns-text-muted); }
 .paste-panel > small { justify-self: end; color: var(--ns-text-muted); }
 .paste-panel > button { justify-self: start; }
+.upload-picker input { width: 100%; min-height: 48px; padding: .65rem; border: 1px dashed var(--ns-border-strong); border-radius: .6rem; background: var(--ns-surface-soft); color: var(--ns-text); font: inherit; }
+.upload-file-name { display: flex; min-width: 0; align-items: center; gap: .45rem; margin: 0; color: var(--ns-text-muted); font-size: .82rem; overflow-wrap: anywhere; }
+.upload-progress { display: grid; gap: .6rem; padding: .8rem; border-radius: .65rem; background: var(--ns-surface-soft); }
+.upload-progress > div { display: flex; justify-content: space-between; gap: 1rem; color: var(--ns-text-muted); font-size: .8rem; }
+.upload-progress progress { width: 100%; accent-color: var(--ns-accent); }
+.upload-progress button { min-height: 44px; justify-self: start; }
+.low-confidence-warning, .local-processing-note { display: flex; align-items: flex-start; gap: .45rem; margin: 0; padding: .7rem .8rem; border-radius: .55rem; font-size: .8rem; }
+.low-confidence-warning { background: #fff3df; color: #805313; }
+.local-processing-note { background: var(--ns-surface-soft); color: var(--ns-text-muted); }
 .extraction-review { display: grid; gap: 1rem; }
 .extraction-review ul { margin: 0; padding: .8rem 1rem .8rem 2rem; border-radius: .6rem; background: #fff8ec; color: #805b20; }
 .extraction-confidence { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: .5rem; }
@@ -603,6 +612,7 @@ body {
   .opportunity-search, .opportunity-form .span-2 { grid-column: auto; }
   .opportunity-card { min-height: 11rem; }
   .opportunity-tabs { display: grid; width: 100%; }
+  .opportunity-tabs button { min-width: 0; padding-inline: .35rem; font-size: .75rem; }
   .opportunity-form > section, .paste-panel, .extraction-review { padding: .9rem; }
   .opportunity-form__actions { display: grid; grid-template-columns: 1fr 1fr; }
   .opportunity-form__actions > * { min-width: 0; justify-content: center; }
