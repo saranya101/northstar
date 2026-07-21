@@ -8,6 +8,7 @@ definePageMeta({ layout: 'app', middleware: ['auth', 'onboarded'] })
 const route = useRoute()
 const router = useRouter()
 const section = computed(() => getOpportunitySection(String(route.params.slug || '')))
+const isEventsSection = computed(() => String(route.params.slug || '') === 'events')
 
 if (!section.value) {
   throw createError({ statusCode: 404, statusMessage: 'Opportunity section not found.' })
@@ -138,6 +139,37 @@ function goToPage(page) {
       <UButton to="/app/opportunities/new" icon="i-lucide-plus">Add opportunity</UButton>
     </header>
 
+    <section
+      v-if="isEventsSection"
+      class="opportunity-events-highlight"
+      aria-labelledby="events-highlight-heading"
+    >
+      <span class="opportunity-events-highlight__icon">
+        <UIcon
+          name="i-lucide-calendar-heart"
+          aria-hidden="true"
+        />
+      </span>
+
+      <div>
+        <p class="app-page__eyebrow">Official campus feed</p>
+
+        <h2 id="events-highlight-heading">
+          Discover learning beyond the timetable
+        </h2>
+
+        <span>
+          Official NTU Events may appear alongside workshops,
+          talks, certifications and networking opportunities.
+          Event dates describe when something happens, while
+          application deadlines describe when you must register
+          or apply.
+        </span>
+      </div>
+
+      <OpportunitiesOpportunitySourceBadge name="NTU Events" />
+    </section>
+
     <section class="opportunity-subcategory-panel" aria-labelledby="subcategory-heading">
       <div>
         <p class="app-page__eyebrow">Subcategories</p>
@@ -214,11 +246,31 @@ function goToPage(page) {
     </div>
 
     <section v-else-if="!state?.items.length" class="module-empty">
-      <span class="module-empty__icon"><UIcon :name="section.icon" /></span>
+      <span class="module-empty__icon">
+        <UIcon :name="section.icon" />
+      </span>
+
       <p>No matches found</p>
-      <h2>Nothing in this section yet</h2>
-      <span>Try another filter or add an opportunity you found yourself.</span>
-      <UButton to="/app/opportunities/new">Add opportunity</UButton>
+
+      <h2>
+        {{
+          isEventsSection
+            ? 'No events match these filters'
+            : 'Nothing in this section yet'
+        }}
+      </h2>
+
+      <span>
+        {{
+          isEventsSection
+            ? 'Try another event type, mode or search term. Official NTU Events will appear here after a successful source scan.'
+            : 'Try another filter or add an opportunity you found yourself.'
+        }}
+      </span>
+
+      <UButton to="/app/opportunities/new">
+        Add opportunity
+      </UButton>
     </section>
 
     <div v-else class="opportunity-grid">
