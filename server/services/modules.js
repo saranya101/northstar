@@ -294,7 +294,7 @@ export async function enrolExistingModule(userId, input, database = prisma) {
 export async function getModuleDossier(userId, enrolmentId, database = prisma) {
   const enrolment = await database.userModuleEnrolment.findFirst({
     where: { id: enrolmentId, userId },
-    include: { offering: { include: offeringInclude } }
+    include: { offering: { include: offeringInclude }, classSessions: { orderBy: [{ dayOfWeek: 'asc' }, { startMinutes: 'asc' }] } }
   })
   if (!enrolment) throw domainError(404, 'Module enrolment not found.')
   const { offering } = enrolment
@@ -332,9 +332,13 @@ export async function getModuleDossier(userId, enrolmentId, database = prisma) {
       colour: enrolment.colour,
       personalNotes: enrolment.personalNotes,
       status: enrolment.status,
+      indexNumber: enrolment.indexNumber,
+      courseType: enrolment.courseType,
+      registrationStatus: enrolment.registrationStatus,
       createdAt: dateValue(enrolment.createdAt),
       updatedAt: dateValue(enrolment.updatedAt)
-    }
+    },
+    classSessions: enrolment.classSessions.map(session => ({ ...session, confidence: decimalValue(session.confidence), createdAt: dateValue(session.createdAt), updatedAt: dateValue(session.updatedAt) }))
   }
 }
 

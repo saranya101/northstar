@@ -22,6 +22,7 @@ model User {
   studyPreference  StudyPreference?
   semesters        UserSemester[]
   moduleEnrolments UserModuleEnrolment[]
+  timetableImports TimetableImport[]
 
   @@unique([email])
   @@map("user")
@@ -163,6 +164,7 @@ model UserSemester {
   user                 User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
   academicTerm         AcademicTerm          @relation(fields: [academicTermId], references: [id])
   moduleEnrolments     UserModuleEnrolment[]
+  timetableImports     TimetableImport[]
 
   @@unique([userId, academicTermId])
   @@index([userId, isActive])
@@ -181,6 +183,63 @@ enum ModuleEnrolmentStatus {
   COMPLETED
   DROPPED
   ARCHIVED
+}
+
+enum TimetableImportStatus {
+  PROCESSING
+  NEEDS_REVIEW
+  CONFIRMED
+  FAILED
+  CANCELLED
+}
+
+enum TimetableImportSource {
+  NTU_REGISTERED_COURSES_PDF
+  NTU_REGISTERED_COURSES_IMAGE
+  NTU_TIMETABLE_IMAGE
+  PASTED_TEXT
+  UNKNOWN
+}
+
+enum DayOfWeek {
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+  SUNDAY
+}
+
+enum ClassSessionType {
+  LECTURE
+  TUTORIAL
+  SEMINAR
+  LABORATORY
+  WORKSHOP
+  PROJECT
+  FIELDWORK
+  OTHER
+}
+
+enum ClassSessionSource {
+  IMPORTED
+  MANUAL
+  OFFICIAL
+}
+
+enum SessionRecurrence {
+  WEEKLY
+  ODD_WEEKS
+  EVEN_WEEKS
+  CUSTOM
+}
+
+enum CourseRegistrationStatus {
+  REGISTERED
+  WAITLISTED
+  EXEMPTED
+  UNKNOWN
 }
 
 enum InstructorRole {
@@ -289,25 +348,75 @@ model InstructorAssignment {
 }
 
 model UserModuleEnrolment {
-  id             String                @id @default(cuid())
-  userId         String
-  userSemesterId String
-  offeringId     String
-  targetGrade    String?
-  personalNotes  String?
-  colour         ModuleColour          @default(MINERAL)
-  status         ModuleEnrolmentStatus @default(ACTIVE)
-  createdAt      DateTime              @default(now())
-  updatedAt      DateTime              @updatedAt
-  user           User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userSemester   UserSemester          @relation(fields: [userSemesterId], references: [id], onDelete: Cascade)
-  offering       ModuleOffering        @relation(fields: [offeringId], references: [id])
+  id                 String                   @id @default(cuid())
+  userId             String
+  userSemesterId     String
+  offeringId         String
+  targetGrade        String?
+  personalNotes      String?
+  colour             ModuleColour             @default(MINERAL)
+  status             ModuleEnrolmentStatus    @default(ACTIVE)
+  indexNumber        String?
+  courseType         String?
+  registrationStatus CourseRegistrationStatus @default(UNKNOWN)
+  createdAt          DateTime                 @default(now())
+  updatedAt          DateTime                 @updatedAt
+  user               User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userSemester       UserSemester             @relation(fields: [userSemesterId], references: [id], onDelete: Cascade)
+  offering           ModuleOffering           @relation(fields: [offeringId], references: [id])
+  classSessions      ClassSession[]
 
   @@unique([userId, offeringId])
   @@index([userId])
   @@index([userSemesterId])
   @@index([status])
   @@index([offeringId])
+}
+
+model TimetableImport {
+  id                   String                @id @default(cuid())
+  userId               String
+  userSemesterId       String
+  source               TimetableImportSource
+  status               TimetableImportStatus @default(NEEDS_REVIEW)
+  parserVersion        String
+  candidatePayload     Json
+  warnings             Json?
+  detectedModuleCount  Int                   @default(0)
+  detectedSessionCount Int                   @default(0)
+  confirmedAt          DateTime?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  user                 User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userSemester         UserSemester          @relation(fields: [userSemesterId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userSemesterId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model ClassSession {
+  id                    String              @id @default(cuid())
+  userModuleEnrolmentId String
+  classType             ClassSessionType
+  groupLabel            String              @default("DEFAULT")
+  dayOfWeek             DayOfWeek
+  startMinutes          Int
+  endMinutes            Int
+  venue                 String?
+  recurrence            SessionRecurrence   @default(WEEKLY)
+  weekNumbers           Int[]               @default([])
+  source                ClassSessionSource  @default(MANUAL)
+  confidence            Decimal?            @db.Decimal(3, 2)
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+  userModuleEnrolment   UserModuleEnrolment @relation(fields: [userModuleEnrolmentId], references: [id], onDelete: Cascade)
+
+  @@unique([userModuleEnrolmentId, classType, groupLabel, dayOfWeek, startMinutes, endMinutes])
+  @@index([userModuleEnrolmentId])
+  @@index([dayOfWeek])
+  @@index([startMinutes])
 }
 
 model Session {

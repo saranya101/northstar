@@ -8,6 +8,7 @@ export function useAuthActions() {
   const { clearSession } = useCurrentSession()
   const { clear: clearOnboarding } = useOnboarding()
   const { clear: clearModules } = useModules()
+  const { clear: clearTimetable } = useTimetable()
 
   async function logout() {
     if (signingOut.value) {
@@ -28,6 +29,7 @@ export function useAuthActions() {
       clearSession()
       clearOnboarding()
       clearModules()
+      clearTimetable()
       await nuxtApp.runWithContext(() => navigateTo('/login'))
     } catch (error) {
       signOutError.value = normaliseAuthError(error, 'Unable to sign out. Please try again.')

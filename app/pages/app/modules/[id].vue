@@ -6,10 +6,13 @@ const nuxtApp = useNuxtApp()
 const { user } = useCurrentSession()
 const { dossiers, loading, saving, error, fieldErrors, loadDossier, update, close, clearErrors } = useModules()
 const instructorOpen = ref(false)
+const sessionOpen = ref(false)
+const selectedSession = ref(null)
 const confirmMode = ref(null)
 const savedMessage = ref('')
 const dossier = computed(() => dossiers.value[route.params.id])
 const settings = reactive({ targetGrade: '', colour: 'MINERAL', personalNotes: '', status: 'ACTIVE' })
+const { saving: sessionSaving, addSession, updateSession, deleteSession } = useTimetable()
 
 useSeoMeta({ title: () => dossier.value ? `${dossier.value.module.code} · Northstar` : 'Module · Northstar' })
 watch(dossier, (value) => {
@@ -42,6 +45,15 @@ async function confirmClose() {
   const result = await close(route.params.id, mode)
   if (result) await nuxtApp.runWithContext(() => navigateTo('/app/modules'))
 }
+function editSession(session) { selectedSession.value = session; sessionOpen.value = true }
+function newSession() { selectedSession.value = null; sessionOpen.value = true }
+async function saveSession(payload) {
+  const { enrolmentId, ...body } = payload
+  const result = selectedSession.value ? await updateSession(selectedSession.value.id, body) : await addSession(enrolmentId, body)
+  if (result) { sessionOpen.value = false; await loadDossier(route.params.id, true) }
+}
+async function removeSession(id) { if (await deleteSession(id)) { sessionOpen.value = false; await loadDossier(route.params.id, true) } }
+function sessionTime(session) { const render = value => `${String(Math.floor(value / 60)).padStart(2, '0')}:${String(value % 60).padStart(2, '0')}`; return `${render(session.startMinutes)}–${render(session.endMinutes)}` }
 </script>
 
 <template>
@@ -76,6 +88,13 @@ async function confirmClose() {
       </section>
 
       <section class="dossier-section">
+        <div class="dossier-section__heading"><div><p>Recurring schedule</p><h2>Class sessions</h2></div><UButton icon="i-lucide-plus" color="neutral" variant="outline" @click="newSession">Add session</UButton></div>
+        <dl class="dossier-details"><div><dt>Index number</dt><dd>{{ dossier.enrolment.indexNumber || 'Not provided' }}</dd></div><div><dt>Registration status</dt><dd>{{ humanize(dossier.enrolment.registrationStatus) }}</dd></div><div><dt>Course type</dt><dd>{{ dossier.enrolment.courseType || 'Not provided' }}</dd></div></dl>
+        <div v-if="dossier.classSessions.length" class="session-list"><button v-for="session in dossier.classSessions" :key="session.id" @click="editSession(session)"><strong>{{ humanize(session.classType) }}</strong><span>{{ humanize(session.dayOfWeek) }} · {{ sessionTime(session) }}</span><small>{{ session.groupLabel }}<template v-if="session.venue"> · {{ session.venue }}</template> · {{ humanize(session.recurrence) }}</small><UIcon name="i-lucide-pencil" /></button></div>
+        <p v-else class="dossier-empty">No class sessions have been added for this module.</p>
+      </section>
+
+      <section class="dossier-section">
         <div class="dossier-section__heading"><div><p>Current offering</p><h2>Teaching team</h2></div><UButton icon="i-lucide-user-plus" color="neutral" variant="outline" @click="instructorOpen = true">Add instructor</UButton></div>
         <div v-if="dossier.instructors.length" class="instructor-list">
           <article v-for="instructor in dossier.instructors" :key="`${instructor.id}-${instructor.role}`">
@@ -104,7 +123,6 @@ async function confirmClose() {
 
       <section class="upcoming-grid" aria-labelledby="upcoming-title">
         <h2 id="upcoming-title">Upcoming areas</h2>
-        <article><UIcon name="i-lucide-calendar-days" /><h3>Timetable</h3><p>Class sessions will be added in the next phase.</p></article>
         <article><UIcon name="i-lucide-clipboard-check" /><h3>Assessments</h3><p>Assessment dates and weightages will be added after your timetable.</p></article>
         <article><UIcon name="i-lucide-brain" /><h3>Topic mastery</h3><p>Topic-level progress will appear once course content is connected.</p></article>
       </section>
@@ -115,6 +133,8 @@ async function confirmClose() {
       </section>
 
       <ModulesAddInstructorModal v-model:open="instructorOpen" :enrolment-id="route.params.id" />
+      <TimetableSessionModal v-model:open="sessionOpen" :session="selectedSession" :fixed-enrolment-id="route.params.id" :enrolments="[]" @save="saveSession" @delete="removeSession" />
+      <p v-if="sessionSaving" class="sr-only" role="status">Saving class session…</p>
       <UModal :open="Boolean(confirmMode)" :title="confirmMode === 'archive' ? 'Archive module?' : 'Drop module?'" description="The shared catalogue record will remain available and your personal historical enrolment data will be preserved." @update:open="value => { if (!value) confirmMode = null }">
         <template #footer>
           <UButton color="neutral" variant="outline" @click="confirmMode = null">Cancel</UButton>

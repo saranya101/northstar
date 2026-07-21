@@ -12,6 +12,7 @@ const bootstrapPending = ref(!session.value.loaded || !onboarding.value)
 const navigation = [
   { label: 'Overview', to: '/app', icon: 'i-lucide-layout-dashboard' },
   { label: 'Modules', to: '/app/modules', icon: 'i-lucide-library-big' },
+  { label: 'Timetable', to: '/app/timetable', icon: 'i-lucide-calendar-days' },
   { label: 'Settings', to: '/app/settings', icon: 'i-lucide-settings-2' }
 ]
 const termLabel = computed(() => {

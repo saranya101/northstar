@@ -21,8 +21,8 @@ function moduleCreated(module) {
 <template>
   <main class="app-page modules-page">
     <header class="app-page__header">
-      <div><p class="app-page__eyebrow">Academic structure</p><h1>Modules</h1><span>Build the academic structure Northstar will use for your timetable, assessments and progress.</span></div>
-      <UButton icon="i-lucide-plus" size="lg" @click="addOpen = true">Add module</UButton>
+      <div><p class="app-page__eyebrow">Academic structure</p><h1>Set up your semester</h1><span>Upload your STARS timetable or registered-courses summary. Northstar will detect your modules and class sessions for review.</span></div>
+      <UButton to="/app/timetable/import" icon="i-lucide-upload" size="lg">Import NTU timetable</UButton>
     </header>
 
     <p v-if="successMessage" class="module-success" role="status" aria-live="polite">{{ successMessage }}</p>
@@ -34,13 +34,13 @@ function moduleCreated(module) {
     <section v-else-if="!hasModules" class="module-empty">
       <span class="module-empty__icon" aria-hidden="true"><UIcon name="i-lucide-library-big" /></span>
       <p>Set up your active semester</p>
-      <h2>Your semester starts here</h2>
-      <span>Add the modules you are taking so Northstar can organise your timetable, assessments and academic progress.</span>
-      <UButton size="lg" icon="i-lucide-plus" @click="addOpen = true">Add module</UButton>
+      <h2>Set up your semester</h2>
+      <span>Upload your STARS timetable or registered-courses summary. Northstar will detect your modules and class sessions for review.</span>
+      <div class="header-actions"><UButton to="/app/timetable/import" size="lg" icon="i-lucide-upload">Import NTU timetable</UButton><UButton color="neutral" variant="outline" @click="addOpen = true">Add manually</UButton></div>
     </section>
 
     <section v-else aria-labelledby="current-modules-title">
-      <div class="modules-list__heading"><div><p>{{ state.semester.label }}</p><h2 id="current-modules-title">Current modules</h2></div><span>{{ state.activeCount }} active</span></div>
+      <div class="modules-list__heading"><div><p>{{ state.semester.label }}</p><h2 id="current-modules-title">Current modules</h2></div><div class="header-actions"><UButton color="neutral" variant="outline" @click="addOpen = true">Search saved modules</UButton><span>{{ state.activeCount }} active</span></div></div>
       <div class="modules-list"><ModulesModuleCard v-for="module in state.modules" :key="module.enrolmentId" :module="module" /></div>
     </section>
 
