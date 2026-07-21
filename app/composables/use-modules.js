@@ -1,6 +1,8 @@
 const MODULE_LIST_REQUESTS = Symbol.for('northstar.module-list-requests')
 const MODULE_DOSSIER_REQUESTS = Symbol.for('northstar.module-dossier-requests')
 const MODULE_SEARCH_SEQUENCE = Symbol.for('northstar.module-search-sequence')
+const MODULE_SEARCH_REQUESTS = Symbol.for('northstar.module-search-requests')
+const MODULE_SEARCH_CACHE = Symbol.for('northstar.module-search-cache')
 
 function moduleErrorDetails(error, fallback) {
   return {
@@ -28,6 +30,8 @@ export function useModules() {
   nuxtApp[MODULE_LIST_REQUESTS] ||= new Map()
   nuxtApp[MODULE_DOSSIER_REQUESTS] ||= new Map()
   nuxtApp[MODULE_SEARCH_SEQUENCE] ||= 0
+  nuxtApp[MODULE_SEARCH_REQUESTS] ||= new Map()
+  nuxtApp[MODULE_SEARCH_CACHE] ||= new Map()
 
   function clearErrors() {
     error.value = ''
@@ -38,6 +42,8 @@ export function useModules() {
     generation.value += 1
     nuxtApp[MODULE_LIST_REQUESTS].clear()
     nuxtApp[MODULE_DOSSIER_REQUESTS].clear()
+    nuxtApp[MODULE_SEARCH_REQUESTS].clear()
+    nuxtApp[MODULE_SEARCH_CACHE].clear()
     state.value = null
     dossiers.value = {}
     ownerId.value = null
@@ -105,12 +111,26 @@ export function useModules() {
     }
 
     const sequence = ++nuxtApp[MODULE_SEARCH_SEQUENCE]
+    const cacheKey = query.toLocaleLowerCase()
+    const cached = nuxtApp[MODULE_SEARCH_CACHE].get(cacheKey)
+    if (cached) {
+      searchResults.value = cached
+      searching.value = false
+      return cached
+    }
+
     searching.value = true
     try {
-      const result = await requestFetch('/api/modules/search', { query: { q: query } })
+      const requests = nuxtApp[MODULE_SEARCH_REQUESTS]
+      const request = requests.get(cacheKey) || requestFetch('/api/modules/search', { query: { q: query } })
+      requests.set(cacheKey, request)
+      const result = await request
+      nuxtApp[MODULE_SEARCH_CACHE].set(cacheKey, result.results)
+      if (requests.get(cacheKey) === request) requests.delete(cacheKey)
       if (sequence === nuxtApp[MODULE_SEARCH_SEQUENCE]) searchResults.value = result.results
       return result.results
     } catch (cause) {
+      nuxtApp[MODULE_SEARCH_REQUESTS].delete(cacheKey)
       if (sequence === nuxtApp[MODULE_SEARCH_SEQUENCE]) {
         error.value = moduleErrorDetails(cause, 'Unable to search modules.').message
       }

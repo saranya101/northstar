@@ -138,13 +138,17 @@ export async function searchModules(userId, query, database = prisma) {
         { title: { contains: query, mode: 'insensitive' } }
       ]
     },
-    include: {
+    select: {
+      id: true,
+      code: true,
+      title: true,
+      sourceStatus: true,
       offerings: {
         where: { academicTermId: activeSemester.academicTermId },
-        include: { enrolments: { where: { userId }, select: { id: true, status: true } } }
+        select: { enrolments: { where: { userId }, select: { id: true } } }
       }
     },
-    take: 50
+    take: 20
   })
 
   return {
@@ -161,8 +165,6 @@ export async function searchModules(userId, query, database = prisma) {
         id: module.id,
         code: module.code,
         title: module.title,
-        description: module.description,
-        academicUnits: decimalValue(module.academicUnits),
         sourceStatus: module.sourceStatus,
         alreadyEnrolled: module.offerings.some(offering => offering.enrolments.length > 0)
       }))

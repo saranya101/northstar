@@ -3,6 +3,7 @@ definePageMeta({ layout: 'app', middleware: ['auth', 'onboarded'] })
 
 const route = useRoute()
 const nuxtApp = useNuxtApp()
+const { user } = useCurrentSession()
 const { dossiers, loading, saving, error, fieldErrors, loadDossier, update, close, clearErrors } = useModules()
 const instructorOpen = ref(false)
 const confirmMode = ref(null)
@@ -21,7 +22,9 @@ watch(dossier, (value) => {
   })
 }, { immediate: true })
 
-await loadDossier(route.params.id)
+watch([user, () => route.params.id], ([currentUser, id]) => {
+  if (currentUser && id) void loadDossier(id).catch(() => {})
+}, { immediate: true })
 
 function humanize(value) {
   return value?.replaceAll('_', ' ').toLowerCase().replace(/\b\w/g, letter => letter.toUpperCase())
@@ -43,7 +46,10 @@ async function confirmClose() {
 
 <template>
   <main class="app-page dossier-page">
-    <p v-if="loading && !dossier" class="module-loading"><UIcon name="i-lucide-loader-circle" class="animate-spin" /> Loading dossier…</p>
+    <div v-if="!dossier && (loading || !error)" class="dossier-skeleton" aria-label="Loading module dossier">
+      <div class="app-skeleton app-skeleton--dossier"><span /><span /><span /><span /></div>
+      <div class="app-skeleton app-skeleton--panel"><span /><span /><span /></div>
+    </div>
     <p v-else-if="!dossier" class="module-alert" role="alert">{{ error || 'Module dossier unavailable.' }}</p>
     <template v-else>
       <NuxtLink to="/app/modules" class="dossier-back"><UIcon name="i-lucide-arrow-left" /> Back to modules</NuxtLink>

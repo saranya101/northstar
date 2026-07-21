@@ -5,7 +5,7 @@ const props = defineProps({ open: Boolean })
 const emit = defineEmits(['update:open', 'created'])
 const { search, searchResults, searching, saving, error, fieldErrors, addManual, enrol, clearErrors } = useModules()
 
-const mode = ref('find')
+const mode = ref('manual')
 const searchText = ref('')
 const selected = ref(null)
 const localErrors = ref({})
@@ -16,16 +16,17 @@ const manualForm = reactive({
 })
 let debounceTimer
 
-watch(searchText, (value) => {
+watch([searchText, mode], ([value, currentMode]) => {
   clearTimeout(debounceTimer)
   selected.value = null
-  if (value.trim().length < 2) return
+  if (currentMode !== 'search' || value.trim().length < 2) return
   debounceTimer = setTimeout(() => search(value), 280)
 })
 watch(() => props.open, (open) => {
   if (open) {
     clearErrors()
     localErrors.value = {}
+    mode.value = searchResults.value.length ? 'search' : 'manual'
   }
 })
 onBeforeUnmount(() => clearTimeout(debounceTimer))
@@ -61,26 +62,28 @@ function issue(name) {
 </script>
 
 <template>
-  <UModal :open="open" title="Add module" description="Add a shared catalogue module or enter one yourself." scrollable :ui="{ content: 'sm:max-w-3xl' }" @update:open="$emit('update:open', $event)">
+  <UModal :open="open" title="Add module" description="Search modules already saved in Northstar or add your module manually." scrollable :ui="{ content: 'sm:max-w-3xl' }" @update:open="$emit('update:open', $event)">
     <template #body>
       <div class="module-mode" role="tablist" aria-label="Add module method">
-        <button type="button" role="tab" :aria-selected="mode === 'find'" :class="{ 'is-active': mode === 'find' }" @click="mode = 'find'">Find module</button>
+        <button type="button" role="tab" :aria-selected="mode === 'search'" :class="{ 'is-active': mode === 'search' }" @click="mode = 'search'">Search saved modules</button>
         <button type="button" role="tab" :aria-selected="mode === 'manual'" :class="{ 'is-active': mode === 'manual' }" @click="mode = 'manual'">Add manually</button>
       </div>
 
+      <p class="module-note">Official university catalogue import will be added separately.</p>
+
       <p v-if="error" class="module-alert" role="alert" aria-live="assertive">{{ error }}</p>
 
-      <form v-if="mode === 'find'" class="module-form" @submit.prevent="submitExisting">
+      <form v-if="mode === 'search'" class="module-form" @submit.prevent="submitExisting">
         <div class="module-field">
           <label for="module-search">Module code or title</label>
           <UInput id="module-search" v-model="searchText" icon="i-lucide-search" size="lg" placeholder="Enter at least 2 characters" :loading="searching" autocomplete="off" />
           <small v-if="searchText && searchText.trim().length < 2">Enter at least 2 characters.</small>
         </div>
         <div v-if="searchText.trim().length >= 2 && !searching" class="module-search-results" aria-live="polite">
-          <p v-if="!searchResults.length">No catalogue modules match this search. You can add the module manually.</p>
+          <p v-if="!searchResults.length">No saved modules match this search yet. Add the module manually and Northstar will remember it for your university.</p>
           <button v-for="result in searchResults" :key="result.id" type="button" :disabled="result.alreadyEnrolled" :class="{ 'is-selected': selected?.id === result.id }" @click="selected = result">
             <span><strong>{{ result.code }}</strong>{{ result.title }}</span>
-            <small>{{ result.alreadyEnrolled ? 'Already enrolled' : result.sourceStatus.replaceAll('_', ' ') }}</small>
+            <small>{{ result.alreadyEnrolled ? 'Already enrolled' : result.sourceStatus }}</small>
           </button>
         </div>
         <p v-if="issue('moduleId')" class="module-field-error">{{ issue('moduleId') }}</p>

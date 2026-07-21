@@ -5,10 +5,13 @@ definePageMeta({ layout: 'app', middleware: ['auth', 'onboarded'] })
 useSeoMeta({ title: 'Modules · Northstar', description: 'Manage the modules in your active semester.' })
 
 const { state, loading, error, load } = useModules()
+const { user } = useCurrentSession()
 const addOpen = ref(false)
 const successMessage = ref('')
 const hasModules = computed(() => hasActiveModules(state.value))
-await load()
+watch(user, (currentUser) => {
+  if (currentUser) void load().catch(() => {})
+}, { immediate: true })
 
 function moduleCreated(module) {
   successMessage.value = `${module.code} was added to your semester.`
@@ -24,7 +27,9 @@ function moduleCreated(module) {
 
     <p v-if="successMessage" class="module-success" role="status" aria-live="polite">{{ successMessage }}</p>
     <p v-if="error" class="module-alert" role="alert">{{ error }}</p>
-    <div v-if="loading && !state" class="module-loading" aria-live="polite"><UIcon name="i-lucide-loader-circle" class="animate-spin" /> Loading modules…</div>
+    <div v-if="!state" class="module-list-skeleton" aria-label="Loading modules" aria-live="polite">
+      <div v-for="item in 3" :key="item" class="app-skeleton app-skeleton--module"><span /><span /><span /></div>
+    </div>
 
     <section v-else-if="!hasModules" class="module-empty">
       <span class="module-empty__icon" aria-hidden="true"><UIcon name="i-lucide-library-big" /></span>
