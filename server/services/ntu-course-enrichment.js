@@ -1,3 +1,5 @@
+import { clockRangeToMinutes } from '#shared/utils/clock-time'
+
 const CACHE_TTL_MS = 6 * 60 * 60 * 1000
 const USER_AGENT = 'Northstar timetable enrichment/1.0 (public NTU course lookup; responsible single-course requests)'
 const globalCache = globalThis[Symbol.for('northstar.ntu-enrichment-cache')] ||= new Map()
@@ -59,7 +61,11 @@ export function parseNtuPublicCoursePage(html, code) {
     if (indexCell) { currentIndex = { indexNumber: indexCell, sessions: [] }; indexes.push(currentIndex) }
     if (!currentIndex) continue
     const typeIndex = cells.findIndex(cell => /^(?:LEC\/STU|LEC|TUT|LAB|SEM|PRJ|DES)$/i.test(cell))
-    if (typeIndex !== -1) currentIndex.sessions.push({ classType: cells[typeIndex], group: cells[typeIndex + 1] || null, day: cells.find(cell => /^(?:MON|TUE|WED|THU|FRI|SAT)$/i.test(cell)) || null, time: cells.find(cell => /^\d{4}\s*[-–]\s*\d{4}$/.test(cell)) || null, venue: cells[typeIndex + 4] || null, remark: cells.at(-1) || null, weekNumbers: [] })
+    if (typeIndex !== -1) {
+      const time = cells.find(cell => /^\d{4}\s*[-–]\s*\d{4}$/.test(cell)) || null
+      const range = clockRangeToMinutes(time)
+      currentIndex.sessions.push({ classType: cells[typeIndex], group: cells[typeIndex + 1] || null, day: cells.find(cell => /^(?:MON|TUE|WED|THU|FRI|SAT)$/i.test(cell)) || null, time, startMinutes: range?.startMinutes ?? null, endMinutes: range?.endMinutes ?? null, venue: cells[typeIndex + 4] || null, remark: cells.at(-1) || null, weekNumbers: [] })
+    }
   }
   return { courseCode: code.toUpperCase(), title, academicUnits: units ? Number(units[1]) : null, description: null, gradingBasis: null, school: null, indexes }
 }

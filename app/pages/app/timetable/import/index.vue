@@ -8,7 +8,7 @@ import { parseNtuTimetableImage } from '~/utils/timetable-import/ntu-timetable-i
 definePageMeta({ layout: 'app', middleware: ['auth', 'onboarded'] })
 useSeoMeta({ title: 'Import timetable · Northstar' })
 const router = useRouter()
-const { createImport, saving, error } = useTimetable()
+const { createImport, draftCandidate, saving, error } = useTimetable()
 const pastedText = ref('')
 const processing = ref(false)
 const progress = ref({ label: '', progress: 0 })
@@ -20,6 +20,7 @@ async function createReview(candidate) {
   const result = await createImport(candidate)
   if (result) await router.push(`/app/timetable/import/${result.id}`)
 }
+async function retryDraft() { if (draftCandidate.value) await createReview(draftCandidate.value) }
 async function parsePasted() {
   localError.value = ''
   await createReview(parseNtuRegisteredCourses(pastedText.value, 'PASTED_TEXT'))
@@ -58,7 +59,7 @@ async function processFile(event) {
   <main class="app-page import-page">
     <header class="app-page__header"><div><p class="app-page__eyebrow">Browser-only extraction</p><h1>Import your timetable</h1><span>Upload a STARS timetable, registered-courses summary, or paste the timetable text.</span></div></header>
     <p class="privacy-callout"><UIcon name="i-lucide-shield-check" /> Your file is processed in your browser. Northstar only saves the modules and class sessions you confirm.</p>
-    <p v-if="localError || error" class="module-alert" role="alert">{{ localError || error }}</p>
+    <div v-if="localError || error" class="module-alert" role="alert"><p>{{ localError || error }}</p><UButton v-if="draftCandidate" size="sm" color="neutral" variant="outline" :loading="saving" @click="retryDraft">Retry saved extraction</UButton></div>
     <section class="import-options" aria-label="Import options">
       <label class="import-option"><UIcon name="i-lucide-file-text" /><strong>Upload PDF</strong><span>PDF · up to 10 MB and 10 pages</span><input type="file" accept="application/pdf" :disabled="processing" @change="processFile"></label>
       <label class="import-option"><UIcon name="i-lucide-image" /><strong>Upload screenshot</strong><span>PNG, JPEG or WebP · up to 10 MB</span><input type="file" accept="image/png,image/jpeg,image/webp" :disabled="processing" @change="processFile"></label>

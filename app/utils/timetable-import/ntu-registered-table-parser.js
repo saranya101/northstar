@@ -1,5 +1,6 @@
 import { candidateId } from './timetable-candidate-normaliser'
 import { tableGeometry, wordsInRegion } from './ntu-image-regions'
+import { clockValueToMinutes } from './timetable-time'
 
 const DENIED_PREFIXES = /^(?:WK|WKI|WEEK|TR|LT|SCL|SR|LHN|EXAM|COLLAB|SWLAB)/
 const clean = value => String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '')
@@ -90,12 +91,29 @@ function parseExam(rawText) {
   const raw = rawText.replace(/\s+/g, ' ').trim()
   if (/NOT\s+APPLICABLE/i.test(raw)) return { applicable: false, rawText: 'Not Applicable', date: null, startMinutes: null, endMinutes: null, confidence: 0.95 }
   const dateMatch = raw.match(/(\d{2})-([A-Z]{3})-(\d{4})/i)
-  const digits = raw.replace(dateMatch?.[0] || '', '').replace(/[^0-9]/g, '')
+  const clockDigits = raw.replace(dateMatch?.[0] || '', '').replace(/[^0-9]/g, '')
   const months = { JAN: '01', FEB: '02', MAR: '03', APR: '04', MAY: '05', JUN: '06', JUL: '07', AUG: '08', SEP: '09', OCT: '10', NOV: '11', DEC: '12' }
-  const date = dateMatch ? `${dateMatch[3]}-${months[dateMatch[2].toUpperCase()]}-${dateMatch[1]}` : null
-  const start = digits.length >= 8 ? Number(digits.slice(0, 2)) * 60 + Number(digits.slice(2, 4)) : null
-  const end = digits.length >= 8 ? Number(digits.slice(-4, -2)) * 60 + Number(digits.slice(-2)) : null
-  return { applicable: Boolean(date || start !== null), rawText: raw, date, startMinutes: start, endMinutes: end, confidence: date && start !== null && end > start ? 0.92 : 0.45 }
+  const month = dateMatch ? months[dateMatch[2].toUpperCase()] : null
+  const detectedDate = dateMatch && month ? `${dateMatch[3]}-${month}-${dateMatch[1]}` : null
+  const dateValue = detectedDate ? new Date(`${detectedDate}T00:00:00Z`) : null
+  const date = dateValue && !Number.isNaN(dateValue.getTime()) && dateValue.toISOString().slice(0, 10) === detectedDate ? detectedDate : null
+  const clockCandidates = [...clockDigits.matchAll(/(?=(\d{4}))/g)].map(match => ({ index: match.index, value: match[1] }))
+  let parsedStart = null
+  let parsedEnd = null
+  for (const [index, start] of clockCandidates.entries()) {
+    const startMinutes = clockValueToMinutes(start.value)
+    if (startMinutes === null) continue
+    const end = clockCandidates.slice(index + 1).find(candidate => {
+      const minutes = clockValueToMinutes(candidate.value, { end: true })
+      return minutes !== null && minutes > startMinutes
+    })
+    if (!end) continue
+    parsedStart = startMinutes
+    parsedEnd = clockValueToMinutes(end.value, { end: true })
+    break
+  }
+  const validRange = parsedStart !== null && parsedEnd !== null && parsedEnd > parsedStart
+  return { applicable: Boolean(date || parsedStart !== null), rawText: raw, date, startMinutes: validRange ? parsedStart : null, endMinutes: validRange ? parsedEnd : null, confidence: date && validRange ? 0.92 : 0.45 }
 }
 
 export function extractSourceSemester(words = []) {

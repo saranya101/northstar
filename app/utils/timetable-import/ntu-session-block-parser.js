@@ -25,13 +25,19 @@ export function parseNtuSessionBlock(text, base = {}) {
   if (week.warning) warnings.push(week.warning)
   if (!week.matched) warnings.push('Week pattern needs confirmation.')
   if (deliveryMode === 'UNKNOWN') warnings.push('Delivery mode needs confirmation.')
+  const startMinutes = base.startMinutes ?? null
+  const endMinutes = base.endMinutes ?? null
+  const timeAlternatives = Array.isArray(base.timeAlternatives) ? base.timeAlternatives : []
+  const timeNeedsReview = warnings.some(warning => /time.*(?:confirmation|conflict|uncertain)|(?:conflict|uncertain).*time/i.test(warning))
   return {
     candidateId: candidateId('session'),
     classType: mapClassType(classMatch[1]),
     groupLabel,
     dayOfWeek: base.dayOfWeek ?? null,
-    startMinutes: base.startMinutes ?? null,
-    endMinutes: base.endMinutes ?? null,
+    startMinutes,
+    endMinutes,
+    timeConfirmed: base.timeConfirmed ?? (Number.isInteger(startMinutes) && Number.isInteger(endMinutes) && endMinutes > startMinutes && !timeNeedsReview && timeAlternatives.length === 0),
+    timeAlternatives,
     venue,
     deliveryMode,
     deliveryModeConfirmed: deliveryMode !== 'UNKNOWN',

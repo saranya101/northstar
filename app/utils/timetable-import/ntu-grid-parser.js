@@ -34,7 +34,7 @@ function explicitTimeRange(text) {
     const startText = digits.slice(0, 4)
     const endText = digits.slice(-4)
     const startMinutes = parseTime(startText)
-    const endMinutes = parseTime(endText)
+    const endMinutes = parseTime(endText, { end: true })
     if (startMinutes !== null && endMinutes !== null && startMinutes >= 480 && endMinutes <= 1410 && endMinutes > startMinutes) return { startMinutes, endMinutes }
   }
   return null
@@ -105,7 +105,8 @@ export function parseNtuGrid(words = [], source = 'NTU_TIMETABLE_IMAGE', blocks 
       const endMinutes = entry.bbox.y1 - entry.bbox.y0 >= (rowHeight || Infinity) * 0.65 ? minutesAtY(entry.bbox.y1, times, rowHeight) : null
       const warnings = ['Day was inferred from the timetable column.', 'Weekly-grid detection is beta.']
       if (!endMinutes || endMinutes <= startMinutes) warnings.push('End time needs confirmation.')
-      const parsed = parseNtuSessionBlock(entry.text, { dayOfWeek: day?.day || null, startMinutes, endMinutes: endMinutes > startMinutes ? endMinutes : null, confidence: endMinutes > startMinutes ? 0.66 : 0.35, warnings }) || { candidateId: candidateId('session'), classType: 'OTHER', groupLabel: 'DEFAULT', dayOfWeek: day?.day || null, startMinutes, endMinutes: endMinutes > startMinutes ? endMinutes : null, timeConfirmed: true, timeAlternatives: null, venue: null, deliveryMode: 'UNKNOWN', deliveryModeConfirmed: false, recurrence: 'WEEKLY', recurrenceConfirmed: false, weekNumbers: [], confidence: endMinutes > startMinutes ? 0.66 : 0.35, selected: true, warnings: [...warnings, 'Class details need confirmation.', 'Delivery mode needs confirmation.', 'Week pattern needs confirmation.'] }
+      const validEnd = Number.isInteger(endMinutes) && Number.isInteger(startMinutes) && endMinutes > startMinutes
+      const parsed = parseNtuSessionBlock(entry.text, { dayOfWeek: day?.day || null, startMinutes, endMinutes: validEnd ? endMinutes : null, timeConfirmed: validEnd, confidence: validEnd ? 0.66 : 0.35, warnings }) || { candidateId: candidateId('session'), classType: 'OTHER', groupLabel: 'DEFAULT', dayOfWeek: day?.day || null, startMinutes, endMinutes: validEnd ? endMinutes : null, timeConfirmed: validEnd, timeAlternatives: [], venue: null, deliveryMode: 'UNKNOWN', deliveryModeConfirmed: false, recurrence: 'WEEKLY', recurrenceConfirmed: false, weekNumbers: [], confidence: validEnd ? 0.66 : 0.35, selected: true, warnings: [...warnings, 'Class details need confirmation.', 'Delivery mode needs confirmation.', 'Week pattern needs confirmation.'] }
       if (parsed) modules.get(code).sessions.push(parsed)
     }
     return { source, modules: [...modules.values()], unmatchedTimetableText: [], warnings: ['No registered-course allowlist was available; review every detected module.'] }
@@ -139,13 +140,15 @@ export function parseNtuGrid(words = [], source = 'NTU_TIMETABLE_IMAGE', blocks 
       if (conflict) warnings.push(`Time conflict: cell text indicates ${explicit.startMinutes}-${explicit.endMinutes}, while grid geometry indicates ${geometryStart}-${geometryEnd}.`)
       const startMinutes = explicit?.startMinutes ?? geometryStart
       const endMinutes = explicit?.endMinutes ?? (geometryValid ? geometryEnd : null)
-      const parsed = parseNtuSessionBlock(text, { dayOfWeek: column.day, startMinutes, endMinutes, confidence: explicit && !conflict ? 0.9 : 0.62, warnings })
+      const timeAlternatives = conflict ? [
+        { source: 'EXPLICIT_TEXT', startMinutes: explicit.startMinutes, endMinutes: explicit.endMinutes, confidence: 0.9, label: 'Time printed in cell', reason: 'Read directly from the timetable cell.', warnings: [] },
+        { source: 'GRID_GEOMETRY', startMinutes: geometryStart, endMinutes: geometryEnd, confidence: 0.62, label: 'Time from grid position', reason: 'Inferred from the cell position against the timetable rows.', warnings: [] }
+      ] : []
+      const parsed = parseNtuSessionBlock(text, { dayOfWeek: column.day, startMinutes, endMinutes, timeConfirmed: !conflict && startMinutes !== null && endMinutes !== null, timeAlternatives, confidence: explicit && !conflict ? 0.9 : 0.62, warnings })
       if (!parsed) {
         unmatchedTimetableText.push({ candidateId: candidateId('unmatched'), text, selected: false, attachToCandidateId: null, warnings: ['A registered module code was seen, but the class details could not be reconstructed.'] })
         continue
       }
-      parsed.timeConfirmed = !conflict
-      parsed.timeAlternatives = conflict ? { explicitStartMinutes: explicit.startMinutes, explicitEndMinutes: explicit.endMinutes, geometryStartMinutes: geometryStart, geometryEndMinutes: geometryEnd } : null
       modules.get(start.match.code).sessions.push(parsed)
       if (start.match.corrected) corrections.push({ code: start.match.code, original: start.word.text, corrected: start.match.code, reason: 'Corrected using the registered-course table allowlist.' })
     }

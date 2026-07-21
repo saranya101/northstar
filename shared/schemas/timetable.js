@@ -13,6 +13,8 @@ const nullableText = maximum => z.preprocess(emptyToNull, z.string().trim().max(
 const confidenceSchema = z.coerce.number().min(0).max(1)
 const candidateIdSchema = z.string().trim().min(1).max(100)
 const minuteSchema = z.coerce.number().int().min(0).max(1440)
+const startMinuteSchema = z.coerce.number().int().min(0).max(1439)
+const endMinuteSchema = z.coerce.number().int().min(1).max(1440)
 const weekNumbersSchema = z.array(z.coerce.number().int().min(1).max(20)).max(20).transform(values => [...new Set(values)].sort((a, b) => a - b))
 const sourceSemesterSchema = z.object({
   academicYearStart: z.coerce.number().int().min(2000).max(2200),
@@ -24,12 +26,19 @@ const examCandidateSchema = z.object({
   applicable: z.boolean(),
   rawText: z.string().trim().max(200),
   date: z.iso.date().nullable(),
-  startMinutes: minuteSchema.nullable(),
-  endMinutes: minuteSchema.nullable(),
-  timeConfirmed: z.boolean().default(true),
-  timeAlternatives: z.object({ explicitStartMinutes: minuteSchema.nullable(), explicitEndMinutes: minuteSchema.nullable(), geometryStartMinutes: minuteSchema.nullable(), geometryEndMinutes: minuteSchema.nullable() }).strict().nullable().default(null),
+  startMinutes: startMinuteSchema.nullable(),
+  endMinutes: endMinuteSchema.nullable(),
   confidence: confidenceSchema
-}).strict()
+}).strict().superRefine((value, context) => { if (value.startMinutes !== null && value.endMinutes !== null && value.endMinutes <= value.startMinutes) context.addIssue({ code: 'custom', path: ['endMinutes'], message: 'Exam end time must be after its start time.' }) })
+const timeAlternativeSchema = z.object({
+  source: z.enum(['EXPLICIT_TEXT', 'GRID_GEOMETRY', 'OCR_VARIANT']),
+  startMinutes: startMinuteSchema.nullable(),
+  endMinutes: endMinuteSchema.nullable(),
+  confidence: confidenceSchema.nullable().default(null),
+  label: z.string().trim().min(1).max(100).optional(),
+  reason: z.string().trim().min(1).max(200).optional(),
+  warnings: z.array(z.string().trim().min(1).max(200)).max(10).default([])
+}).strict().superRefine((value, context) => { if (value.startMinutes !== null && value.endMinutes !== null && value.endMinutes <= value.startMinutes) context.addIssue({ code: 'custom', path: ['endMinutes'], message: 'Alternative end time must be after its start time.' }) })
 const correctionSchema = z.object({ original: z.string().trim().min(1).max(80), corrected: z.string().trim().min(1).max(80), reason: z.string().trim().min(1).max(200) }).strict()
 
 const enrichmentFieldSchema = z.object({
@@ -58,8 +67,10 @@ export const timetableSessionCandidateSchema = z.object({
   classType: z.enum(CLASS_SESSION_TYPES).default('OTHER'),
   groupLabel: z.string().trim().max(100).transform(value => value || 'DEFAULT').default('DEFAULT'),
   dayOfWeek: z.enum(DAYS_OF_WEEK).nullable(),
-  startMinutes: minuteSchema.nullable(),
-  endMinutes: minuteSchema.nullable(),
+  startMinutes: startMinuteSchema.nullable(),
+  endMinutes: endMinuteSchema.nullable(),
+  timeConfirmed: z.boolean().default(false),
+  timeAlternatives: z.array(timeAlternativeSchema).max(5).default([]),
   venue: nullableText(200),
   deliveryMode: z.enum(SESSION_DELIVERY_MODES).default('UNKNOWN'),
   deliveryModeConfirmed: z.boolean().default(true),
@@ -123,7 +134,8 @@ export const confirmTimetableImportSchema = z.object({
       if (!session.dayOfWeek) context.addIssue({ code: 'custom', path: ['modules', index, 'sessions', sessionIndex, 'dayOfWeek'], message: 'Choose a day.' })
       if (session.startMinutes === null) context.addIssue({ code: 'custom', path: ['modules', index, 'sessions', sessionIndex, 'startMinutes'], message: 'Enter a start time.' })
       if (session.endMinutes === null) context.addIssue({ code: 'custom', path: ['modules', index, 'sessions', sessionIndex, 'endMinutes'], message: 'Enter an end time.' })
-      if (!session.timeConfirmed) context.addIssue({ code: 'custom', path: ['modules', index, 'sessions', sessionIndex, 'startMinutes'], message: 'Resolve the conflicting time readings.' })
+      const hasTimeConflict = session.warnings.some(warning => /time.*(?:conflict|uncertain|confirmation)|(?:conflict|uncertain).*time/i.test(warning))
+      if (!session.timeConfirmed && (session.timeAlternatives.length > 0 || hasTimeConflict || session.startMinutes === null || session.endMinutes === null)) context.addIssue({ code: 'custom', path: ['modules', index, 'sessions', sessionIndex, 'startMinutes'], message: session.timeAlternatives.length ? 'Choose one of the detected time alternatives.' : 'Confirm the uncertain time.' })
       if (!session.deliveryModeConfirmed) context.addIssue({ code: 'custom', path: ['modules', index, 'sessions', sessionIndex, 'deliveryMode'], message: 'Confirm the delivery mode.' })
       if (!session.recurrenceConfirmed) context.addIssue({ code: 'custom', path: ['modules', index, 'sessions', sessionIndex, 'recurrence'], message: 'Confirm the week pattern.' })
     }

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { parseNtuTimetableImage } from '../app/utils/timetable-import/ntu-timetable-image-parser'
+import { createTimetableImportSchema } from '../shared/schemas/timetable'
 
 const words = []
 const word = (text, x, y, width = Math.max(12, text.length * 7), height = 14) => words.push({ text, confidence: .85, bbox: { x0: x, y0: y, x1: x + width, y1: y + height } })
@@ -20,7 +21,7 @@ word('Academic', 174, 1243, 86); word('Year', 265, 1243, 40); word('2025,Semeste
 for (const [text, x] of [['Index', 23], ['Course', 84], ['Title', 202], ['AUs', 300], ['Status', 350], ['@Exam', 437], ['Schedule', 508]]) word(text, x, 1274)
 const rows = [
   ['79705', 'gssooy', '3', 'Registered', '06-May-2026 1700to1900 hrs'],
-  ['10352', 'C3000', '3', 'Registered', '28-Apr-2026 1300to1500 hrs'],
+  ['10352', 'C3000', '3', 'Registered', '28-Apr-2026 ADI1300t01500'],
   ['10324', 'sczzor', '3', 'Registered', '30-Apr-2026 1700to1900 hrs'],
   ['00989', 'BUSGO1', '3', 'Registered', 'Not Applicable'],
   ['86046', 'CCO006', '3', 'Registered', 'Not Applicable'],
@@ -40,10 +41,21 @@ describe('sanitised real NTU screenshot regression', () => {
     expect(result.sourceSummary).toEqual({ moduleCount: 7, totalAcademicUnits: 20 })
     expect(result.modules.reduce((sum, module) => sum + module.academicUnits, 0)).toBe(20)
     expect(result.modules.filter(module => module.examCandidate.applicable)).toHaveLength(3)
+    expect(Object.fromEntries(result.modules.map(module => [module.code, module.examCandidate]))).toMatchObject({
+      ES5007: { applicable: true, startMinutes: 1020, endMinutes: 1140, rawText: '06-May-2026 1700to1900 hrs' },
+      SC3000: { applicable: true, startMinutes: 780, endMinutes: 900, rawText: '28-Apr-2026 ADI1300t01500' },
+      SC2207: { applicable: true, startMinutes: 1020, endMinutes: 1140, rawText: '30-Apr-2026 1700to1900 hrs' },
+      BU5601: { applicable: false, startMinutes: null, endMinutes: null },
+      CC0006: { applicable: false, startMinutes: null, endMinutes: null },
+      ML0004: { applicable: false, startMinutes: null, endMinutes: null },
+      SC2005: { applicable: false, startMinutes: null, endMinutes: null }
+    })
     expect(new Set(result.modules.flatMap(module => module.sessions.map(session => session.dayOfWeek)))).toEqual(new Set(['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY']))
     expect(result.modules.flatMap(module => module.sessions).every(session => session.startMinutes !== null && session.endMinutes !== null)).toBe(true)
     expect(result.modules.map(module => module.title)).toEqual(refinedTitles)
     expect(result.modules.map(module => module.code)).not.toEqual(expect.arrayContaining(['BUSG01', 'BUS5601', 'MLO004', 'E000', 'TRI17', 'CCO006', 'WK12', 'WKI12', 'C0006', 'C3000']))
     expect(JSON.stringify(result)).not.toMatch(/RAJA|LATCHIYA|DHURGA/i)
+    expect(createTimetableImportSchema.safeParse(result).success).toBe(true)
+    expect(JSON.stringify(result)).not.toMatch(/data:image|image\/png|arraybuffer|blob:|matric/i)
   })
 })
