@@ -1,6 +1,6 @@
 import { fetchPublicHtml, fetchPublicJson } from '../../services/opportunity-link-fetcher'
 import { defineOpportunityAdapter } from './contract'
-import { normaliseOpportunityTags } from '../../../shared/opportunities/tags'
+import { normaliseOpportunityTags } from '#shared/opportunities/tags'
 
 export const DEVPOST_LISTINGS_URL = 'https://devpost.com/api/hackathons'
 export const DEVPOST_MAX_PAGES = 2

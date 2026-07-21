@@ -1,4 +1,4 @@
-import { normaliseOpportunityTags } from '../../../shared/opportunities/tags'
+import { normaliseOpportunityTags } from '#shared/opportunities/tags'
 import { defineOpportunityAdapter } from './contract'
 
 export const VOLUNTEER_GOV_SG_BASE_URL = 'https://www.volunteer.gov.sg'
