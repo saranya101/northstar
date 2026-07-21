@@ -1,4 +1,17 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+
+vi.mock('../server/utils/prisma', () => ({ prisma: {} }))
+
+import {
+  createOpportunity,
+  deleteOpportunity,
+  getOpportunity,
+  getOpportunityDiscovery,
+  listOpportunities,
+  updateOpportunity,
+  updateOpportunityStatus,
+} from '../server/services/opportunities'
+
 
 vi.mock('../server/utils/prisma', () => ({ prisma: {} }))
 import { createOpportunity, deleteOpportunity, getOpportunity, listOpportunities, updateOpportunity, updateOpportunityStatus } from '../server/services/opportunities'
@@ -47,4 +60,224 @@ describe('opportunity service', () => {
     expect(database.opportunity.delete).not.toHaveBeenCalled()
     expect(database.opportunity.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'o1', createdByUserId: 'u2' } }))
   })
+})
+
+describe('opportunity discovery intelligence', () => {
+  function makePublicOpportunity(overrides = {}) {
+    const id = overrides.id ?? 'public-opportunity'
+
+    return {
+      id,
+      title: 'General Student Event',
+      organisation: 'Example Organisation',
+      category: 'OTHER',
+      description: null,
+      sourceType: 'PUBLIC_SOURCE',
+      sourceName: 'Example Source',
+      sourceUrl: `https://example.com/${id}`,
+      applicationUrl: null,
+      publishedAt: null,
+      deadline: new Date('2026-07-25T04:00:00.000Z'),
+      startAt: null,
+      endAt: null,
+      location: null,
+      mode: 'UNKNOWN',
+      commitment: null,
+      eligibilityText: null,
+      requirements: null,
+      benefits: null,
+      tags: [],
+      createdByUserId: null,
+      createdAt: new Date('2026-07-20T04:00:00.000Z'),
+      updatedAt: new Date('2026-07-20T04:00:00.000Z'),
+      userOpportunities: [],
+      sourceListings: [
+        {
+          id: `listing-${id}`,
+          active: true,
+          firstSeenAt:
+            new Date('2026-07-20T04:00:00.000Z'),
+          lastSeenAt:
+            new Date('2026-07-21T03:00:00.000Z'),
+          lastVerifiedAt:
+            new Date('2026-07-21T03:00:00.000Z'),
+          source: {
+            id: 'source-1',
+            name: 'Example Source',
+            slug: 'example-source',
+          },
+        },
+      ],
+      ...overrides,
+    }
+  }
+
+  it(
+    'adds scoring metadata and a ranked recommended collection without reordering existing previews',
+    async () => {
+      const lowRelevance = makePublicOpportunity({
+        id: 'low-relevance',
+      })
+
+      const highRelevance = makePublicOpportunity({
+        id: 'high-relevance',
+        title: 'Business Case Competition',
+        organisation: 'NTU',
+        category: 'COMPETITION',
+        description:
+          'Business students solve an industry challenge and present recommendations to a judging panel.',
+        sourceName: 'NTU Events',
+        sourceUrl:
+          'https://example.com/business-case',
+        applicationUrl:
+          'https://example.com/business-case/apply',
+        location: 'Singapore',
+        mode: 'IN_PERSON',
+        commitment: 'One-day competition',
+        eligibilityText:
+          'Open to Year 1 university students',
+        requirements:
+          'Teams of three to four students',
+        benefits: 'Mentorship and prizes',
+        tags: ['Business Case', 'Finance'],
+        sourceListings: [
+          {
+            id: 'listing-high',
+            active: true,
+            firstSeenAt:
+              new Date('2026-07-21T00:00:00.000Z'),
+            lastSeenAt:
+              new Date('2026-07-21T03:00:00.000Z'),
+            lastVerifiedAt:
+              new Date('2026-07-21T03:00:00.000Z'),
+            source: {
+              id: 'source-ntu',
+              name: 'NTU Events',
+              slug: 'ntu-events',
+            },
+          },
+        ],
+      })
+
+      const findMany = vi.fn()
+        .mockResolvedValueOnce([
+          lowRelevance,
+          highRelevance,
+        ])
+        .mockResolvedValueOnce([
+          lowRelevance,
+          highRelevance,
+        ])
+        .mockResolvedValueOnce([
+          highRelevance,
+        ])
+        .mockResolvedValueOnce([
+          lowRelevance,
+          highRelevance,
+        ])
+
+      const findAcademicProfile = vi.fn()
+        .mockResolvedValue({
+          currentYearOfStudy: 1,
+          university: {
+            name:
+              'Nanyang Technological University',
+            shortName: 'NTU',
+            country: 'Singapore',
+          },
+          school: {
+            name: 'Nanyang Business School',
+          },
+          programme: {
+            name: 'Business',
+            degreeType: 'Bachelor',
+          },
+        })
+
+      const database = {
+        opportunity: {
+          count: vi.fn().mockResolvedValue(0),
+          findMany,
+        },
+        userAcademicProfile: {
+          findUnique: findAcademicProfile,
+        },
+      }
+
+      const result = await getOpportunityDiscovery(
+        'u1',
+        database,
+        now,
+      )
+
+      expect(
+        result.closingSoon.map(item => item.id),
+      ).toEqual([
+        'low-relevance',
+        'high-relevance',
+      ])
+
+      expect(
+        result.newest.map(item => item.id),
+      ).toEqual([
+        'low-relevance',
+        'high-relevance',
+      ])
+
+      expect(result.recommended[0].id)
+        .toBe('high-relevance')
+
+      expect(
+        result.recommended[0].relevanceScore,
+      ).toBeGreaterThan(
+        result.recommended[1].relevanceScore,
+      )
+
+      for (const item of [
+        ...result.closingSoon,
+        ...result.newest,
+        ...result.saved,
+        ...result.recommended,
+      ]) {
+        expect(item).toEqual(
+          expect.objectContaining({
+            relevanceScore: expect.any(Number),
+            scoreBreakdown: expect.any(Object),
+            recommendationReasons:
+              expect.any(Array),
+            rankingVersion:
+              'opportunity-ranking-v1',
+          }),
+        )
+      }
+
+      expect(findAcademicProfile)
+        .toHaveBeenCalledWith({
+          where: {
+            userId: 'u1',
+          },
+          select: {
+            currentYearOfStudy: true,
+            university: {
+              select: {
+                name: true,
+                shortName: true,
+                country: true,
+              },
+            },
+            school: {
+              select: {
+                name: true,
+              },
+            },
+            programme: {
+              select: {
+                name: true,
+                degreeType: true,
+              },
+            },
+          },
+        })
+    },
+  )
 })

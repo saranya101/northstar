@@ -2,6 +2,10 @@ import { createError } from 'h3'
 import { prisma } from '../utils/prisma'
 import { normalizeOpportunityUrl } from '~~/shared/schemas/opportunities'
 import { getOpportunitySections } from '~~/shared/opportunities/taxonomy'
+import {
+  rankOpportunities,
+  scoreOpportunity,
+} from '../../shared/opportunities/ranking.js'
 
 const personalInclude = userId => ({
   userOpportunities: { where: { userId }, take: 1 },
@@ -37,6 +41,72 @@ export function serializeOpportunity(record, userId) {
     personal: personal ? { id: personal.id, status: personal.status, personalDeadline: dateValue(personal.personalDeadline), notes: personal.notes, savedAt: dateValue(personal.savedAt), appliedAt: dateValue(personal.appliedAt) } : null
   }
 }
+
+
+function toOpportunityRankingProfile(record) {
+  if (!record) return {}
+
+  return {
+    programmeName: record.programme?.name ?? '',
+    schoolName: record.school?.name ?? '',
+    universityName: record.university?.name ?? '',
+    universityShortName: record.university?.shortName ?? '',
+    universityCountry: record.university?.country ?? '',
+    degreeType: record.programme?.degreeType ?? '',
+    currentYearOfStudy:
+      Number.isInteger(record.currentYearOfStudy)
+        ? record.currentYearOfStudy
+        : null,
+  }
+}
+
+async function getOpportunityRankingProfile(
+  userId,
+  database,
+) {
+  const academicProfile =
+    await database.userAcademicProfile.findUnique({
+      where: { userId },
+      select: {
+        currentYearOfStudy: true,
+        university: {
+          select: {
+            name: true,
+            shortName: true,
+            country: true,
+          },
+        },
+        school: {
+          select: {
+            name: true,
+          },
+        },
+        programme: {
+          select: {
+            name: true,
+            degreeType: true,
+          },
+        },
+      },
+    })
+
+  return toOpportunityRankingProfile(academicProfile)
+}
+
+function serializeScoredOpportunity(
+  record,
+  userId,
+  profile,
+  now,
+) {
+  const opportunity = serializeOpportunity(record, userId)
+
+  return {
+    ...opportunity,
+    ...scoreOpportunity(opportunity, profile, now),
+  }
+}
+
 
 function toDates(input) {
   const result = { ...input }
@@ -79,59 +149,183 @@ export async function listOpportunities(userId, filters, database = prisma, now 
   return { items, total, page: filters.page, pageSize: filters.pageSize, pageCount: Math.ceil(total / filters.pageSize), summary: { closingSoonCount, applicationsInProgress } }
 }
 
-export async function getOpportunityDiscovery(userId, database = prisma, now = new Date()) {
-  const closingSoonEnd = new Date(now.getTime() + 7 * 86_400_000)
+export async function getOpportunityDiscovery(
+  userId,
+  database = prisma,
+  now = new Date(),
+) {
+  const closingSoonEnd = new Date(
+    now.getTime() + 7 * 86_400_000,
+  )
+
   const activeVisibility = activeVisibleWhere(userId)
   const notIgnored = notIgnoredWhere(userId)
   const include = personalInclude(userId)
 
-  const sections = await Promise.all(getOpportunitySections().map(async section => {
-    const sectionWhere = { AND: [activeVisibility, notIgnored, { category: { in: section.categories } }] }
-    const [activeCount, closingSoonCount] = await Promise.all([
-      database.opportunity.count({ where: sectionWhere }),
-      database.opportunity.count({ where: { AND: [sectionWhere, { deadline: { gte: now, lte: closingSoonEnd } }] } })
-    ])
-    return {
-      slug: section.slug,
-      label: section.label,
-      activeCount,
-      closingSoonCount
-    }
-  }))
+  const sectionsPromise = Promise.all(
+    getOpportunitySections().map(async section => {
+      const sectionWhere = {
+        AND: [
+          activeVisibility,
+          notIgnored,
+          {
+            category: {
+              in: section.categories,
+            },
+          },
+        ],
+      }
 
-  const previewBase = { AND: [activeVisibility, notIgnored] }
-  const trackedStatuses = ['SAVED', 'INTERESTED', 'APPLYING', 'APPLIED']
-  const [closingRows, newestRows, savedRows] = await Promise.all([
-    database.opportunity.findMany({
-      where: { AND: [previewBase, { deadline: { gte: now, lte: closingSoonEnd } }] },
-      include,
-      orderBy: [{ deadline: 'asc' }, { createdAt: 'desc' }],
-      take: 6
+      const [
+        activeCount,
+        closingSoonCount,
+      ] = await Promise.all([
+        database.opportunity.count({
+          where: sectionWhere,
+        }),
+
+        database.opportunity.count({
+          where: {
+            AND: [
+              sectionWhere,
+              {
+                deadline: {
+                  gte: now,
+                  lte: closingSoonEnd,
+                },
+              },
+            ],
+          },
+        }),
+      ])
+
+      return {
+        slug: section.slug,
+        label: section.label,
+        activeCount,
+        closingSoonCount,
+      }
     }),
+  )
+
+  const previewBase = {
+    AND: [
+      activeVisibility,
+      notIgnored,
+    ],
+  }
+
+  const trackedStatuses = [
+    'SAVED',
+    'INTERESTED',
+    'APPLYING',
+    'APPLIED',
+  ]
+
+  const [
+    rankingProfile,
+    sections,
+    closingRows,
+    newestRows,
+    savedRows,
+    recommendationCandidates,
+  ] = await Promise.all([
+    getOpportunityRankingProfile(userId, database),
+
+    sectionsPromise,
+
+    database.opportunity.findMany({
+      where: {
+        AND: [
+          previewBase,
+          {
+            deadline: {
+              gte: now,
+              lte: closingSoonEnd,
+            },
+          },
+        ],
+      },
+      include,
+      orderBy: [
+        { deadline: 'asc' },
+        { createdAt: 'desc' },
+      ],
+      take: 6,
+    }),
+
     database.opportunity.findMany({
       where: previewBase,
       include,
-      orderBy: [{ createdAt: 'desc' }],
-      take: 6
+      orderBy: [
+        { createdAt: 'desc' },
+      ],
+      take: 6,
     }),
+
     database.opportunity.findMany({
       where: {
         AND: [
           activeVisibility,
-          { userOpportunities: { some: { userId, status: { in: trackedStatuses } } } }
-        ]
+          {
+            userOpportunities: {
+              some: {
+                userId,
+                status: {
+                  in: trackedStatuses,
+                },
+              },
+            },
+          },
+        ],
       },
       include,
-      orderBy: [{ updatedAt: 'desc' }],
-      take: 6
-    })
+      orderBy: [
+        { updatedAt: 'desc' },
+      ],
+      take: 6,
+    }),
+
+    database.opportunity.findMany({
+      where: previewBase,
+      include,
+      orderBy: [
+        { createdAt: 'desc' },
+        { id: 'asc' },
+      ],
+      take: 100,
+    }),
   ])
+
+  const scoreRows = rows =>
+    rows.map(record =>
+      serializeScoredOpportunity(
+        record,
+        userId,
+        rankingProfile,
+        now,
+      ),
+    )
+
+  const recommendationRecords =
+    recommendationCandidates.map(record =>
+      serializeOpportunity(record, userId),
+    )
 
   return {
     sections,
-    closingSoon: closingRows.map(row => serializeOpportunity(row, userId)),
-    newest: newestRows.map(row => serializeOpportunity(row, userId)),
-    saved: savedRows.map(row => serializeOpportunity(row, userId))
+
+    closingSoon: scoreRows(closingRows),
+
+    newest: scoreRows(newestRows),
+
+    saved: scoreRows(savedRows),
+
+    recommended: rankOpportunities(
+      recommendationRecords,
+      rankingProfile,
+      now,
+    ).slice(0, 6),
   }
 }
 
