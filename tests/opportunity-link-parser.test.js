@@ -1,5 +1,8 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { extractOpportunityFromHtml } from '../server/services/opportunity-link-parser'
+
+const singaporeDate = value => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Singapore', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(value))
 
 describe('deterministic opportunity webpage extraction', () => {
   it('prioritises JSON-LD opportunity fields', () => {
@@ -36,5 +39,33 @@ describe('deterministic opportunity webpage extraction', () => {
     expect(result.sourceHost).toBe('example.org')
     expect(result.candidate.sourceUrl.value).toBe('https://example.org/events/build')
     expect(result.candidate.applicationUrl.value).toBe('https://example.org/apply')
+  })
+
+  it('extracts the Garena challenge timeline, FAQ, benefits and scoped final location', () => {
+    const html = readFileSync(new URL('./fixtures/garena-ai-build-challenge.html', import.meta.url), 'utf8')
+    const result = extractOpportunityFromHtml(html, 'https://aibuildchallenge.garena.sg/#challenge')
+    const persisted = JSON.stringify(result)
+
+    expect(singaporeDate(result.candidate.deadline.value)).toBe('2026-07-23')
+    expect(singaporeDate(result.candidate.endAt.value)).toBe('2026-08-23')
+    expect(result.candidate.deadline.confidence).toBeGreaterThanOrEqual(.9)
+    expect(result.candidate.deadline.warnings.join(' ')).toMatch(/no closing time/i)
+    expect(result.candidate.eligibilityText).toMatchObject({ confidence: .95 })
+    expect(result.candidate.eligibilityText.value).toMatch(/university.*working professionals/i)
+    expect(result.candidate.eligibilityText.value).toMatch(/prior AI experience is not required/i)
+    expect(result.candidate.requirements.value).toMatch(/3 to 5 members/i)
+    expect(result.candidate.requirements.value).toMatch(/Each member must submit an individual application/i)
+    expect(result.candidate.requirements.value).toMatch(/onsite at Garena Singapore's office/i)
+    expect(result.candidate.benefits.value).toMatch(/Cash prizes/i)
+    expect(result.candidate.benefits.value).toMatch(/OpenAI API credits/i)
+    expect(result.candidate.benefits.value).toMatch(/ChatGPT Pro access/i)
+    expect(result.candidate.benefits.value).toMatch(/Mentorship|Networking/i)
+    expect(result.candidate.benefits.value).toMatch(/career opportunities/i)
+    expect(result.candidate.location.value).toBe('Singapore; onsite final at Garena Singapore office')
+    expect(result.candidate.mode.value).toBe('UNKNOWN')
+    expect(singaporeDate(result.candidate.deadline.value)).not.toBe(singaporeDate(result.candidate.endAt.value))
+    expect(result.warnings.join(' ')).toMatch(/PROPOSAL SUBMISSION: By 9 Aug 2026.*separate from the application deadline/i)
+    expect(persisted).not.toMatch(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)
+    expect(persisted).not.toMatch(/<\/?(?:html|section|div|span)\b/i)
   })
 })

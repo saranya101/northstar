@@ -53,6 +53,79 @@ function absoluteUrl(value, base) { if (!value) return null; try { const result 
 function visibleText(html) {
   return entities(html.replace(/<(script|style|noscript|svg|template)\b[\s\S]*?<\/\1>/gi, ' ').replace(/<\s*br\s*\/?>|<\/(?:p|div|li|section|article|h[1-6]|tr)>/gi, '\n').replace(/<[^>]+>/g, ' ').replace(/[ \t]+/g, ' ').replace(/\n\s*\n+/g, '\n').trim()).slice(0, 40_000)
 }
+function sectionById(html, id) {
+  return html.match(new RegExp(`<section\\b[^>]*\\bid=["']${id}["'][^>]*>([\\s\\S]*?)<\\/section>`, 'i'))?.[1] || ''
+}
+function safeExtractedText(value) {
+  return plain(value)?.replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, '').replace(/\s+/g, ' ').trim() || null
+}
+function dateValue(value, timeZone) {
+  return extractOpportunityFromText(`Deadline: ${value}`, { timeZone }).candidate.deadline.value
+}
+function timelineDetails(html, timeZone) {
+  const section = sectionById(html, 'timeline')
+  if (!section) return null
+  const cards = []
+  const expression = /<div\b[^>]*class=["'][^"']*\btl-card-title\b[^"']*["'][^>]*>([\s\S]{0,600}?)<div\b[^>]*class=["'][^"']*\btl-card-date\b[^"']*["'][^>]*>([\s\S]*?)<\/div>/gi
+  for (const match of section.matchAll(expression)) {
+    const label = plain(match[1])
+    const date = plain(match[2])
+    if (label && date && !cards.some(card => card.label === label && card.date === date)) cards.push({ label, date })
+  }
+  const registration = cards.find(card => /\b(registration|application)\s+(window|period)\b|\b(applications?|registration)\s+(close|closing|deadline)\b/i.test(card.label)
+    && !/proposal|submission|final|presentation|judging|shortlist/i.test(card.label))
+  const finalEvent = cards.find(card => /\b(final presentations?|final event|finals?)\b/i.test(card.label))
+  const range = registration?.date.match(/\b(\d{1,2})\s*[–—-]\s*(\d{1,2})\s+([A-Za-z]{3,9})\s+(20\d{2})\b/i)
+  const deadlineText = range ? `${range[2]} ${range[3]} ${range[4]}` : registration?.date
+  const startText = range ? `${range[1]} ${range[3]} ${range[4]}` : null
+  return {
+    deadline: dateValue(deadlineText, timeZone),
+    deadlineLabel: deadlineText,
+    startAt: dateValue(startText, timeZone),
+    finalAt: dateValue(finalEvent?.date, timeZone),
+    finalLabel: finalEvent?.date || null,
+    milestones: cards.filter(card => card !== registration && card !== finalEvent)
+  }
+}
+function faqDetails(html) {
+  const section = sectionById(html, 'faq')
+  if (!section) return null
+  const answers = []
+  for (const match of section.matchAll(/<span\b[^>]*class=["'][^"']*\bfaq-q\b[^"']*["'][^>]*>([\s\S]*?)<\/span>[\s\S]{0,800}?<div\b[^>]*class=["'][^"']*\bfaq-answer\b[^"']*["'][^>]*>([\s\S]*?)<\/div>/gi)) {
+    const question = safeExtractedText(match[1])
+    const answer = safeExtractedText(match[2])
+    if (question && answer && !/\b(contact|email)\b/i.test(question)) answers.push({ question, answer })
+  }
+  const answerFor = pattern => answers.find(item => pattern.test(item.question))?.answer || null
+  const participation = answerFor(/who can participate|who (?:is )?eligible|who can apply/i)
+  const experience = answerFor(/prior .{0,20}experience|experience required/i)
+  const team = answerFor(/how many .{0,20}(?:team|members)|team (?:size|members)/i)
+  const attendance = answerFor(/overseas|attend|onsite|on-site/i)
+  return {
+    eligibility: [participation, experience?.match(/^[^.!?]+[.!?]/)?.[0]].filter(Boolean).join(' ') || null,
+    requirements: [team, attendance, experience && /expected|required|must/i.test(experience) ? experience : null].filter(Boolean).join(' ') || null,
+    attendance
+  }
+}
+function benefitDetails(text) {
+  const values = []
+  if (/cash prizes?|cash prize/i.test(text)) values.push('Cash prizes for winning teams.')
+  if (/OpenAI API credits?/i.test(text)) values.push('OpenAI API credits for winning team members.')
+  if (/ChatGPT Pro (?:access)?/i.test(text)) values.push('ChatGPT Pro access for participants.')
+  if (/\bmentor(?:ship|ing)?\b|Garena mentor/i.test(text)) values.push('Mentorship for finalist teams.')
+  if (/network(?:ing)? with industry leaders|networking opportunities/i.test(text)) values.push('Networking with industry leaders.')
+  if (/career opportunities/i.test(text)) values.push('Standout participants may be considered for relevant career opportunities.')
+  return values.join(' ') || null
+}
+function scopedLocation(faq, timeline) {
+  const attendance = faq?.attendance || ''
+  if (!/\b(on-?site|in person)\b/i.test(attendance) || !/Singapore/i.test(attendance)) return null
+  const office = /Garena(?: Singapore(?:'s)?)? office|Garena HQ/i.test(attendance) ? 'Garena Singapore office' : 'onsite venue'
+  return {
+    value: `Singapore; onsite final at ${office}`,
+    warning: timeline?.finalLabel ? `Only the final on ${timeline.finalLabel} is explicitly onsite; the challenge as a whole was not classified as in-person.` : 'Only the final is explicitly onsite; the challenge as a whole was not classified as in-person.'
+  }
+}
 function applicationLink(html, base) {
   for (const match of html.matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi)) {
     if (/\b(apply|application|register|sign up)\b/i.test(plain(match[2]) || '')) {
@@ -77,6 +150,10 @@ export function extractOpportunityFromHtml(html, finalUrl, { timeZone = 'Asia/Si
   const text = visibleText(html)
   const metadataText = [...metadata.values()].filter(Boolean).join('\n')
   const labelled = extractOpportunityFromText(`${metadataText}\n${text}`, { timeZone })
+  const timeline = timelineDetails(html, timeZone)
+  const faq = faqDetails(html)
+  const benefits = benefitDetails(text)
+  const location = scopedLocation(faq, timeline)
   const canonical = linkValue(html, 'canonical', finalUrl) || normalizeOpportunityUrl(finalUrl)
   const titleTag = plain(html.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i)?.[1])
   const heading = plain(html.match(/<h1\b[^>]*>([\s\S]*?)<\/h1>/i)?.[1])
@@ -95,21 +172,23 @@ export function extractOpportunityFromHtml(html, finalUrl, { timeZone = 'Asia/Si
       organisation: choose(field(structuredOrganisation, .96), field(metadata.get('og:site_name') || metadata.get('application-name') || metadata.get('author'), .78), labelled.candidate.organisation, 'Organisation was not identified.'),
       category: choose(field(labelled.candidate.category.value, node ? .88 : 0), null, labelled.candidate.category, 'Choose a category.'),
       description: choose(field(plain(node?.description), .96), field(metadata.get('og:description') || metadata.get('description') || metadata.get('twitter:description'), .84), field(null)),
-      deadline: choose(field(safeDate(node?.validThrough || node?.applicationDeadline), .98), field(safeDate(metadata.get('article:expiration_time') || metadata.get('deadline')), .85), labelled.candidate.deadline),
-      startAt: choose(field(safeDate(node?.startDate), .98), field(safeDate(metadata.get('event:start_time')), .86), labelled.candidate.startAt),
-      endAt: choose(field(safeDate(node?.endDate), .98), field(safeDate(metadata.get('event:end_time')), .86), labelled.candidate.endAt),
-      location: choose(field(structuredLocation, .95), field(metadata.get('event:location') || metadata.get('location'), .8), labelled.candidate.location),
-      mode: choose(field(attendanceMode(node?.eventAttendanceMode || node?.jobLocationType), .95), field(attendanceMode(metadata.get('event:attendance_mode')), .8), labelled.candidate.mode),
+      deadline: choose(field(safeDate(node?.validThrough || node?.applicationDeadline), .98), field(safeDate(metadata.get('article:expiration_time') || metadata.get('deadline')), .85), timeline?.deadline ? field(timeline.deadline, .95, [`Registration closes on ${timeline.deadlineLabel}; no closing time was published.`]) : labelled.candidate.deadline),
+      startAt: choose(field(safeDate(node?.startDate), .98), field(safeDate(metadata.get('event:start_time')), .86), timeline?.startAt ? field(timeline.startAt, .93, ['This is the start of the published registration window.']) : labelled.candidate.startAt),
+      endAt: choose(field(safeDate(node?.endDate), .98), field(safeDate(metadata.get('event:end_time')), .86), timeline?.finalAt ? field(timeline.finalAt, .95, [`Final presentations are on ${timeline.finalLabel}; no event time was published.`]) : labelled.candidate.endAt),
+      location: choose(field(structuredLocation, .95), field(metadata.get('event:location') || metadata.get('location'), .8), location ? field(location.value, .95, [location.warning]) : labelled.candidate.location),
+      mode: choose(field(attendanceMode(node?.eventAttendanceMode || node?.jobLocationType), .95), field(attendanceMode(metadata.get('event:attendance_mode')), .8), location ? field('UNKNOWN', .82, [location.warning]) : labelled.candidate.mode),
       applicationUrl: choose(field(structuredApplication, .93), field(metaApplication, .85), field(applicationLink(html, finalUrl) || labelled.candidate.applicationUrl.value, .74)),
       sourceUrl: field(canonical, linkValue(html, 'canonical', finalUrl) ? .96 : .9),
-      eligibilityText: choose(field(plain(node?.eligibility || node?.qualifications), .94), null, labelled.candidate.eligibilityText),
-      requirements: choose(field(plain(node?.responsibilities || node?.skills || node?.qualifications), .92), null, labelled.candidate.requirements),
-      benefits: choose(field(plain(node?.jobBenefits || node?.benefits), .92), null, labelled.candidate.benefits),
+      eligibilityText: choose(field(plain(node?.eligibility || node?.qualifications), .94), faq?.eligibility ? field(faq.eligibility, .95) : null, labelled.candidate.eligibilityText),
+      requirements: choose(field(plain(node?.responsibilities || node?.skills || node?.qualifications), .92), faq?.requirements ? field(faq.requirements, .95) : null, labelled.candidate.requirements),
+      benefits: choose(field(plain(node?.jobBenefits || node?.benefits), .92), benefits ? field(benefits, .9) : null, labelled.candidate.benefits),
       tags: choose(field(keywords(node?.keywords), .9), field(keywords(metadata.get('keywords') || metadata.get('article:tag')), .75), labelled.candidate.tags)
     },
     warnings,
     sourceHost
   }
+  if (timeline?.finalLabel) warnings.push(`Final presentations are scheduled for ${timeline.finalLabel}; this was kept separate from the application deadline.`)
+  for (const milestone of timeline?.milestones || []) warnings.push(`${milestone.label}: ${milestone.date}. This milestone was kept separate from the application deadline.`)
   for (const [key, value] of Object.entries(result.candidate)) if (!value.value && !value.warnings.length) value.warnings.push(`${key} was not found and was left blank.`)
   return result
 }
