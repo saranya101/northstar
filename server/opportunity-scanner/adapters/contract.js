@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { OPPORTUNITY_CATEGORIES, OPPORTUNITY_MODES } from '../../../shared/schemas/opportunities'
+import { OPPORTUNITY_CATEGORIES, OPPORTUNITY_MODES } from '#shared/schemas/opportunities'
 import { normalizeAdapterCandidate } from '../normalization'
 
 /**
