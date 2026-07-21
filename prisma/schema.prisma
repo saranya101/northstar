@@ -23,6 +23,8 @@ model User {
   semesters        UserSemester[]
   moduleEnrolments UserModuleEnrolment[]
   timetableImports TimetableImport[]
+  createdOpportunities Opportunity[]     @relation("OpportunityCreator")
+  userOpportunities    UserOpportunity[]
 
   @@unique([email])
   @@map("user")
@@ -275,6 +277,113 @@ enum ModuleColour {
   INDIGO
   SLATE
   ROSE
+}
+
+enum OpportunityCategory {
+  INTERNSHIP
+  PART_TIME_JOB
+  GRADUATE_PROGRAMME
+  HACKATHON
+  COMPETITION
+  VOLUNTEERING
+  CLUB
+  LEADERSHIP
+  SCHOLARSHIP
+  GRANT
+  RESEARCH
+  EXCHANGE
+  SUMMER_PROGRAMME
+  MENTORSHIP
+  ENTREPRENEURSHIP
+  WORKSHOP
+  TALK
+  NETWORKING
+  CERTIFICATION
+  AMBASSADOR
+  PROJECT
+  OTHER
+}
+
+enum OpportunitySourceType {
+  MANUAL
+  PASTED_TEXT
+  PASTED_LINK
+  PUBLIC_SOURCE
+  EMAIL
+  SCREENSHOT
+  PDF
+}
+
+enum OpportunityMode {
+  IN_PERSON
+  ONLINE
+  HYBRID
+  UNKNOWN
+}
+
+enum UserOpportunityStatus {
+  SAVED
+  INTERESTED
+  APPLYING
+  APPLIED
+  ACCEPTED
+  REJECTED
+  COMPLETED
+  IGNORED
+}
+
+model Opportunity {
+  id                String              @id @default(cuid())
+  title             String
+  organisation      String
+  category          OpportunityCategory
+  description       String?
+  sourceType        OpportunitySourceType @default(MANUAL)
+  sourceName        String?
+  sourceUrl         String?
+  applicationUrl    String?
+  publishedAt       DateTime?
+  deadline          DateTime?
+  startAt           DateTime?
+  endAt             DateTime?
+  location          String?
+  mode              OpportunityMode     @default(UNKNOWN)
+  commitment        String?
+  eligibilityText   String?
+  requirements      String?
+  benefits          String?
+  tags              String[]            @default([])
+  createdByUserId   String?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  createdBy         User?               @relation("OpportunityCreator", fields: [createdByUserId], references: [id], onDelete: Cascade)
+  userOpportunities UserOpportunity[]
+
+  @@index([createdByUserId])
+  @@index([deadline])
+  @@index([category])
+  @@index([category, deadline])
+}
+
+model UserOpportunity {
+  id               String                @id @default(cuid())
+  userId           String
+  opportunityId    String
+  status           UserOpportunityStatus @default(SAVED)
+  personalDeadline DateTime?
+  notes            String?
+  savedAt          DateTime?
+  appliedAt        DateTime?
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  user             User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  opportunity      Opportunity           @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, opportunityId])
+  @@index([userId])
+  @@index([userId, status])
+  @@index([opportunityId])
+  @@index([personalDeadline])
 }
 
 model Module {

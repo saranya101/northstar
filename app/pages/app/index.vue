@@ -1,5 +1,6 @@
 <script setup>
 import { activeModuleCount, hasActiveModules } from '~/utils/module-view'
+import { opportunityTiming } from '~~/shared/utils/opportunities'
 
 definePageMeta({ layout: 'app', middleware: ['auth', 'onboarded'] })
 useSeoMeta({ title: 'Overview · Northstar', description: 'Your current academic foundation in Northstar.' })
@@ -24,9 +25,17 @@ const nextClass = computed(() => {
   const minutes = now.getHours() * 60 + now.getMinutes()
   return todaySessions.value.find(session => session.endMinutes > minutes) || null
 })
+const opportunityOverview = ref(null)
+const opportunityOverviewLoading = ref(false)
+async function loadOpportunityOverview() {
+  opportunityOverviewLoading.value = true
+  try { opportunityOverview.value = await $fetch('/api/opportunities', { query: { sort: 'deadline', pageSize: 3 } }) }
+  catch { opportunityOverview.value = null }
+  finally { opportunityOverviewLoading.value = false }
+}
 
 watch(user, (currentUser) => {
-  if (currentUser) { void loadModules().catch(() => {}); void loadTimetable().catch(() => {}) }
+  if (currentUser) { void loadModules().catch(() => {}); void loadTimetable().catch(() => {}); void loadOpportunityOverview() }
 }, { immediate: true })
 </script>
 
@@ -70,6 +79,13 @@ watch(user, (currentUser) => {
       <NuxtLink v-for="module in modules.modules" :key="module.enrolmentId" :to="`/app/modules/${module.enrolmentId}`" class="overview-module-row">
         <span :class="`module-colour--${module.colour.toLowerCase()}`" aria-hidden="true" /><strong>{{ module.code }}</strong><p>{{ module.title }}</p><small>{{ module.targetGrade ? `Target ${module.targetGrade}` : 'No target grade' }}</small><UIcon name="i-lucide-chevron-right" />
       </NuxtLink>
+    </section>
+
+    <section class="overview-opportunities" aria-labelledby="overview-opportunities-title">
+      <div class="overview-modules__heading"><div><p>Beyond classes</p><h2 id="overview-opportunities-title">Opportunities</h2></div><NuxtLink to="/app/opportunities">Opportunity Inbox <UIcon name="i-lucide-arrow-right" /></NuxtLink></div>
+      <div v-if="opportunityOverviewLoading" class="app-skeleton overview-opportunity-skeleton"><span v-for="item in 3" :key="item" /></div>
+      <p v-else-if="!opportunityOverview?.items.length" class="dossier-empty">No opportunities saved yet. <NuxtLink to="/app/opportunities/new">Add one</NuxtLink>.</p>
+      <template v-else><div class="overview-opportunity-stats"><span><strong>{{ opportunityOverview.summary.closingSoonCount }}</strong> closing soon</span><span><strong>{{ opportunityOverview.summary.applicationsInProgress }}</strong> in progress</span></div><NuxtLink v-for="item in opportunityOverview.items" :key="item.id" :to="`/app/opportunities/${item.id}`" class="overview-opportunity-row"><span><strong>{{ item.title }}</strong><small>{{ item.organisation }}</small></span><em>{{ opportunityTiming(item).label }}</em><UIcon name="i-lucide-chevron-right" /></NuxtLink></template>
     </section>
   </main>
 </template>
