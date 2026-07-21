@@ -29,6 +29,7 @@ export async function extractPdf(file, { onProgress = () => {}, signal } = {}) {
       const items = content.items.filter(item => 'str' in item).map(item => ({ text: item.str, x: item.transform[4], y: item.transform[5], width: item.width, height: item.height }))
       let text = textFromItems(items)
       let words = []
+      let blocks = []
       if (text.replace(/\s/g, '').length < 40) {
         ocr ||= await createOcrExtractor({ onProgress, signal })
         const viewport = page.getViewport({ scale: 1.75 })
@@ -40,10 +41,11 @@ export async function extractPdf(file, { onProgress = () => {}, signal } = {}) {
         const result = await ocr.recognise(canvas)
         text = result.text
         words = result.words
+        blocks = result.blocks
         canvas.width = 0
         canvas.height = 0
       }
-      pages.push({ number, text, items, words })
+      pages.push({ number, text, items, words, blocks })
       page.cleanup()
       onProgress({ label: `Reading page ${number} of ${pdfDocument.numPages}`, progress: number / pdfDocument.numPages })
     }

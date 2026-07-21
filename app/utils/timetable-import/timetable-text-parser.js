@@ -1,6 +1,7 @@
 import { sanitiseIdentityText } from './identity-sanitiser'
 import { candidateId, mapClassType, mapRegistrationStatus } from './timetable-candidate-normaliser'
 import { normalizeDay, parseTimeRange } from './timetable-time'
+import { parseNtuSessionBlock } from './ntu-session-block-parser'
 
 export const MODULE_CODE_PATTERN = /\b(?=[A-Z0-9]{4,12}\b)(?=[A-Z0-9]*[A-Z])(?=[A-Z0-9]*\d)[A-Z]{1,6}\d{2,6}[A-Z]?\b/g
 const DAY_PATTERN = /\b(MON(?:DAY)?|TUE(?:S|SDAY)?|WED(?:NESDAY)?|THU(?:R|RS|RSDAY)?|FRI(?:DAY)?|SAT(?:URDAY)?|SUN(?:DAY)?)\b/i
@@ -31,14 +32,16 @@ export function parseTimetableText(rawText, source = 'PASTED_TEXT') {
 
     const dayMatch = line.match(DAY_PATTERN)
     const timeMatch = line.match(TIME_RANGE_PATTERN)
-    if (dayMatch || timeMatch) {
+    if (dayMatch || timeMatch || /\b(?:LEC|LECTURE|TUT|TUTORIAL|SEM|SEMINAR|LAB|LABORATORY|WORKSHOP|PROJECT|FIELDWORK)(?:\/STU)?\b/i.test(line)) {
       const time = timeMatch ? parseTimeRange(timeMatch[0]) : null
-      const typeMatch = line.match(/\b(LEC(?:TURE)?|TUT(?:ORIAL)?|SEM(?:INAR)?|LAB(?:ORATORY)?|WORKSHOP|PROJECT|FIELDWORK)\b/i)
-      const groupMatch = line.match(/\b(?:GROUP|GRP)\s*[:#]?\s*([A-Z0-9-]+)\b/i)
       const sessionWarnings = []
       if (!dayMatch) sessionWarnings.push('Day needs confirmation.')
       if (!time) sessionWarnings.push('Start and end time need confirmation.')
-      module.sessions.push({ candidateId: candidateId('session'), classType: mapClassType(typeMatch?.[1]), groupLabel: groupMatch?.[1] || 'DEFAULT', dayOfWeek: normalizeDay(dayMatch?.[1]), startMinutes: time?.startMinutes ?? null, endMinutes: time?.endMinutes ?? null, venue: null, recurrence: 'WEEKLY', weekNumbers: [], confidence: time && dayMatch ? 0.78 : 0.35, selected: module.registrationStatus !== 'EXEMPTED', warnings: sessionWarnings })
+      const session = parseNtuSessionBlock(line, { dayOfWeek: normalizeDay(dayMatch?.[1]), startMinutes: time?.startMinutes ?? null, endMinutes: time?.endMinutes ?? null, confidence: time && dayMatch ? 0.78 : 0.35, warnings: sessionWarnings })
+      if (session) {
+        session.selected = module.registrationStatus !== 'EXEMPTED'
+        module.sessions.push(session)
+      }
     }
   }
 
@@ -46,4 +49,3 @@ export function parseTimetableText(rawText, source = 'PASTED_TEXT') {
   for (const module of modules.values()) if (!module.sessions.length) warnings.push(`${module.code}: no class sessions were detected.`)
   return { source, modules: [...modules.values()], warnings }
 }
-

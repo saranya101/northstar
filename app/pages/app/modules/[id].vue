@@ -1,4 +1,5 @@
 <script setup>
+import { deliveryModeIcon, deliveryModeLabel } from '~/utils/timetable-import/timetable-delivery'
 definePageMeta({ layout: 'app', middleware: ['auth', 'onboarded'] })
 
 const route = useRoute()
@@ -82,7 +83,7 @@ function sessionTime(session) { const render = value => `${String(Math.floor(val
         <dl class="dossier-details">
           <div><dt>Grading basis</dt><dd>{{ dossier.module.gradingBasis || dossier.offering.gradingType || 'Not provided' }}</dd></div>
           <div><dt>Current section</dt><dd>{{ dossier.offering.sectionLabel === 'DEFAULT' ? 'No specific section' : dossier.offering.sectionLabel }}</dd></div>
-          <div><dt>Provenance</dt><dd>{{ humanize(dossier.module.sourceStatus) }}<small v-if="dossier.module.sourceStatus === 'USER_ENTERED'">Supplied by a Northstar user and not officially verified.</small></dd></div>
+          <div><dt>Provenance</dt><dd>{{ humanize(dossier.module.sourceStatus) }}<small v-if="dossier.module.verificationStatus === 'PUBLIC_SOURCE_MATCH'">Matched against NTU public course information.</small><small v-else-if="dossier.module.verificationStatus === 'PUBLIC_SOURCE_CONFLICT'">NTU public information differed; the reviewed student selection was retained.</small><small v-else-if="dossier.module.sourceStatus === 'USER_ENTERED'">Supplied by a Northstar user and not officially verified.</small></dd></div>
         </dl>
         <div class="dossier-links"><UButton v-if="dossier.module.officialUrl" :to="dossier.module.officialUrl" target="_blank" color="neutral" variant="outline">Official module page</UButton><UButton v-if="dossier.offering.syllabusUrl" :to="dossier.offering.syllabusUrl" target="_blank" color="neutral" variant="outline">Syllabus</UButton><span v-if="!dossier.module.officialUrl && !dossier.offering.syllabusUrl">No official links have been connected.</span></div>
       </section>
@@ -90,7 +91,7 @@ function sessionTime(session) { const render = value => `${String(Math.floor(val
       <section class="dossier-section">
         <div class="dossier-section__heading"><div><p>Recurring schedule</p><h2>Class sessions</h2></div><UButton icon="i-lucide-plus" color="neutral" variant="outline" @click="newSession">Add session</UButton></div>
         <dl class="dossier-details"><div><dt>Index number</dt><dd>{{ dossier.enrolment.indexNumber || 'Not provided' }}</dd></div><div><dt>Registration status</dt><dd>{{ humanize(dossier.enrolment.registrationStatus) }}</dd></div><div><dt>Course type</dt><dd>{{ dossier.enrolment.courseType || 'Not provided' }}</dd></div></dl>
-        <div v-if="dossier.classSessions.length" class="session-list"><button v-for="session in dossier.classSessions" :key="session.id" @click="editSession(session)"><strong>{{ humanize(session.classType) }}</strong><span>{{ humanize(session.dayOfWeek) }} · {{ sessionTime(session) }}</span><small>{{ session.groupLabel }}<template v-if="session.venue"> · {{ session.venue }}</template> · {{ humanize(session.recurrence) }}</small><UIcon name="i-lucide-pencil" /></button></div>
+        <div v-if="dossier.classSessions.length" class="session-list"><button v-for="session in dossier.classSessions" :key="session.id" @click="editSession(session)"><strong>{{ humanize(session.classType) }}</strong><span>{{ humanize(session.dayOfWeek) }} · {{ sessionTime(session) }}</span><small>{{ session.groupLabel }}<template v-if="session.venue"> · {{ session.venue }}</template> · {{ humanize(session.recurrence) }}</small><span class="delivery-label"><UIcon :name="deliveryModeIcon(session.deliveryMode)" /> {{ deliveryModeLabel(session.deliveryMode) }}</span><UIcon name="i-lucide-pencil" /></button></div>
         <p v-else class="dossier-empty">No class sessions have been added for this module.</p>
       </section>
 

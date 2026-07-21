@@ -309,7 +309,9 @@ export async function getModuleDossier(userId, enrolmentId, database = prisma) {
       gradingBasis: offering.module.gradingBasis,
       officialUrl: offering.module.officialUrl,
       sourceStatus: offering.module.sourceStatus,
-      lastVerifiedAt: dateValue(offering.module.lastVerifiedAt)
+      lastVerifiedAt: dateValue(offering.module.lastVerifiedAt),
+      verificationStatus: offering.module.verificationStatus,
+      enrichmentProvenance: offering.module.enrichmentProvenance
     },
     offering: {
       id: offering.id,

@@ -1,7 +1,16 @@
 import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('../server/utils/prisma', () => ({ prisma: {} }))
-import { confirmTimetableImport, deleteClassSession, getTimetableImport, updateClassSession } from '../server/services/timetable'
+import { confirmTimetableImport, deleteClassSession, getTimetableImport, sourceSemesterStatus, updateClassSession } from '../server/services/timetable'
+
+describe('source semester validation', () => {
+  it('detects matches, mismatches and unknown uploads deterministically', () => {
+    const source = { academicYearLabel: '2025/2026', semesterNumber: 2 }
+    expect(sourceSemesterStatus(source, { academicYear: '2025/2026', semesterNumber: 2, name: 'Semester 2' })).toBe('MATCH')
+    expect(sourceSemesterStatus(source, { academicYear: '2026/2027', semesterNumber: 1, name: 'Semester 1' })).toBe('MISMATCH')
+    expect(sourceSemesterStatus(null, { academicYear: '2026/2027', semesterNumber: 1 })).toBe('UNKNOWN')
+  })
+})
 
 describe('timetable ownership', () => {
   it('returns 404 when another user reads an import', async () => {

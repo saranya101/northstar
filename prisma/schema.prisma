@@ -242,6 +242,21 @@ enum CourseRegistrationStatus {
   UNKNOWN
 }
 
+enum SessionDeliveryMode {
+  IN_PERSON
+  ONLINE
+  HYBRID
+  TBC
+  UNKNOWN
+}
+
+enum ModuleVerificationStatus {
+  USER_CONFIRMED
+  PUBLIC_SOURCE_MATCH
+  PUBLIC_SOURCE_CONFLICT
+  UNVERIFIED
+}
+
 enum InstructorRole {
   LECTURER
   TUTOR
@@ -263,23 +278,25 @@ enum ModuleColour {
 }
 
 model Module {
-  id             String             @id @default(cuid())
-  universityId   String
-  schoolId       String?
-  code           String
-  title          String
-  description    String?
-  academicUnits  Decimal?           @db.Decimal(5, 2)
-  level          String?
-  gradingBasis   String?
-  officialUrl    String?
-  sourceStatus   ModuleSourceStatus @default(USER_ENTERED)
-  lastVerifiedAt DateTime?
-  createdAt      DateTime           @default(now())
-  updatedAt      DateTime           @updatedAt
-  university     University         @relation(fields: [universityId], references: [id])
-  school         School?            @relation(fields: [schoolId], references: [id])
-  offerings      ModuleOffering[]
+  id                   String                   @id @default(cuid())
+  universityId         String
+  schoolId             String?
+  code                 String
+  title                String
+  description          String?
+  academicUnits        Decimal?                 @db.Decimal(5, 2)
+  level                String?
+  gradingBasis         String?
+  officialUrl          String?
+  sourceStatus         ModuleSourceStatus       @default(USER_ENTERED)
+  lastVerifiedAt       DateTime?
+  verificationStatus   ModuleVerificationStatus @default(UNVERIFIED)
+  enrichmentProvenance Json?
+  createdAt            DateTime                 @default(now())
+  updatedAt            DateTime                 @updatedAt
+  university           University               @relation(fields: [universityId], references: [id])
+  school               School?                  @relation(fields: [schoolId], references: [id])
+  offerings            ModuleOffering[]
 
   @@unique([universityId, code])
   @@index([universityId])
@@ -408,6 +425,7 @@ model ClassSession {
   recurrence            SessionRecurrence   @default(WEEKLY)
   weekNumbers           Int[]               @default([])
   source                ClassSessionSource  @default(MANUAL)
+  deliveryMode          SessionDeliveryMode @default(UNKNOWN)
   confidence            Decimal?            @db.Decimal(3, 2)
   createdAt             DateTime            @default(now())
   updatedAt             DateTime            @updatedAt

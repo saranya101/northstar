@@ -3,6 +3,7 @@ import { detectTimetableFormat } from '~/utils/timetable-import/format-detector'
 import { validateTimetableFile } from '~/utils/timetable-import/file-validation'
 import { parseNtuGrid } from '~/utils/timetable-import/ntu-grid-parser'
 import { parseNtuRegisteredCourses } from '~/utils/timetable-import/ntu-registered-courses-parser'
+import { parseNtuTimetableImage } from '~/utils/timetable-import/ntu-timetable-image-parser'
 
 definePageMeta({ layout: 'app', middleware: ['auth', 'onboarded'] })
 useSeoMeta({ title: 'Import timetable · Northstar' })
@@ -39,11 +40,17 @@ async function processFile(event) {
       extraction = await extractImage(file, { signal: controller.value.signal, onProgress: value => { progress.value = value } })
     }
     const words = extraction.words || extraction.pages?.flatMap(page => page.words) || []
+    const blocks = extraction.blocks || extraction.pages?.flatMap(page => page.blocks) || []
+    if (file.type !== 'application/pdf') {
+      progress.value = { label: 'Combining registered courses and timetable sessions', progress: 0.92 }
+      await createReview(parseNtuTimetableImage(extraction, 'NTU_TIMETABLE_IMAGE'))
+      return
+    }
     const detected = detectTimetableFormat(extraction.text, words)
     progress.value = { label: detected.format === 'WEEKLY_GRID' ? 'Weekly grid detected (beta)' : 'Registered courses detected', progress: 1 }
     if (detected.format === 'UNKNOWN') { pastedText.value = extraction.text; localError.value = 'The format was uncertain. Review the extracted text below, edit it if needed, then continue.'; return }
     const source = detected.format === 'WEEKLY_GRID' ? 'NTU_TIMETABLE_IMAGE' : file.type === 'application/pdf' ? 'NTU_REGISTERED_COURSES_PDF' : 'NTU_REGISTERED_COURSES_IMAGE'
-    await createReview(detected.format === 'WEEKLY_GRID' ? parseNtuGrid(words, source) : parseNtuRegisteredCourses(extraction.text, source))
+    await createReview(detected.format === 'WEEKLY_GRID' ? parseNtuGrid(words, source, blocks) : parseNtuRegisteredCourses(extraction.text, source))
   } catch (cause) { if (cause?.name !== 'AbortError') localError.value = cause.message || 'The file could not be read.' } finally { processing.value = false; controller.value = null; event.target.value = '' }
 }
 </script>

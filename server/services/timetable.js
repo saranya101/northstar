@@ -23,14 +23,28 @@ function selectedCounts(modules) {
   return { detectedModuleCount: modules.length, detectedSessionCount: modules.reduce((count, module) => count + module.sessions.length, 0) }
 }
 
+export function sourceSemesterStatus(sourceSemester, academicTerm) {
+  if (!sourceSemester) return 'UNKNOWN'
+  const semesterNumber = academicTerm?.semesterNumber ?? Number(String(academicTerm?.name || '').match(/\d+/)?.[0])
+  return academicTerm?.academicYear === sourceSemester.academicYearLabel && semesterNumber === sourceSemester.semesterNumber ? 'MATCH' : 'MISMATCH'
+}
+
+function targetSemester(activeSemester) {
+  const term = activeSemester.academicTerm
+  return { userSemesterId: activeSemester.id, academicYearLabel: term.academicYear, semesterNumber: term.semesterNumber ?? (Number(String(term.name).match(/\d+/)?.[0]) || null), displayLabel: `${term.academicYear} ${term.name}` }
+}
+
 function serializeImport(record) {
-  return { id: record.id, source: record.source, status: record.status, parserVersion: record.parserVersion, modules: record.candidatePayload.modules, warnings: record.warnings || [], detectedModuleCount: record.detectedModuleCount, detectedSessionCount: record.detectedSessionCount, confirmedAt: dateValue(record.confirmedAt), createdAt: dateValue(record.createdAt), updatedAt: dateValue(record.updatedAt) }
+  return { id: record.id, source: record.source, status: record.status, parserVersion: record.parserVersion, ...record.candidatePayload, warnings: record.warnings || [], detectedModuleCount: record.detectedModuleCount, detectedSessionCount: record.detectedSessionCount, confirmedAt: dateValue(record.confirmedAt), createdAt: dateValue(record.createdAt), updatedAt: dateValue(record.updatedAt) }
 }
 
 export async function createTimetableImport(userId, input, database = prisma) {
   const { activeSemester } = await requireModuleContext(userId, database)
   const counts = selectedCounts(input.modules)
-  const record = await database.timetableImport.create({ data: { userId, userSemesterId: activeSemester.id, source: input.source, status: 'NEEDS_REVIEW', parserVersion: 'northstar-deterministic-1', candidatePayload: { modules: input.modules }, warnings: input.warnings, ...counts } })
+  const { source, warnings, ...candidatePayload } = input
+  candidatePayload.semesterMatchStatus = sourceSemesterStatus(input.sourceSemester, activeSemester.academicTerm)
+  candidatePayload.targetSemester = targetSemester(activeSemester)
+  const record = await database.timetableImport.create({ data: { userId, userSemesterId: activeSemester.id, source, status: 'NEEDS_REVIEW', parserVersion: 'northstar-ntu-image-2', candidatePayload, warnings, ...counts } })
   return serializeImport(record)
 }
 
@@ -45,7 +59,7 @@ export async function updateTimetableImport(userId, id, input, database = prisma
   if (!record) throw domainError(404, 'Timetable import not found.')
   if (record.status !== 'NEEDS_REVIEW') throw domainError(409, 'Only an import awaiting review can be changed.')
   const counts = selectedCounts(input.modules)
-  return serializeImport(await database.timetableImport.update({ where: { id }, data: { candidatePayload: { modules: input.modules }, warnings: input.warnings, ...counts } }))
+  return serializeImport(await database.timetableImport.update({ where: { id }, data: { candidatePayload: { ...record.candidatePayload, modules: input.modules, unmatchedTimetableText: input.unmatchedTimetableText }, warnings: input.warnings, ...counts } }))
 }
 
 export async function cancelTimetableImport(userId, id, database = prisma) {
@@ -70,7 +84,7 @@ function overlap(left, right) {
 
 function serializeSession(session) {
   const enrolment = session.userModuleEnrolment
-  return { id: session.id, enrolmentId: session.userModuleEnrolmentId, classType: session.classType, groupLabel: session.groupLabel, dayOfWeek: session.dayOfWeek, startMinutes: session.startMinutes, endMinutes: session.endMinutes, venue: session.venue, recurrence: session.recurrence, weekNumbers: session.weekNumbers, source: session.source, confidence: decimalValue(session.confidence), module: enrolment ? { id: enrolment.offering.module.id, code: enrolment.offering.module.code, title: enrolment.offering.module.title, colour: enrolment.colour } : undefined }
+  return { id: session.id, enrolmentId: session.userModuleEnrolmentId, classType: session.classType, groupLabel: session.groupLabel, dayOfWeek: session.dayOfWeek, startMinutes: session.startMinutes, endMinutes: session.endMinutes, venue: session.venue, deliveryMode: session.deliveryMode, recurrence: session.recurrence, weekNumbers: session.weekNumbers, source: session.source, confidence: decimalValue(session.confidence), module: enrolment ? { id: enrolment.offering.module.id, code: enrolment.offering.module.code, title: enrolment.offering.module.title, colour: enrolment.colour } : undefined }
 }
 
 function conflictPairs(sessions) {
@@ -87,6 +101,9 @@ export async function confirmTimetableImport(userId, id, input, database = prism
     if (record.status !== 'NEEDS_REVIEW') throw domainError(409, 'This import is not ready for confirmation.')
     if (dateValue(record.updatedAt) !== input.expectedUpdatedAt) throw domainError(409, 'This review changed in another tab. Reload it before confirming.')
     const { academicProfile, activeSemester } = await requireModuleContext(userId, transaction)
+    if (record.userSemesterId !== activeSemester.id) throw domainError(409, 'This import targets a different semester. Cancel it and review the upload again after selecting the matching semester.')
+    const semesterStatus = sourceSemesterStatus(record.candidatePayload.sourceSemester, activeSemester.academicTerm)
+    if (semesterStatus !== 'MATCH') throw domainError(409, semesterStatus === 'MISMATCH' ? `Semester mismatch: the upload is for ${record.candidatePayload.sourceSemester.displayLabel}, but the selected target is ${activeSemester.academicTerm.academicYear} ${activeSemester.academicTerm.name}.` : 'Select a target semester explicitly before confirming this import.')
     let modulesCreated = 0
     let modulesReused = 0
     let sessionsCreated = 0
@@ -97,13 +114,21 @@ export async function confirmTimetableImport(userId, id, input, database = prism
       let module = await transaction.module.findUnique({ where: { universityId_code: { universityId: academicProfile.universityId, code } } })
       if (!module) {
         if (!candidate.title) throw domainError(400, `${code} needs a title before it can be created.`)
-        module = await transaction.module.create({ data: { universityId: academicProfile.universityId, schoolId: academicProfile.schoolId, code, title: candidate.title, academicUnits: candidate.academicUnits, sourceStatus: 'USER_ENTERED' } })
+        module = await transaction.module.create({ data: { universityId: academicProfile.universityId, schoolId: academicProfile.schoolId, code, title: candidate.title, academicUnits: candidate.academicUnits, description: candidate.publicEnrichment?.description, gradingBasis: candidate.publicEnrichment?.gradingBasis, officialUrl: candidate.publicEnrichment?.officialUrl, sourceStatus: 'USER_ENTERED', verificationStatus: candidate.publicEnrichment?.verificationStatus || 'USER_CONFIRMED', enrichmentProvenance: candidate.publicEnrichment?.fieldProvenance, lastVerifiedAt: candidate.publicEnrichment ? new Date() : null } })
         modulesCreated += 1
       } else {
         modulesReused += 1
         if (!module.sourceStatus.startsWith('OFFICIAL_')) {
           const safeUpdates = {}
           if (module.academicUnits === null && candidate.academicUnits !== null) safeUpdates.academicUnits = candidate.academicUnits
+          if (!module.description && candidate.publicEnrichment?.description) safeUpdates.description = candidate.publicEnrichment.description
+          if (!module.gradingBasis && candidate.publicEnrichment?.gradingBasis) safeUpdates.gradingBasis = candidate.publicEnrichment.gradingBasis
+          if (!module.officialUrl && candidate.publicEnrichment?.officialUrl) safeUpdates.officialUrl = candidate.publicEnrichment.officialUrl
+          if (candidate.publicEnrichment) {
+            safeUpdates.enrichmentProvenance = candidate.publicEnrichment.fieldProvenance
+            safeUpdates.verificationStatus = candidate.publicEnrichment.verificationStatus
+            safeUpdates.lastVerifiedAt = new Date()
+          }
           if (Object.keys(safeUpdates).length) module = await transaction.module.update({ where: { id: module.id }, data: safeUpdates })
         }
       }
@@ -117,13 +142,13 @@ export async function confirmTimetableImport(userId, id, input, database = prism
         const key = { userModuleEnrolmentId: enrolment.id, classType: session.classType, groupLabel: session.groupLabel, dayOfWeek: session.dayOfWeek, startMinutes: session.startMinutes, endMinutes: session.endMinutes }
         const duplicate = await transaction.classSession.findUnique({ where: { userModuleEnrolmentId_classType_groupLabel_dayOfWeek_startMinutes_endMinutes: key } })
         if (duplicate) { duplicatesSkipped += 1; continue }
-        await transaction.classSession.create({ data: { ...key, venue: session.venue, recurrence: session.recurrence, weekNumbers: session.recurrence === 'CUSTOM' ? session.weekNumbers : [], source: 'IMPORTED', confidence: session.confidence } })
+        await transaction.classSession.create({ data: { ...key, venue: session.venue, deliveryMode: session.deliveryMode, recurrence: session.recurrence, weekNumbers: session.recurrence === 'CUSTOM' ? session.weekNumbers : [], source: 'IMPORTED', confidence: session.confidence } })
         sessionsCreated += 1
       }
     }
     const sessions = await transaction.classSession.findMany({ where: { userModuleEnrolment: { userId, userSemesterId: activeSemester.id, status: 'ACTIVE' } }, include: SESSION_INCLUDE })
     const conflicts = conflictPairs(sessions)
-    await transaction.timetableImport.update({ where: { id }, data: { status: 'CONFIRMED', confirmedAt: new Date(), candidatePayload: { modules: input.modules } } })
+    await transaction.timetableImport.update({ where: { id }, data: { status: 'CONFIRMED', confirmedAt: new Date(), candidatePayload: { ...record.candidatePayload, modules: input.modules } } })
     return { modulesCreated, modulesReused, sessionsCreated, duplicatesSkipped, conflicts }
   })
 }

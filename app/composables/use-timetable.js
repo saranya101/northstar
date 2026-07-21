@@ -46,5 +46,10 @@ export function useTimetable() {
   async function addSession(enrolmentId, body) { const result = await mutate(`/api/modules/${enrolmentId}/sessions`, { method: 'POST', body }, 'Unable to add the session.'); if (result) await load(true); return result }
   async function updateSession(id, body) { const result = await mutate(`/api/sessions/${id}`, { method: 'PATCH', body }, 'Unable to update the session.'); if (result) await load(true); return result }
   async function deleteSession(id) { const result = await mutate(`/api/sessions/${id}`, { method: 'DELETE' }, 'Unable to delete the session.'); if (result) await load(true); return result }
-  return { state, imports, loading, saving, error, fieldErrors, load, createImport, loadImport, updateImport, confirmImport, cancelImport, addSession, updateSession, deleteSession, clear, clearErrors }
+  async function enrichModule({ code, academicYear, semester, importedTitle }) {
+    const query = { code, academicYear, semester }
+    if (importedTitle) query.importedTitle = importedTitle
+    try { return await request(`enrichment:${code}:${academicYear}:${semester}`, () => requestFetch('/api/timetable/enrichment', { query })) } catch { return { available: false, reason: 'NTU public course information is temporarily unavailable.' } }
+  }
+  return { state, imports, loading, saving, error, fieldErrors, load, createImport, loadImport, updateImport, confirmImport, cancelImport, addSession, updateSession, deleteSession, enrichModule, clear, clearErrors }
 }
