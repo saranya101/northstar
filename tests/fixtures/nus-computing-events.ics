@@ -1,0 +1,29 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//NUS School of Computing//Events//EN
+BEGIN:VEVENT
+LOCATION:COM3 Seminar Room
+DESCRIPTION:Public research workshop on trustworthy machine learning.
+DTSTART:20271005T140000
+DTEND:20271005T160000
+SUMMARY:Trustworthy AI Research Workshop
+URL;VALUE=URI:https://events.comp.nus.edu.sg/view/30001
+DTSTAMP:20270801T030000
+UID:nus-soc-30001
+END:VEVENT
+BEGIN:VEVENT
+LOCATION:Online
+DESCRIPTION:An online student coding competition.
+DTSTART:20271101T090000
+DTEND:20271103T180000
+SUMMARY:NUS Cloud Coding Challenge
+URL;VALUE=URI:https://events.comp.nus.edu.sg/view/30002
+DTSTAMP:20270802T030000
+UID:nus-soc-30002
+END:VEVENT
+BEGIN:VEVENT
+SUMMARY:Malformed event without a URL
+DTSTART:not-a-date
+UID:broken
+END:VEVENT
+END:VCALENDAR

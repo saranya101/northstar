@@ -19,6 +19,16 @@ export const OPPORTUNITY_SOURCE_FILTERS = [
     label: 'NTU Events',
     icon: 'i-lucide-calendar-days',
   },
+  {
+    key: 'hackerearth',
+    label: 'HackerEarth',
+    icon: 'i-lucide-terminal',
+  },
+  {
+    key: 'nus-events',
+    label: 'NUS Events',
+    icon: 'i-lucide-graduation-cap',
+  },
 ]
 
 const SOURCE_PRESENTATIONS = {
@@ -38,6 +48,18 @@ const SOURCE_PRESENTATIONS = {
     key: 'ntu-events',
     label: 'NTU Events',
     icon: 'i-lucide-calendar-days',
+  },
+
+  hackerearth: {
+    key: 'hackerearth',
+    label: 'HackerEarth',
+    icon: 'i-lucide-terminal',
+  },
+
+  'nus-events': {
+    key: 'nus-events',
+    label: 'NUS Events',
+    icon: 'i-lucide-graduation-cap',
   },
 
   other: {
@@ -71,6 +93,17 @@ export function opportunitySourceKey(name) {
     || value.includes('nanyang technological university events')
   ) {
     return 'ntu-events'
+  }
+
+  if (value.includes('hackerearth')) {
+    return 'hackerearth'
+  }
+
+  if (
+    value.includes('nus events')
+    || value.includes('national university of singapore events')
+  ) {
+    return 'nus-events'
   }
 
   return 'other'

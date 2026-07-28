@@ -1,5 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
-import { assertPublicUrl, fetchPublicHtml, fetchPublicJson, isBlockedIpAddress, normalizePublicUrl } from '../server/services/opportunity-link-fetcher'
+import {
+  assertPublicUrl,
+  fetchPublicCalendar,
+  fetchPublicHtml,
+  fetchPublicJson,
+  isBlockedIpAddress,
+  normalizePublicUrl,
+} from '../server/services/opportunity-link-fetcher'
 
 const publicLookup = vi.fn().mockResolvedValue([{ address: '93.184.216.34', family: 4 }])
 const htmlResponse = (html = '<html><title>Public</title></html>', init = {}) => { const { headers, ...options } = init; return new Response(html, { status: 200, ...options, headers: { 'content-type': 'text/html; charset=utf-8', ...headers } }) }
@@ -60,5 +67,37 @@ describe('opportunity link SSRF protection', () => {
     await expect(fetchPublicJson('https://example.com/public.json', { fetchImpl, lookup: publicLookup })).resolves.toMatchObject({ data: { items: [] } })
     expect(fetchImpl).toHaveBeenCalledWith(expect.any(URL), expect.objectContaining({ method: 'GET', redirect: 'manual', headers: { accept: 'application/json', 'user-agent': 'NorthstarOpportunityImporter/1.0' } }))
     expect(JSON.stringify(fetchImpl.mock.calls[0][1].headers)).not.toMatch(/cookie|credential|authori[sz]ation/i)
+  })
+
+  it('accepts only bounded public iCalendar responses without credentials', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(new Response(
+      'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nEND:VCALENDAR',
+      { status: 200, headers: { 'content-type': 'text/calendar; charset=utf-8' } },
+    ))
+    await expect(fetchPublicCalendar(
+      'https://example.com/events.ics',
+      { fetchImpl, lookup: publicLookup },
+    )).resolves.toMatchObject({
+      text: expect.stringContaining('BEGIN:VCALENDAR'),
+    })
+    expect(fetchImpl).toHaveBeenCalledWith(
+      expect.any(URL),
+      expect.objectContaining({
+        method: 'GET',
+        redirect: 'manual',
+        headers: {
+          accept: 'text/calendar',
+          'user-agent': 'NorthstarOpportunityImporter/1.0',
+        },
+      }),
+    )
+    expect(JSON.stringify(fetchImpl.mock.calls[0][1].headers))
+      .not.toMatch(/cookie|credential|authori[sz]ation/i)
+
+    const html = vi.fn().mockResolvedValue(htmlResponse())
+    await expect(fetchPublicCalendar(
+      'https://example.com/events',
+      { fetchImpl: html, lookup: publicLookup },
+    )).rejects.toMatchObject({ statusCode: 415 })
   })
 })

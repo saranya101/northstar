@@ -175,6 +175,8 @@ describe('public opportunity visibility and CLI validation', () => {
     expect(() => parseOpportunitySyncArgs([])).toThrow('Usage:')
     expect(() => parseOpportunitySyncArgs(['--source=unknown'])).toThrow('Unknown opportunity source.')
     expect(parseOpportunitySyncArgs(['--source=mock'])).toEqual({ source: 'mock' })
+    expect(parseOpportunitySyncArgs(['--source=hackerearth'])).toEqual({ source: 'hackerearth' })
+    expect(parseOpportunitySyncArgs(['--source=nus-events'])).toEqual({ source: 'nus-events' })
   })
 })
 

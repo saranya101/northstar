@@ -28,6 +28,20 @@ describe('opportunity presentation helpers', () => {
       key: 'ntu-events',
       label: 'NTU Events',
     })
+
+    expect(
+      opportunitySourcePresentation('HackerEarth'),
+    ).toMatchObject({
+      key: 'hackerearth',
+      label: 'HackerEarth',
+    })
+
+    expect(
+      opportunitySourcePresentation('NUS Events'),
+    ).toMatchObject({
+      key: 'nus-events',
+      label: 'NUS Events',
+    })
   })
 
   it('uses a readable fallback for other sources', () => {

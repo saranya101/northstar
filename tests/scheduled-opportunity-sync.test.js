@@ -27,11 +27,13 @@ const successfulRun = overrides => ({
 })
 
 describe('scheduled opportunity sync', () => {
-  it('uses the three production opportunity sources', () => {
+  it('uses every successfully implemented production opportunity source', () => {
     expect(SCHEDULED_OPPORTUNITY_SOURCES).toEqual([
       'devpost',
       'volunteer-gov-sg',
-      'ntu-events'
+      'ntu-events',
+      'hackerearth',
+      'nus-events'
     ])
   })
 
@@ -56,20 +58,22 @@ describe('scheduled opportunity sync', () => {
     expect(calls).toEqual([
       'devpost',
       'volunteer-gov-sg',
-      'ntu-events'
+      'ntu-events',
+      'hackerearth',
+      'nus-events'
     ])
 
     expect(result.success).toBe(true)
-    expect(result.succeededCount).toBe(3)
+    expect(result.succeededCount).toBe(5)
     expect(result.failedCount).toBe(0)
 
     expect(result.totals).toEqual({
-      fetchedCount: 15,
-      createdCount: 6,
-      updatedCount: 3,
-      duplicateCount: 3,
+      fetchedCount: 25,
+      createdCount: 10,
+      updatedCount: 5,
+      duplicateCount: 5,
       invalidCount: 0,
-      closedCount: 3
+      closedCount: 5
     })
   })
 
@@ -94,11 +98,13 @@ describe('scheduled opportunity sync', () => {
     expect(calls).toEqual([
       'devpost',
       'volunteer-gov-sg',
-      'ntu-events'
+      'ntu-events',
+      'hackerearth',
+      'nus-events'
     ])
 
     expect(result.success).toBe(false)
-    expect(result.succeededCount).toBe(2)
+    expect(result.succeededCount).toBe(4)
     expect(result.failedCount).toBe(1)
 
     expect(result.results[1]).toMatchObject({

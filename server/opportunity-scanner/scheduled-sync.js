@@ -7,7 +7,9 @@ import {
 export const SCHEDULED_OPPORTUNITY_SOURCES = Object.freeze([
   'devpost',
   'volunteer-gov-sg',
-  'ntu-events'
+  'ntu-events',
+  'hackerearth',
+  'nus-events'
 ])
 
 const emptyCounts = () => ({

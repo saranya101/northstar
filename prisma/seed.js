@@ -84,6 +84,40 @@ try {
     }
   })
 
+  await prisma.opportunitySource.upsert({
+    where: { adapterKey: 'hackerearth' },
+    update: {
+      name: 'HackerEarth',
+      slug: 'hackerearth',
+      baseUrl: 'https://www.hackerearth.com/challenges/',
+      enabled: true
+    },
+    create: {
+      name: 'HackerEarth',
+      slug: 'hackerearth',
+      adapterKey: 'hackerearth',
+      baseUrl: 'https://www.hackerearth.com/challenges/',
+      enabled: true
+    }
+  })
+
+  await prisma.opportunitySource.upsert({
+    where: { adapterKey: 'nus-events' },
+    update: {
+      name: 'NUS Events',
+      slug: 'nus-events',
+      baseUrl: 'https://events.comp.nus.edu.sg/',
+      enabled: true
+    },
+    create: {
+      name: 'NUS Events',
+      slug: 'nus-events',
+      adapterKey: 'nus-events',
+      baseUrl: 'https://events.comp.nus.edu.sg/',
+      enabled: true
+    }
+  })
+
 } finally {
   await prisma.$disconnect()
 }

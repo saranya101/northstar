@@ -150,3 +150,39 @@ export async function fetchPublicJson(input, { fetchImpl = globalThis.fetch, loo
   }
   throw requestError(422, 'The website redirected too many times.')
 }
+
+export async function fetchPublicCalendar(input, { fetchImpl = globalThis.fetch, lookup = dnsLookup, limits = LINK_FETCH_LIMITS } = {}) {
+  let current = normalizePublicUrl(input)
+  for (let redirect = 0; redirect <= limits.redirects; redirect += 1) {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), limits.timeoutMs)
+    let response
+    try {
+      await Promise.race([
+        assertPublicUrl(current, { lookup }),
+        new Promise((_, reject) => controller.signal.addEventListener('abort', () => reject(Object.assign(new Error('Timed out'), { name: 'AbortError' })), { once: true }))
+      ])
+      response = await fetchImpl(current, { method: 'GET', redirect: 'manual', signal: controller.signal, headers: { accept: 'text/calendar', 'user-agent': 'NorthstarOpportunityImporter/1.0' } })
+      if ([301, 302, 303, 307, 308].includes(response.status)) {
+        if (redirect === limits.redirects) throw requestError(422, 'The website redirected too many times.')
+        const location = response.headers.get('location')
+        if (!location) throw requestError(422, 'The website returned an invalid redirect.')
+        await response.body?.cancel()
+        current = normalizePublicUrl(new URL(location, current).toString())
+        continue
+      }
+      if ([401, 403].includes(response.status) || /\/(?:login|signin|auth)(?:[/?#]|$)/i.test(current.pathname)) throw requestError(422, 'This page appears to require authentication.')
+      if (!response.ok) throw requestError(422, 'The calendar could not be imported.')
+      const contentType = (response.headers.get('content-type') || '').toLowerCase()
+      if (!contentType.includes('text/calendar')) throw requestError(415, 'Only public calendar feeds can be imported.')
+      const text = await readLimitedBody(response, limits.bytes)
+      if (!/^BEGIN:VCALENDAR\b/m.test(text)) throw requestError(422, 'The website returned invalid calendar data.')
+      return { text, finalUrl: normalizeOpportunityUrl(current.toString()) }
+    } catch (error) {
+      if (error?.statusCode) throw error
+      if (error?.name === 'AbortError' || controller.signal.aborted) throw requestError(504, 'The website took too long to respond.')
+      throw requestError(422, 'The website could not be reached.')
+    } finally { clearTimeout(timer) }
+  }
+  throw requestError(422, 'The website redirected too many times.')
+}

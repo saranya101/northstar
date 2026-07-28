@@ -1,13 +1,17 @@
 import { devpostOpportunityAdapter } from './devpost'
 import { volunteerGovSgOpportunityAdapter } from './volunteer-gov-sg'
 import { ntuEventsOpportunityAdapter } from './ntu-events'
+import { hackerEarthOpportunityAdapter } from './hackerearth'
+import { nusEventsOpportunityAdapter } from './nus-events'
 import { mockOpportunityAdapter } from './mock'
 
 const adapters = new Map([
   [mockOpportunityAdapter.key, mockOpportunityAdapter],
   [devpostOpportunityAdapter.key, devpostOpportunityAdapter],
   [volunteerGovSgOpportunityAdapter.key, volunteerGovSgOpportunityAdapter],
-  [ntuEventsOpportunityAdapter.key, ntuEventsOpportunityAdapter]
+  [ntuEventsOpportunityAdapter.key, ntuEventsOpportunityAdapter],
+  [hackerEarthOpportunityAdapter.key, hackerEarthOpportunityAdapter],
+  [nusEventsOpportunityAdapter.key, nusEventsOpportunityAdapter]
 ])
 
 export function registerOpportunityAdapter(adapter) {
