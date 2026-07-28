@@ -118,6 +118,13 @@ export function opportunityMatchesSource(opportunity, sourceKey) {
     return true
   }
 
+  if (
+    Array.isArray(opportunity.publicSourceKeys)
+    && opportunity.publicSourceKeys.includes(sourceKey)
+  ) {
+    return true
+  }
+
   return opportunitySourceNames(opportunity)
     .some(name => opportunitySourceKey(name) === sourceKey)
 }

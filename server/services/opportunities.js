@@ -5,11 +5,21 @@ import { getOpportunitySections } from '~~/shared/opportunities/taxonomy'
 import {
   rankOpportunities,
   scoreOpportunity,
-} from '../../shared/opportunities/ranking.js'
+} from '~~/shared/opportunities/ranking'
+import {
+  addPortfolioValue,
+  addPortfolioValueToMany,
+} from './opportunity-value-intelligence'
+import {
+  getOpportunityPreferencesForUser,
+} from './opportunity-preferences'
+import {
+  listOpportunityAdapters,
+} from '../opportunity-scanner/adapters/registry'
 
 const personalInclude = userId => ({
   userOpportunities: { where: { userId }, take: 1 },
-  sourceListings: { include: { source: { select: { id: true, name: true, slug: true } } } }
+  sourceListings: { include: { source: { select: { id: true, name: true, slug: true, adapterKey: true } } } }
 })
 const visibleWhere = userId => ({ OR: [{ createdByUserId: userId }, { createdByUserId: null, sourceType: 'PUBLIC_SOURCE' }] })
 const activeVisibleWhere = userId => ({
@@ -28,6 +38,7 @@ export function serializeOpportunity(record, userId) {
   const lastSeenAt = listings.length ? new Date(Math.max(...listings.map(item => new Date(item.lastSeenAt).getTime()))) : null
   const lastVerifiedAt = listings.length ? new Date(Math.max(...listings.map(item => new Date(item.lastVerifiedAt).getTime()))) : null
   const publicSourceNames = [...new Set(listings.map(item => item.source?.name).filter(Boolean))]
+  const publicSourceKeys = [...new Set(listings.map(item => item.source?.adapterKey).filter(Boolean))]
   const isPublic = record.createdByUserId === null && record.sourceType === 'PUBLIC_SOURCE'
   return {
     id: record.id, title: record.title, organisation: record.organisation, category: record.category, description: record.description,
@@ -37,7 +48,7 @@ export function serializeOpportunity(record, userId) {
     requirements: record.requirements, benefits: record.benefits, tags: record.tags, createdByUserId: record.createdByUserId,
     isOwner: record.createdByUserId === userId, isPublic, active: isPublic ? listings.some(item => item.active) : true,
     firstSeenAt: dateValue(firstSeenAt), lastSeenAt: dateValue(lastSeenAt), lastVerifiedAt: dateValue(lastVerifiedAt),
-    publicSourceNames, createdAt: dateValue(record.createdAt), updatedAt: dateValue(record.updatedAt),
+    publicSourceNames, publicSourceKeys, createdAt: dateValue(record.createdAt), updatedAt: dateValue(record.updatedAt),
     personal: personal ? { id: personal.id, status: personal.status, personalDeadline: dateValue(personal.personalDeadline), notes: personal.notes, savedAt: dateValue(personal.savedAt), appliedAt: dateValue(personal.appliedAt) } : null
   }
 }
@@ -91,6 +102,127 @@ async function getOpportunityRankingProfile(
     })
 
   return toOpportunityRankingProfile(academicProfile)
+}
+
+function preferenceFilter(preferences, now, userId) {
+  const conditions = []
+
+  if (preferences.preferredSources.length) {
+    conditions.push({
+      OR: [
+        { createdByUserId: userId },
+        {
+          sourceListings: {
+            some: {
+              active: true,
+              source: {
+                adapterKey: {
+                  in: preferences.preferredSources,
+                },
+              },
+            },
+          },
+        },
+      ],
+    })
+  }
+
+  if (preferences.preferredCategories.length) {
+    conditions.push({
+      category: {
+        in: preferences.preferredCategories,
+      },
+    })
+  }
+
+  if (preferences.preferredModes.length) {
+    conditions.push({
+      mode: {
+        in: preferences.preferredModes,
+      },
+    })
+  }
+
+  if (!preferences.includeOther) {
+    conditions.push({ category: { not: 'OTHER' } })
+  }
+
+  if (preferences.hideExpired) {
+    conditions.push({
+      OR: [
+        { deadline: { gte: now } },
+        {
+          AND: [
+            { deadline: null },
+            { OR: [{ endAt: null }, { endAt: { gte: now } }] },
+          ],
+        },
+      ],
+    })
+  }
+
+  return conditions
+}
+
+async function getAvailableSources(database) {
+  const fallback = listOpportunityAdapters().map(adapter => ({
+    key: adapter.key,
+    name: adapter.name,
+    enabled: true,
+  }))
+
+  if (!database.opportunitySource?.findMany) return fallback
+
+  const sources = await database.opportunitySource.findMany({
+    where: {
+      adapterKey: {
+        in: fallback.map(source => source.key),
+      },
+    },
+    select: {
+      adapterKey: true,
+      name: true,
+      enabled: true,
+      lastSuccessfulAt: true,
+    },
+    orderBy: { name: 'asc' },
+  })
+
+  return sources.map(source => ({
+    key: source.adapterKey,
+    name: source.name,
+    enabled: source.enabled,
+    lastSuccessfulAt: dateValue(source.lastSuccessfulAt),
+  }))
+}
+
+function sortPortfolioRows(rows, sort) {
+  const stable = [...rows]
+
+  if (sort === 'PORTFOLIO_VALUE') {
+    return stable.sort((left, right) =>
+      right.portfolioValue.score - left.portfolioValue.score
+      || new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()
+      || left.id.localeCompare(right.id),
+    )
+  }
+
+  if (sort === 'NEWEST') {
+    return stable.sort((left, right) =>
+      new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()
+      || left.id.localeCompare(right.id),
+    )
+  }
+
+  if (sort === 'DEADLINE') {
+    return stable.sort((left, right) => {
+      const leftDeadline = left.deadline ? new Date(left.deadline).getTime() : Number.MAX_SAFE_INTEGER
+      const rightDeadline = right.deadline ? new Date(right.deadline).getTime() : Number.MAX_SAFE_INTEGER
+      return leftDeadline - rightDeadline || left.id.localeCompare(right.id)
+    })
+  }
+
+  return stable
 }
 
 function serializeScoredOpportunity(
@@ -154,13 +286,29 @@ export async function getOpportunityDiscovery(
   database = prisma,
   now = new Date(),
 ) {
+  const [
+    rankingProfile,
+    preferences,
+    availableSources,
+  ] = await Promise.all([
+    getOpportunityRankingProfile(userId, database),
+    getOpportunityPreferencesForUser(userId, database),
+    getAvailableSources(database),
+  ])
+
   const closingSoonEnd = new Date(
-    now.getTime() + 7 * 86_400_000,
+    now.getTime()
+      + preferences.closingSoonDays * 86_400_000,
   )
 
   const activeVisibility = activeVisibleWhere(userId)
   const notIgnored = notIgnoredWhere(userId)
   const include = personalInclude(userId)
+  const preferenceConditions = preferenceFilter(
+    preferences,
+    now,
+    userId,
+  )
 
   const sectionsPromise = Promise.all(
     getOpportunitySections().map(async section => {
@@ -168,6 +316,7 @@ export async function getOpportunityDiscovery(
         AND: [
           activeVisibility,
           notIgnored,
+          ...preferenceConditions,
           {
             category: {
               in: section.categories,
@@ -212,6 +361,7 @@ export async function getOpportunityDiscovery(
     AND: [
       activeVisibility,
       notIgnored,
+      ...preferenceConditions,
     ],
   }
 
@@ -223,15 +373,12 @@ export async function getOpportunityDiscovery(
   ]
 
   const [
-    rankingProfile,
     sections,
     closingRows,
     newestRows,
     savedRows,
     recommendationCandidates,
   ] = await Promise.all([
-    getOpportunityRankingProfile(userId, database),
-
     sectionsPromise,
 
     database.opportunity.findMany({
@@ -267,6 +414,7 @@ export async function getOpportunityDiscovery(
       where: {
         AND: [
           activeVisibility,
+          ...preferenceConditions,
           {
             userOpportunities: {
               some: {
@@ -298,19 +446,40 @@ export async function getOpportunityDiscovery(
   ])
 
   const scoreRows = rows =>
-    rows.map(record =>
-      serializeScoredOpportunity(
-        record,
-        userId,
-        rankingProfile,
-        now,
+    addPortfolioValueToMany(
+      rows.map(record =>
+        serializeScoredOpportunity(
+          record,
+          userId,
+          rankingProfile,
+          now,
+        ),
       ),
+      preferences,
+      rankingProfile,
+      now,
     )
 
   const recommendationRecords =
     recommendationCandidates.map(record =>
       serializeOpportunity(record, userId),
     )
+
+  const rankedRecommended = addPortfolioValueToMany(
+    rankOpportunities(
+      recommendationRecords,
+      rankingProfile,
+      now,
+    ),
+    preferences,
+    rankingProfile,
+    now,
+  )
+
+  const globalRefreshDates = availableSources
+    .map(source => source.lastSuccessfulAt)
+    .filter(Boolean)
+    .map(value => new Date(value).getTime())
 
   return {
     sections,
@@ -321,11 +490,24 @@ export async function getOpportunityDiscovery(
 
     saved: scoreRows(savedRows),
 
-    recommended: rankOpportunities(
-      recommendationRecords,
-      rankingProfile,
-      now,
-    ).slice(0, 6),
+    recommended: rankedRecommended.slice(0, 6),
+
+    results: sortPortfolioRows(
+      rankedRecommended,
+      preferences.defaultSort,
+    ).slice(0, 24),
+
+    appliedPreferences: preferences,
+
+    availableSources,
+
+    lastGlobalSourceRefreshAt: globalRefreshDates.length
+      ? new Date(
+          Math.max(...globalRefreshDates),
+        ).toISOString()
+      : null,
+
+    lastManualRefreshAt: preferences.lastManualRefreshAt,
   }
 }
 
@@ -355,10 +537,18 @@ export async function findOpportunityDuplicates(userId, input, database = prisma
   return rows.filter(row => (sourceUrl && normalizeOpportunityUrl(row.opportunity.sourceUrl) === sourceUrl) || (applicationUrl && normalizeOpportunityUrl(row.opportunity.applicationUrl) === applicationUrl)).map(row => ({ id: row.opportunity.id, title: row.opportunity.title, organisation: row.opportunity.organisation, sourceUrl: row.opportunity.sourceUrl, applicationUrl: row.opportunity.applicationUrl }))
 }
 
-export async function getOpportunity(userId, id, database = prisma) {
+export async function getOpportunity(userId, id, database = prisma, now = new Date()) {
   const record = await database.opportunity.findFirst({ where: { id, ...visibleWhere(userId) }, include: personalInclude(userId) })
   if (!record || (record.createdByUserId === userId && !record.userOpportunities.length)) throw createError({ statusCode: 404, statusMessage: 'Opportunity not found.' })
-  return serializeOpportunity(record, userId)
+  const [profile, preferences] = await Promise.all([
+    getOpportunityRankingProfile(userId, database),
+    getOpportunityPreferencesForUser(userId, database),
+  ])
+  const opportunity = serializeOpportunity(record, userId)
+  return addPortfolioValue({
+    ...opportunity,
+    ...scoreOpportunity(opportunity, profile, now),
+  }, preferences, profile, now)
 }
 
 export async function updateOpportunity(userId, id, input, database = prisma) {

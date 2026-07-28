@@ -283,6 +283,48 @@ body {
   }
 }
 
+/* Personal Opportunity Radar settings and value detail */
+.radar-settings,
+.radar-settings__form {
+  display: grid;
+  gap: 1.25rem;
+}
+.radar-settings > header { display: grid; gap: .3rem; }
+.radar-settings > header p { margin: 0; color: var(--ns-accent); font-size: .72rem; font-weight: 750; letter-spacing: .1em; text-transform: uppercase; }
+.radar-settings > header h2 { margin: 0; color: var(--ns-ink); font-size: 1.4rem; }
+.radar-settings > header span { color: var(--ns-text-muted); font-size: .84rem; line-height: 1.55; }
+.radar-settings__selects { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: .8rem; }
+.radar-settings label:not(.radar-choice), .radar-settings fieldset { display: grid; gap: .4rem; min-width: 0; }
+.radar-settings label > span, .radar-settings legend { color: var(--ns-ink); font-size: .78rem; font-weight: 700; }
+.radar-settings fieldset { margin: 0; padding: .9rem; border: 1px solid var(--ns-border); border-radius: .75rem; }
+.radar-settings legend small { color: var(--ns-text-muted); font-weight: 500; }
+.radar-settings__choices { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .35rem .7rem; }
+.radar-choice { display: inline-flex; min-height: 38px; align-items: center; gap: .5rem; color: var(--ns-text-muted); font-size: .78rem; }
+.radar-choice input { accent-color: var(--ns-accent); }
+.radar-settings__toggles { display: flex; flex-wrap: wrap; gap: .6rem 1.2rem; }
+.radar-settings__skills small, .radar-settings__error { color: var(--ns-text-muted); font-size: .72rem; }
+.radar-settings__error { margin: 0; color: #9b3d2f; }
+.radar-settings footer { display: flex; justify-content: flex-end; gap: .6rem; }
+.radar-settings__loading { display: grid; gap: .6rem; }
+.radar-settings__loading span { height: 2.5rem; border-radius: .5rem; background: var(--ns-border); }
+
+.portfolio-detail { display: grid; gap: 1rem; }
+.portfolio-detail > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+.portfolio-detail > header h2 { margin-bottom: 0; }
+.opportunity-detail__content .portfolio-detail__grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .7rem; }
+.opportunity-detail__content .portfolio-detail__grid > section { padding: .85rem; border: 0; background: var(--ns-surface-soft); }
+.portfolio-detail h3 { margin: 0 0 .45rem; color: var(--ns-ink); font-size: .82rem; }
+.portfolio-detail ul { display: grid; gap: .35rem; margin: 0; padding-left: 1.1rem; color: var(--ns-text-muted); font-size: .78rem; line-height: 1.45; }
+.portfolio-detail__resume { display: flex; align-items: flex-start; justify-content: space-between; gap: .8rem; padding: .9rem; border: 1px solid var(--ns-border); border-radius: .75rem; }
+.portfolio-detail__resume > div { display: grid; gap: .35rem; }
+.portfolio-detail__resume small { color: var(--ns-text-muted); font-size: .7rem; }
+
+@media (max-width: 700px) {
+  .radar-settings__selects, .radar-settings__choices, .opportunity-detail__content .portfolio-detail__grid { grid-template-columns: minmax(0,1fr); }
+  .radar-settings footer, .portfolio-detail > header, .portfolio-detail__resume { align-items: stretch; flex-direction: column; }
+  .radar-settings footer > *, .portfolio-detail__resume > button { width: 100%; justify-content: center; }
+}
+
 .onboarding-layout, .app-home, .settings-page { min-height: 100svh; background: var(--ns-page); }
 .onboarding-layout__bar { display: flex; min-height: 72px; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--ns-border); padding: 0 clamp(1rem, 4vw, 3rem); background: rgba(251, 250, 246, .88); }
 .onboarding-layout__brand { display: inline-flex; align-items: center; gap: .7rem; color: var(--ns-text); font-weight: 650; text-decoration: none; }

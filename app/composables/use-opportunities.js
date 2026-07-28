@@ -14,6 +14,9 @@ export function useOpportunities() {
   const fieldErrors = useState('northstar-opportunities-field-errors', () => ({}))
   const details = useState('northstar-opportunity-details', () => ({}))
   const duplicates = useState('northstar-opportunity-duplicates', () => [])
+  const refreshing = useState('northstar-opportunities-refreshing', () => false)
+  const refreshResult = useState('northstar-opportunities-refresh-result', () => null)
+  const refreshError = useState('northstar-opportunities-refresh-error', () => '')
 
   function clearErrors() { error.value = ''; fieldErrors.value = {}; duplicates.value = [] }
 
@@ -134,6 +137,29 @@ export function useOpportunities() {
     }
   }
 
+  async function refreshNow() {
+    if (refreshing.value) return null
+    refreshing.value = true
+    refreshError.value = ''
+    try {
+      refreshResult.value = await requestFetch(
+        '/api/opportunities/refresh',
+        { method: 'POST' },
+      )
+      await loadDiscovery(true)
+      return refreshResult.value
+    } catch (cause) {
+      refreshError.value = cause?.data?.message
+        || 'Unable to refresh opportunities.'
+      refreshResult.value = {
+        nextAllowedAt: cause?.data?.nextAllowedAt || null,
+      }
+      return null
+    } finally {
+      refreshing.value = false
+    }
+  }
+
   return {
     state,
     discovery,
@@ -145,6 +171,9 @@ export function useOpportunities() {
     error,
     fieldErrors,
     duplicates,
+    refreshing,
+    refreshResult,
+    refreshError,
     load,
     loadDiscovery,
     loadOne,
@@ -154,6 +183,7 @@ export function useOpportunities() {
     remove,
     parseText,
     parseLink,
+    refreshNow,
     clearErrors
   }
 }

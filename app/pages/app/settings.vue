@@ -25,6 +25,7 @@ async function saveSetting(path, payload) {
     </div>
     <template v-else>
     <section class="settings-card settings-modules"><div><p>Current semester</p><h2>Modules</h2><span>{{ modules?.activeCount ?? 0 }} active {{ modules?.activeCount === 1 ? 'module' : 'modules' }}</span></div><UButton to="/app/modules" color="neutral" variant="outline">Manage modules</UButton></section>
+    <SettingsOpportunityRadarSettings @saved="savedMessage = 'Opportunity Radar preferences saved.'" />
     <section class="settings-card"><OnboardingProfileStep :profile="state.profile" :saving="saving" :server-error="error" :field-errors="fieldErrors" heading-level="h2" submit-label="Save profile" @submit="saveSetting('profile', $event)" /></section>
     <section class="settings-card"><OnboardingAcademicStep :academic-profile="state?.academicProfile" :universities="state?.universities" :saving="saving" :server-error="error" :field-errors="fieldErrors" heading-level="h2" submit-label="Save academic profile" :show-back="false" @submit="saveSetting('academic', $event)" /></section>
     <section class="settings-card"><OnboardingSemesterStep :semester="state?.semester" :terms="currentTerms" :saving="saving" :server-error="error" :field-errors="fieldErrors" heading-level="h2" submit-label="Save GPA goals" :show-back="false" @submit="saveSetting('semester', $event)" /></section>

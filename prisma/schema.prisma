@@ -20,6 +20,7 @@ model User {
   profile              Profile?
   academicProfile      UserAcademicProfile?
   studyPreference      StudyPreference?
+  opportunityRadarPreference OpportunityRadarPreference?
   semesters            UserSemester[]
   moduleEnrolments     UserModuleEnrolment[]
   timetableImports     TimetableImport[]
@@ -152,6 +153,55 @@ model StudyPreference {
   createdAt                DateTime             @default(now())
   updatedAt                DateTime             @updatedAt
   user                     User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+enum OpportunityFeedRefreshCadence {
+  MANUAL
+  HOURLY
+  EVERY_6_HOURS
+  EVERY_12_HOURS
+  DAILY
+}
+
+enum OpportunityDefaultSort {
+  RECOMMENDED
+  NEWEST
+  DEADLINE
+  PORTFOLIO_VALUE
+}
+
+enum OpportunityPortfolioGoal {
+  LEADERSHIP
+  TECHNICAL_SKILLS
+  COMMUNITY_IMPACT
+  BUSINESS_EXPERIENCE
+  RESEARCH_EXPERIENCE
+  ENTREPRENEURSHIP
+  SCHOLARSHIP_EVIDENCE
+  TRANSFER_APPLICATION_EVIDENCE
+  NETWORKING
+  RESUME_BUILDING
+}
+
+model OpportunityRadarPreference {
+  id                    String                         @id @default(cuid())
+  userId                String                         @unique
+  feedRefreshCadence    OpportunityFeedRefreshCadence @default(EVERY_6_HOURS)
+  preferredSources      String[]                       @default([])
+  preferredCategories   OpportunityCategory[]          @default([])
+  preferredModes        OpportunityMode[]              @default([])
+  closingSoonDays       Int                            @default(7)
+  defaultSort           OpportunityDefaultSort         @default(RECOMMENDED)
+  hideExpired           Boolean                        @default(true)
+  includeOther          Boolean                        @default(true)
+  portfolioGoals        OpportunityPortfolioGoal[]     @default([])
+  skillGoals            String[]                       @default([])
+  lastManualRefreshAt   DateTime?
+  createdAt             DateTime                       @default(now())
+  updatedAt             DateTime                       @updatedAt
+  user                  User                           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model UserSemester {

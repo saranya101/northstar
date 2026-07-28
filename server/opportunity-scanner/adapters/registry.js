@@ -24,6 +24,12 @@ export function listOpportunityAdapterKeys() {
   return [...adapters.keys()].sort()
 }
 
+export function listOpportunityAdapters() {
+  return [...adapters.values()]
+    .filter(adapter => adapter.key !== 'mock')
+    .sort((left, right) => left.name.localeCompare(right.name))
+}
+
 export function replaceOpportunityAdapterForTests(adapter) {
   adapters.set(adapter.key, adapter)
   return () => adapters.set(adapter.key, mockOpportunityAdapter)

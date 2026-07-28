@@ -1,10 +1,13 @@
 <script setup>
 import { getOpportunitySections } from '~~/shared/opportunities/taxonomy'
 import {
-  OPPORTUNITY_SOURCE_FILTERS,
   filterOpportunitiesBySource,
   opportunityMatchesSource,
+  opportunitySourcePresentation,
 } from '~/utils/opportunity-presentation'
+import {
+  opportunityCadenceMs,
+} from '~/utils/opportunity-cadence'
 
 definePageMeta({
   layout: 'app',
@@ -20,12 +23,19 @@ const {
   discovery,
   discoveryLoading,
   error,
+  refreshing,
+  refreshResult,
+  refreshError,
   loadDiscovery,
+  refreshNow,
 } = useOpportunities()
 
 const { user } = useCurrentSession()
 const sections = getOpportunitySections()
 const selectedSource = ref('all')
+const clock = ref(Date.now())
+let cadenceTimer = null
+let clockTimer = null
 
 const sectionStats = computed(() => new Map(
   (discovery.value?.sections || [])
@@ -33,9 +43,23 @@ const sectionStats = computed(() => new Map(
 ))
 
 const allDiscoveryItems = computed(() => [
+  ...(discovery.value?.results || []),
   ...(discovery.value?.closingSoon || []),
   ...(discovery.value?.newest || []),
   ...(discovery.value?.saved || []),
+])
+
+const sourceFilters = computed(() => [
+  {
+    key: 'all',
+    label: 'All trusted sources',
+    icon: 'i-lucide-layers-3',
+  },
+  ...(discovery.value?.availableSources || []).map(source => ({
+    key: source.key,
+    label: source.name,
+    icon: opportunitySourcePresentation(source.name).icon,
+  })),
 ])
 
 const uniqueDiscoveryItems = computed(() => {
@@ -80,11 +104,79 @@ const filteredSaved = computed(() =>
   ),
 )
 
+const filteredResults = computed(() =>
+  filterOpportunitiesBySource(
+    discovery.value?.results,
+    selectedSource.value,
+  ),
+)
+
 const selectedSourceLabel = computed(() =>
-  OPPORTUNITY_SOURCE_FILTERS.find(
+  sourceFilters.value.find(
     source => source.key === selectedSource.value,
   )?.label || 'All sources',
 )
+
+const nextAllowedAt = computed(() =>
+  refreshResult.value?.nextAllowedAt
+    || (discovery.value?.lastManualRefreshAt
+      ? new Date(
+          new Date(discovery.value.lastManualRefreshAt).getTime()
+          + 15 * 60 * 1000,
+        ).toISOString()
+      : null),
+)
+
+const coolingDown = computed(() =>
+  nextAllowedAt.value
+  && new Date(nextAllowedAt.value).getTime() > clock.value,
+)
+
+function formatRefreshTime(value) {
+  if (!value) return 'Not refreshed yet'
+  return new Intl.DateTimeFormat('en-SG', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(new Date(value))
+}
+
+function clearCadenceTimer() {
+  if (cadenceTimer) clearTimeout(cadenceTimer)
+  cadenceTimer = null
+}
+
+function scheduleCadenceRefresh() {
+  clearCadenceTimer()
+  const interval = opportunityCadenceMs(
+    discovery.value?.appliedPreferences?.feedRefreshCadence,
+  )
+  if (!interval) return
+  cadenceTimer = setTimeout(async () => {
+    await loadDiscovery(true)
+    scheduleCadenceRefresh()
+  }, interval)
+}
+
+async function runRefresh() {
+  await refreshNow()
+  clock.value = Date.now()
+}
+
+watch(
+  () => discovery.value?.appliedPreferences?.feedRefreshCadence,
+  scheduleCadenceRefresh,
+)
+
+onMounted(() => {
+  clockTimer = setInterval(() => {
+    clock.value = Date.now()
+  }, 1000)
+})
+
+onUnmounted(() => {
+  clearCadenceTimer()
+  if (clockTimer) clearInterval(clockTimer)
+})
 
 const emptySourceLabel = computed(() =>
   selectedSource.value === 'all'
@@ -96,7 +188,7 @@ watch(
   user,
   current => {
     if (current) {
-      void loadDiscovery(true)
+      void loadDiscovery(true).then(scheduleCadenceRefresh)
     }
   },
   { immediate: true },
@@ -117,6 +209,16 @@ watch(
 
       <div class="opportunity-radar-actions">
         <UButton
+          icon="i-lucide-refresh-cw"
+          color="neutral"
+          variant="outline"
+          :loading="refreshing"
+          :disabled="coolingDown"
+          @click="runRefresh"
+        >
+          Refresh now
+        </UButton>
+        <UButton
           to="/app/opportunities#saved-opportunities"
           color="neutral"
           variant="outline"
@@ -133,6 +235,25 @@ watch(
         </UButton>
       </div>
     </header>
+
+    <div class="opportunity-refresh-status" aria-live="polite">
+      <span>
+        Last source refresh:
+        {{ formatRefreshTime(discovery?.lastGlobalSourceRefreshAt) }}
+      </span>
+      <span v-if="discovery?.lastManualRefreshAt">
+        Your last refresh:
+        {{ formatRefreshTime(discovery.lastManualRefreshAt) }}
+      </span>
+      <span v-if="coolingDown">
+        Refresh available {{ formatRefreshTime(nextAllowedAt) }}
+      </span>
+      <span v-else-if="discovery?.appliedPreferences?.feedRefreshCadence === 'MANUAL'">
+        Automatic feed checks are off
+      </span>
+    </div>
+
+    <p v-if="refreshError" class="module-alert" role="alert">{{ refreshError }}</p>
 
     <p
       v-if="error"
@@ -152,8 +273,9 @@ watch(
           Choose a discovery source
         </h2>
         <span>
-          Filter the current radar without changing saved
-          opportunities or requesting another scan.
+          Results from Devpost, Volunteer.gov.sg, NTU Events and future connected sources.
+          Counts show unique opportunities currently displayed.
+          This filter does not request another scan.
         </span>
       </div>
 
@@ -163,7 +285,7 @@ watch(
         aria-label="Filter discovery by source"
       >
         <button
-          v-for="source in OPPORTUNITY_SOURCE_FILTERS"
+          v-for="source in sourceFilters"
           :key="source.key"
           type="button"
           class="opportunity-source-filter__button"
@@ -183,6 +305,24 @@ watch(
 
           <strong>{{ sourceCount(source.key) }}</strong>
         </button>
+      </div>
+    </section>
+
+    <section class="opportunity-section" aria-labelledby="personalised-results-heading">
+      <div class="opportunity-section__heading">
+        <div>
+          <p>Personalised</p>
+          <h2 id="personalised-results-heading">For your portfolio</h2>
+          <span>Ordered using your saved {{ discovery?.appliedPreferences?.defaultSort?.toLowerCase().replaceAll('_', ' ') || 'recommended' }} preference.</span>
+        </div>
+        <strong class="opportunity-section__count">{{ filteredResults.length }}</strong>
+      </div>
+      <div v-if="filteredResults.length" class="opportunity-grid opportunity-grid--results">
+        <OpportunitiesOpportunityCard v-for="item in filteredResults" :key="item.id" :opportunity="item" />
+      </div>
+      <div v-else class="opportunity-preview-empty">
+        <span class="opportunity-preview-empty__icon"><UIcon name="i-lucide-radar" /></span>
+        <div><strong>No matching opportunities yet</strong><span>Adjust your Opportunity Radar settings or choose all trusted sources.</span></div>
       </div>
     </section>
 
@@ -275,7 +415,8 @@ watch(
           <p>Time-sensitive</p>
           <h2 id="closing-soon-heading">Closing soon</h2>
           <span>
-            Application deadlines within the next seven days.
+            Application deadlines within the next
+            {{ discovery?.appliedPreferences?.closingSoonDays || 7 }} days.
           </span>
         </div>
 

@@ -76,6 +76,22 @@ const tags = computed(() =>
     : [],
 )
 
+const portfolio = computed(() =>
+  props.opportunity.portfolioValue || null,
+)
+
+const portfolioSkills = computed(() =>
+  Array.isArray(portfolio.value?.skillSignals)
+    ? portfolio.value.skillSignals.slice(0, 2)
+    : [],
+)
+
+const makeItCount = computed(() =>
+  Array.isArray(portfolio.value?.maximiseActions)
+    ? portfolio.value.maximiseActions[0] || ''
+    : '',
+)
+
 const showEventEnd = computed(() => {
   if (!props.opportunity.endAt) {
     return false
@@ -91,10 +107,7 @@ const showEventEnd = computed(() => {
 </script>
 
 <template>
-  <NuxtLink
-    :to="`/app/opportunities/${opportunity.id}`"
-    class="opportunity-card"
-  >
+  <article class="opportunity-card">
     <header class="opportunity-card__top">
       <div class="opportunity-card__sources">
         <OpportunitiesOpportunitySourceBadge
@@ -129,7 +142,11 @@ const showEventEnd = computed(() => {
     </div>
 
     <div class="opportunity-card__identity">
-      <h3>{{ opportunity.title }}</h3>
+      <h3>
+        <NuxtLink :to="`/app/opportunities/${opportunity.id}`">
+          {{ opportunity.title }}
+        </NuxtLink>
+      </h3>
       <p>{{ opportunity.organisation }}</p>
     </div>
 
@@ -253,6 +270,35 @@ const showEventEnd = computed(() => {
       </span>
     </div>
 
+    <section
+      v-if="portfolio"
+      class="opportunity-card__portfolio"
+      :aria-label="`${portfolio.level} portfolio value`"
+    >
+      <header>
+        <span :class="`portfolio-level portfolio-level--${portfolio.level.toLowerCase()}`">
+          {{ portfolio.level }}
+        </span>
+        <strong>{{ portfolio.headline }}</strong>
+      </header>
+
+      <div v-if="portfolioSkills.length" class="opportunity-card__skills">
+        <span v-for="skill in portfolioSkills" :key="skill">{{ skill }}</span>
+      </div>
+
+      <p v-if="makeItCount">
+        <strong>Make it count:</strong> {{ makeItCount }}
+      </p>
+
+      <details>
+        <summary>Why it matters</summary>
+        <p>{{ portfolio.summary }}</p>
+        <ul v-if="opportunity.recommendationReasons?.length">
+          <li v-for="reason in opportunity.recommendationReasons.slice(0, 2)" :key="reason">{{ reason }}</li>
+        </ul>
+      </details>
+    </section>
+
     <footer
       v-if="
         opportunity.isPublic
@@ -268,5 +314,5 @@ const showEventEnd = computed(() => {
       Verified
       {{ formatOpportunityDate(opportunity.lastVerifiedAt) }}
     </footer>
-  </NuxtLink>
+  </article>
 </template>

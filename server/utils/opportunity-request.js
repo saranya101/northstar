@@ -16,8 +16,8 @@ export async function readOpportunityBody(event, schema) { return parse(schema, 
 export async function readOpportunityQuery(event, schema) { return parse(schema, getQuery(event)) }
 
 export function handleOpportunityError(event, error, operation) {
-  const statusCode = [400, 401, 403, 404, 409, 413, 415, 422, 504].includes(error?.statusCode) ? error.statusCode : 500
+  const statusCode = [400, 401, 403, 404, 409, 413, 415, 422, 429, 504].includes(error?.statusCode) ? error.statusCode : 500
   if (statusCode === 500) console.error(`[opportunities] ${operation} failed`)
   setResponseStatus(event, statusCode)
-  return { status: 'unhealthy', message: statusCode === 500 ? 'Unable to complete the opportunity request.' : error.statusMessage, fieldErrors: error?.data?.fieldErrors || {}, duplicates: error?.data?.duplicates || [] }
+  return { status: 'unhealthy', message: statusCode === 500 ? 'Unable to complete the opportunity request.' : error.statusMessage, fieldErrors: error?.data?.fieldErrors || {}, duplicates: error?.data?.duplicates || [], nextAllowedAt: error?.data?.nextAllowedAt || null }
 }
