@@ -77,7 +77,9 @@ function sessionTime(session) { const render = value => `${String(Math.floor(val
         </dl>
       </header>
 
-      <section class="dossier-section">
+      <nav class="module-subnav" aria-label="Module sections"><a href="#overview">Overview</a><a href="#assessments">Assessments</a><a href="#course-outline">Course outline</a><a href="#instructors">Instructors</a><a href="#sessions">Sessions</a></nav>
+
+      <section id="overview" class="dossier-section">
         <div class="dossier-section__heading"><div><p>Shared record</p><h2>Academic details</h2></div></div>
         <p class="dossier-description">{{ dossier.module.description || 'No module description has been added yet.' }}</p>
         <dl class="dossier-details">
@@ -88,14 +90,17 @@ function sessionTime(session) { const render = value => `${String(Math.floor(val
         <div class="dossier-links"><UButton v-if="dossier.module.officialUrl" :to="dossier.module.officialUrl" target="_blank" color="neutral" variant="outline">Official module page</UButton><UButton v-if="dossier.offering.syllabusUrl" :to="dossier.offering.syllabusUrl" target="_blank" color="neutral" variant="outline">Syllabus</UButton><span v-if="!dossier.module.officialUrl && !dossier.offering.syllabusUrl">No official links have been connected.</span></div>
       </section>
 
-      <section class="dossier-section">
+      <AcademicAssessmentsPanel :enrolment-id="route.params.id" />
+      <AcademicCourseOutlinePanel :enrolment-id="route.params.id" />
+
+      <section id="sessions" class="dossier-section">
         <div class="dossier-section__heading"><div><p>Recurring schedule</p><h2>Class sessions</h2></div><UButton icon="i-lucide-plus" color="neutral" variant="outline" @click="newSession">Add session</UButton></div>
         <dl class="dossier-details"><div><dt>Index number</dt><dd>{{ dossier.enrolment.indexNumber || 'Not provided' }}</dd></div><div><dt>Registration status</dt><dd>{{ humanize(dossier.enrolment.registrationStatus) }}</dd></div><div><dt>Course type</dt><dd>{{ dossier.enrolment.courseType || 'Not provided' }}</dd></div></dl>
         <div v-if="dossier.classSessions.length" class="session-list"><button v-for="session in dossier.classSessions" :key="session.id" @click="editSession(session)"><strong>{{ humanize(session.classType) }}</strong><span>{{ humanize(session.dayOfWeek) }} · {{ sessionTime(session) }}</span><small>{{ session.groupLabel }}<template v-if="session.venue"> · {{ session.venue }}</template> · {{ humanize(session.recurrence) }}</small><span class="delivery-label"><UIcon :name="deliveryModeIcon(session.deliveryMode)" /> {{ deliveryModeLabel(session.deliveryMode) }}</span><UIcon name="i-lucide-pencil" /></button></div>
         <p v-else class="dossier-empty">No class sessions have been added for this module.</p>
       </section>
 
-      <section class="dossier-section">
+      <section id="instructors" class="dossier-section">
         <div class="dossier-section__heading"><div><p>Current offering</p><h2>Teaching team</h2></div><UButton icon="i-lucide-user-plus" color="neutral" variant="outline" @click="instructorOpen = true">Add instructor</UButton></div>
         <div v-if="dossier.instructors.length" class="instructor-list">
           <article v-for="instructor in dossier.instructors" :key="`${instructor.id}-${instructor.role}`">
@@ -124,7 +129,6 @@ function sessionTime(session) { const render = value => `${String(Math.floor(val
 
       <section class="upcoming-grid" aria-labelledby="upcoming-title">
         <h2 id="upcoming-title">Upcoming areas</h2>
-        <article><UIcon name="i-lucide-clipboard-check" /><h3>Assessments</h3><p>Assessment dates and weightages will be added after your timetable.</p></article>
         <article><UIcon name="i-lucide-brain" /><h3>Topic mastery</h3><p>Topic-level progress will appear once course content is connected.</p></article>
       </section>
 

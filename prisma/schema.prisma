@@ -24,6 +24,8 @@ model User {
   semesters            UserSemester[]
   moduleEnrolments     UserModuleEnrolment[]
   timetableImports     TimetableImport[]
+  courseOutlineImports CourseOutlineImport[]
+  assessments          Assessment[]
   createdOpportunities Opportunity[]         @relation("OpportunityCreator")
   userOpportunities    UserOpportunity[]
 
@@ -611,6 +613,8 @@ model UserModuleEnrolment {
   userSemesterId     String
   offeringId         String
   targetGrade        String?
+  targetPercentage   Decimal?                 @db.Decimal(5, 2)
+  targetLabel        String?
   personalNotes      String?
   colour             ModuleColour             @default(MINERAL)
   status             ModuleEnrolmentStatus    @default(ACTIVE)
@@ -623,12 +627,283 @@ model UserModuleEnrolment {
   userSemester       UserSemester             @relation(fields: [userSemesterId], references: [id], onDelete: Cascade)
   offering           ModuleOffering           @relation(fields: [offeringId], references: [id])
   classSessions      ClassSession[]
+  courseOutlineImports CourseOutlineImport[]
+  assessments          Assessment[]
 
   @@unique([userId, offeringId])
   @@index([userId])
   @@index([userSemesterId])
   @@index([status])
   @@index([offeringId])
+}
+
+enum CourseOutlineImportSource {
+  PDF
+  IMAGE
+  TEXT
+  MANUAL
+}
+
+enum CourseOutlineImportStatus {
+  PROCESSING
+  REVIEW_REQUIRED
+  CONFIRMED
+  FAILED
+  CANCELLED
+}
+
+enum CourseOutlineCandidateStatus {
+  SELECTED
+  REJECTED
+}
+
+enum AssessmentType {
+  QUIZ
+  MIDTERM
+  FINAL_EXAMINATION
+  INDIVIDUAL_ASSIGNMENT
+  GROUP_ASSIGNMENT
+  PRESENTATION
+  CLASS_PARTICIPATION
+  ATTENDANCE
+  REFLECTION
+  CASE_ANALYSIS
+  REPORT
+  PROJECT
+  PRACTICAL
+  LABORATORY
+  ORAL_EXAMINATION
+  PEER_ASSESSMENT
+  OTHER
+}
+
+enum AssessmentStatus {
+  NOT_STARTED
+  PLANNING
+  IN_PROGRESS
+  WAITING_ON_TEAMMATE
+  READY_FOR_REVIEW
+  SUBMITTED
+  GRADED
+  OVERDUE
+  CANCELLED
+}
+
+enum AssessmentMilestoneStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+model CourseOutlineImport {
+  id                    String                    @id @default(cuid())
+  userId                String
+  userModuleEnrolmentId String
+  originalFileName      String?
+  mimeType              String?
+  sourceType            CourseOutlineImportSource
+  sourceLabel           String
+  rawExtractedText      String
+  status                CourseOutlineImportStatus @default(REVIEW_REQUIRED)
+  parserVersion         String
+  extractionConfidence Decimal?                  @db.Decimal(3, 2)
+  safeErrorMessage      String?
+  academicYear          String?
+  semesterLabel         String?
+  historical            Boolean                  @default(false)
+  userConfirmedCurrent  Boolean                  @default(false)
+  warnings              String[]                 @default([])
+  confirmedAt           DateTime?
+  createdAt             DateTime                  @default(now())
+  updatedAt             DateTime                  @updatedAt
+  user                  User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userModuleEnrolment   UserModuleEnrolment       @relation(fields: [userModuleEnrolmentId], references: [id], onDelete: Cascade)
+  candidates            CourseOutlineAssessmentCandidate[]
+  facts                 CourseOutlineFact[]
+  weeks                 CourseOutlineWeek[]
+  assessments           Assessment[]
+
+  @@index([userId, createdAt])
+  @@index([userModuleEnrolmentId, status])
+}
+
+model CourseOutlineAssessmentCandidate {
+  id                    String                       @id @default(cuid())
+  importId              String
+  sourceOrder           Int
+  status                CourseOutlineCandidateStatus @default(SELECTED)
+  name                  String?
+  type                  AssessmentType?
+  weight                Decimal?                     @db.Decimal(5, 2)
+  officialDeadline      DateTime?
+  eventDate             DateTime?
+  submissionPlatform    String?
+  submissionUrl         String?
+  instructions          String?
+  groupAssessment       Boolean?
+  examFormat            String?
+  durationMinutes       Int?
+  openBook              Boolean?
+  deliverables          String[]                     @default([])
+  rubricHeadings        String[]                     @default([])
+  warnings              String[]                     @default([])
+  createdAt             DateTime                     @default(now())
+  updatedAt             DateTime                     @updatedAt
+  courseOutlineImport   CourseOutlineImport          @relation(fields: [importId], references: [id], onDelete: Cascade)
+  provenance            CourseOutlineCandidateProvenance[]
+
+  @@index([importId, sourceOrder])
+}
+
+model CourseOutlineCandidateProvenance {
+  id           String   @id @default(cuid())
+  candidateId  String
+  fieldName    String
+  pageNumber   Int?
+  sectionHeading String?
+  sourceExcerpt String?
+  confidence   Decimal? @db.Decimal(3, 2)
+  createdAt    DateTime @default(now())
+  candidate    CourseOutlineAssessmentCandidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  @@unique([candidateId, fieldName])
+  @@index([candidateId])
+}
+
+model CourseOutlineFact {
+  id             String   @id @default(cuid())
+  importId       String
+  fieldName      String
+  value          String
+  sourceOrder    Int
+  selected       Boolean  @default(true)
+  pageNumber     Int?
+  sectionHeading String?
+  sourceExcerpt String?
+  confidence     Decimal? @db.Decimal(3, 2)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  courseOutlineImport CourseOutlineImport @relation(fields: [importId], references: [id], onDelete: Cascade)
+
+  @@unique([importId, fieldName])
+  @@index([importId, sourceOrder])
+}
+
+model CourseOutlineWeek {
+  id             String   @id @default(cuid())
+  importId       String
+  weekNumber     Int?
+  topic          String?
+  reading        String?
+  activity       String?
+  importantDate String?
+  sourceOrder    Int
+  selected       Boolean  @default(true)
+  pageNumber     Int?
+  sourceExcerpt  String?
+  confidence     Decimal? @db.Decimal(3, 2)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  courseOutlineImport CourseOutlineImport @relation(fields: [importId], references: [id], onDelete: Cascade)
+
+  @@index([importId, sourceOrder])
+}
+
+model Assessment {
+  id                    String           @id @default(cuid())
+  userId                String
+  userModuleEnrolmentId String
+  sourceImportId        String?
+  sourceCandidateId     String?          @unique
+  name                  String
+  normalizedName        String
+  type                  AssessmentType
+  weight                Decimal?         @db.Decimal(5, 2)
+  officialDeadline      DateTime?
+  internalDeadline      DateTime?
+  eventDate             DateTime?
+  submissionPlatform    String?
+  submissionUrl         String?
+  instructions          String?
+  examFormat            String?
+  estimatedEffortMinutes Int?
+  actualEffortMinutes   Int?
+  groupAssessment       Boolean?
+  status                AssessmentStatus @default(NOT_STARTED)
+  score                 Decimal?         @db.Decimal(10, 2)
+  maximumScore          Decimal?         @db.Decimal(10, 2)
+  percentageScore       Decimal?         @db.Decimal(7, 4)
+  weightedScore         Decimal?         @db.Decimal(7, 4)
+  feedback              String?
+  reflection            String?
+  submittedAt           DateTime?
+  gradedAt              DateTime?
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+  user                  User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userModuleEnrolment   UserModuleEnrolment @relation(fields: [userModuleEnrolmentId], references: [id], onDelete: Cascade)
+  sourceImport          CourseOutlineImport? @relation(fields: [sourceImportId], references: [id], onDelete: Restrict)
+  provenance            AssessmentProvenance[]
+  deliverables          AssessmentDeliverable[]
+  milestones            AssessmentMilestone[]
+
+  @@index([userId, userModuleEnrolmentId])
+  @@index([userModuleEnrolmentId, officialDeadline])
+  @@index([sourceImportId])
+}
+
+model AssessmentProvenance {
+  id               String   @id @default(cuid())
+  assessmentId     String
+  sourceImportId   String
+  fieldName        String
+  originalFileName String?
+  sourceLabel      String
+  sourceType       CourseOutlineImportSource
+  pageNumber       Int?
+  sectionHeading   String?
+  sourceExcerpt    String?
+  confidence       Decimal? @db.Decimal(3, 2)
+  userConfirmed    Boolean  @default(true)
+  confirmedAt      DateTime
+  createdAt        DateTime @default(now())
+  assessment       Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+
+  @@unique([assessmentId, fieldName])
+  @@index([sourceImportId])
+}
+
+model AssessmentDeliverable {
+  id           String   @id @default(cuid())
+  assessmentId String
+  title        String
+  description  String?
+  required     Boolean  @default(true)
+  completed    Boolean  @default(false)
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  assessment   Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+
+  @@index([assessmentId, sortOrder])
+}
+
+model AssessmentMilestone {
+  id                     String                    @id @default(cuid())
+  assessmentId           String
+  title                  String
+  dueDate                DateTime?
+  status                 AssessmentMilestoneStatus @default(NOT_STARTED)
+  estimatedEffortMinutes Int?
+  notes                  String?
+  sortOrder              Int                       @default(0)
+  createdAt              DateTime                  @default(now())
+  updatedAt              DateTime                  @updatedAt
+  assessment             Assessment                @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+
+  @@index([assessmentId, sortOrder])
+  @@index([dueDate])
 }
 
 model TimetableImport {
