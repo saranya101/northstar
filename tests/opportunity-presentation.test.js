@@ -100,7 +100,7 @@ describe('opportunity presentation helpers', () => {
 })
 
 describe('opportunity card presentation', () => {
-  it('keeps application and event dates explicitly separate', async () => {
+  it('keeps deadline and event date selection explicitly separate', async () => {
     const { readFile } = await import('node:fs/promises')
 
     const card = await readFile(
@@ -111,10 +111,10 @@ describe('opportunity card presentation', () => {
       'utf8',
     )
 
-    expect(card).toContain('Application deadline')
-    expect(card).toContain('Event date')
-    expect(card).toContain('Event ends')
-    expect(card).toContain('Application status')
+    expect(card).toContain("label: 'Deadline'")
+    expect(card).toContain("label: 'Event'")
+    expect(card).toContain('opportunity.personal')
+    expect(card).toContain('opportunity-card__location')
     expect(card).toContain('OpportunitiesOpportunitySourceBadge')
   })
 })

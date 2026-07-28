@@ -495,7 +495,7 @@ export async function getOpportunityDiscovery(
     results: sortPortfolioRows(
       rankedRecommended,
       preferences.defaultSort,
-    ).slice(0, 24),
+    ),
 
     appliedPreferences: preferences,
 

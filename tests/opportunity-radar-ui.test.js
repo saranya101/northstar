@@ -29,12 +29,15 @@ describe('personalised Opportunity Radar UI', () => {
     expect(timerBlock).not.toContain('refreshNow()')
   })
 
-  it('renders value only when present with two skills and expandable context', () => {
+  it('renders compact value only when present with two skills and expandable context', () => {
     const card = read('app/components/opportunities/OpportunityCard.vue')
     expect(card).toContain('v-if="portfolio"')
     expect(card).toContain('skillSignals.slice(0, 2)')
-    expect(card).toContain('<details>')
+    expect(card).toContain(':aria-expanded="expanded"')
+    expect(card).toContain('@click="expanded = !expanded"')
     expect(card).toContain('Make it count:')
+    expect(card).not.toContain('resumeBulletTemplate')
+    expect(card).not.toContain('Event ends')
   })
 
   it('supports settings state, cooldown feedback, and truthful resume copy', () => {
@@ -44,10 +47,38 @@ describe('personalised Opportunity Radar UI', () => {
     expect(settings).toContain(':loading="saving"')
     expect(settings).toContain('Reset to defaults')
     expect(settings).toContain('lastManualRefreshAt: _lastManualRefreshAt')
+    expect(settings).toContain('You have unsaved changes.')
+    expect(settings).toContain('SettingsSkillChipInput')
     expect(page).toContain(':disabled="coolingDown"')
     expect(page).toContain('nextAllowedAt')
     expect(detail).toContain('navigator.clipboard.writeText')
     expect(detail).toContain('Replace placeholders such as [X]')
+  })
+
+  it('groups settings into accessible collapsible sections', () => {
+    const settings = read('app/components/settings/OpportunityRadarSettings.vue')
+    for (const label of [
+      'Feed behaviour',
+      'What you want to see',
+      'What you want to build',
+      'Visibility',
+    ]) {
+      expect(settings).toContain(label)
+    }
+    expect(settings).toContain(':aria-expanded=')
+    expect(settings).toContain('radar-settings__savebar')
+  })
+
+  it('progressively displays twelve recommendations and resets only for filter changes', () => {
+    const page = read('app/pages/app/opportunities/index.vue')
+    expect(page).toContain('OPPORTUNITY_RESULT_PAGE_SIZE')
+    expect(page).toContain('Load 12 more')
+    expect(page).toContain('Showing {{ visibleResults.length }} of {{ filteredResults.length }} opportunities')
+    expect(page).toContain('visibleCount.value = OPPORTUNITY_RESULT_PAGE_SIZE')
+    expect(page).toContain('selectedCategory.value')
+    expect(page).toContain('selectedMode.value')
+    expect(page).toContain('selectedSort.value')
+    expect(page).not.toContain('saveOpportunityPreferences')
   })
 
   it('uses natural-height responsive result grids', () => {

@@ -70,12 +70,6 @@ const modeLabel = computed(() =>
   opportunityModeLabel(props.opportunity.mode),
 )
 
-const tags = computed(() =>
-  Array.isArray(props.opportunity.tags)
-    ? props.opportunity.tags.slice(0, 4)
-    : [],
-)
-
 const portfolio = computed(() =>
   props.opportunity.portfolioValue || null,
 )
@@ -92,18 +86,69 @@ const makeItCount = computed(() =>
     : '',
 )
 
-const showEventEnd = computed(() => {
-  if (!props.opportunity.endAt) {
-    return false
+const expanded = ref(false)
+const disclosureId = computed(() =>
+  `opportunity-value-${props.opportunity.id}`,
+)
+
+const primaryDate = computed(() => {
+  if (props.opportunity.deadline) {
+    return {
+      label: 'Deadline',
+      value: props.opportunity.deadline,
+    }
   }
 
-  if (!props.opportunity.startAt) {
-    return true
+  if (props.opportunity.startAt) {
+    return {
+      label: 'Event',
+      value: props.opportunity.startAt,
+    }
   }
 
-  return formatOpportunityDate(props.opportunity.endAt)
-    !== formatOpportunityDate(props.opportunity.startAt)
+  return null
 })
+
+const place = computed(() =>
+  props.opportunity.location
+  || (props.opportunity.mode !== 'UNKNOWN'
+    ? modeLabel.value
+    : ''),
+)
+
+const goalMatches = computed(() =>
+  Array.isArray(portfolio.value?.goalMatches)
+    ? portfolio.value.goalMatches.slice(0, 3)
+    : [],
+)
+
+const evidenceIdeas = computed(() =>
+  Array.isArray(portfolio.value?.evidenceIdeas)
+    ? portfolio.value.evidenceIdeas.slice(0, 3)
+    : [],
+)
+
+const maximiseActions = computed(() =>
+  Array.isArray(portfolio.value?.maximiseActions)
+    ? portfolio.value.maximiseActions.slice(0, 2)
+    : [],
+)
+
+const recommendationReasons = computed(() =>
+  Array.isArray(props.opportunity.recommendationReasons)
+    ? props.opportunity.recommendationReasons.slice(0, 2)
+    : [],
+)
+
+const hasDisclosure = computed(() =>
+  Boolean(
+    portfolio.value?.summary
+    || goalMatches.value.length
+    || evidenceIdeas.value.length
+    || maximiseActions.value.length
+    || recommendationReasons.value.length,
+  ),
+)
 </script>
 
 <template>
@@ -150,126 +195,6 @@ const showEventEnd = computed(() => {
       <p>{{ opportunity.organisation }}</p>
     </div>
 
-    <div
-      v-if="
-        opportunity.deadline
-        || opportunity.startAt
-        || opportunity.endAt
-      "
-      class="opportunity-card__dates"
-    >
-      <div
-        v-if="opportunity.deadline"
-        class="opportunity-card__date"
-      >
-        <span class="opportunity-card__date-icon">
-          <UIcon
-            name="i-lucide-calendar-clock"
-            aria-hidden="true"
-          />
-        </span>
-
-        <div>
-          <span>Application deadline</span>
-          <strong>
-            {{ formatOpportunityDate(opportunity.deadline) }}
-          </strong>
-        </div>
-      </div>
-
-      <div
-        v-if="opportunity.startAt"
-        class="opportunity-card__date"
-      >
-        <span class="opportunity-card__date-icon">
-          <UIcon
-            name="i-lucide-calendar-days"
-            aria-hidden="true"
-          />
-        </span>
-
-        <div>
-          <span>Event date</span>
-          <strong>
-            {{ formatOpportunityDate(opportunity.startAt) }}
-          </strong>
-        </div>
-      </div>
-
-      <div
-        v-if="showEventEnd"
-        class="opportunity-card__date"
-      >
-        <span class="opportunity-card__date-icon">
-          <UIcon
-            name="i-lucide-calendar-range"
-            aria-hidden="true"
-          />
-        </span>
-
-        <div>
-          <span>Event ends</span>
-          <strong>
-            {{ formatOpportunityDate(opportunity.endAt) }}
-          </strong>
-        </div>
-      </div>
-    </div>
-
-    <dl class="opportunity-card__meta">
-      <div>
-        <dt>
-          <UIcon
-            name="i-lucide-map-pin"
-            aria-hidden="true"
-          />
-          Location
-        </dt>
-
-        <dd
-          :title="opportunity.location || 'Not specified'"
-        >
-          {{ opportunity.location || 'Not specified' }}
-        </dd>
-      </div>
-
-      <div>
-        <dt>
-          <UIcon
-            name="i-lucide-monitor-smartphone"
-            aria-hidden="true"
-          />
-          Mode
-        </dt>
-
-        <dd>{{ modeLabel }}</dd>
-      </div>
-
-      <div>
-        <dt>
-          <UIcon
-            name="i-lucide-list-checks"
-            aria-hidden="true"
-          />
-          Application status
-        </dt>
-
-        <dd>{{ applicationStatus }}</dd>
-      </div>
-    </dl>
-
-    <div
-      v-if="tags.length"
-      class="opportunity-tags"
-    >
-      <span
-        v-for="tag in tags"
-        :key="tag"
-      >
-        {{ tag }}
-      </span>
-    </div>
-
     <section
       v-if="portfolio"
       class="opportunity-card__portfolio"
@@ -277,9 +202,10 @@ const showEventEnd = computed(() => {
     >
       <header>
         <span :class="`portfolio-level portfolio-level--${portfolio.level.toLowerCase()}`">
-          {{ portfolio.level }}
+          {{ portfolio.level }} portfolio value
+          <strong>{{ portfolio.score }}</strong>
         </span>
-        <strong>{{ portfolio.headline }}</strong>
+        <h4>{{ portfolio.headline }}</h4>
       </header>
 
       <div v-if="portfolioSkills.length" class="opportunity-card__skills">
@@ -290,29 +216,90 @@ const showEventEnd = computed(() => {
         <strong>Make it count:</strong> {{ makeItCount }}
       </p>
 
-      <details>
-        <summary>Why it matters</summary>
-        <p>{{ portfolio.summary }}</p>
-        <ul v-if="opportunity.recommendationReasons?.length">
-          <li v-for="reason in opportunity.recommendationReasons.slice(0, 2)" :key="reason">{{ reason }}</li>
-        </ul>
-      </details>
     </section>
 
-    <footer
-      v-if="
-        opportunity.isPublic
-        && opportunity.lastVerifiedAt
-      "
-      class="opportunity-card__footer"
+    <dl
+      v-if="primaryDate || place || opportunity.personal"
+      class="opportunity-card__meta"
     >
-      <UIcon
-        name="i-lucide-badge-check"
-        aria-hidden="true"
-      />
+      <div v-if="primaryDate">
+        <dt>{{ primaryDate.label }}</dt>
+        <dd>{{ formatOpportunityDate(primaryDate.value) }}</dd>
+      </div>
+      <div v-if="place" class="opportunity-card__location">
+        <dt>{{ opportunity.location ? 'Location' : 'Mode' }}</dt>
+        <dd :title="place">{{ place }}</dd>
+      </div>
+      <div v-if="opportunity.personal">
+        <dt>Tracking</dt>
+        <dd>{{ applicationStatus }}</dd>
+      </div>
+    </dl>
 
-      Verified
-      {{ formatOpportunityDate(opportunity.lastVerifiedAt) }}
+    <div
+      v-if="portfolio && hasDisclosure"
+      class="opportunity-card__disclosure"
+    >
+      <button
+        type="button"
+        :aria-expanded="expanded"
+        :aria-controls="disclosureId"
+        @click="expanded = !expanded"
+      >
+        Why it matters
+        <UIcon
+          :name="expanded ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'"
+          aria-hidden="true"
+        />
+      </button>
+
+      <div
+        v-show="expanded"
+        :id="disclosureId"
+        class="opportunity-card__disclosure-content"
+      >
+        <p v-if="portfolio.summary">{{ portfolio.summary }}</p>
+
+        <div v-if="goalMatches.length">
+          <strong>Goals supported</strong>
+          <p>{{ goalMatches.join(' · ') }}</p>
+        </div>
+
+        <div v-if="evidenceIdeas.length">
+          <strong>Evidence to collect</strong>
+          <ul>
+            <li v-for="idea in evidenceIdeas" :key="idea">{{ idea }}</li>
+          </ul>
+        </div>
+
+        <div v-if="maximiseActions.length">
+          <strong>How to maximise it</strong>
+          <ul>
+            <li v-for="action in maximiseActions" :key="action">{{ action }}</li>
+          </ul>
+        </div>
+
+        <div v-if="recommendationReasons.length">
+          <strong>Why recommended</strong>
+          <ul>
+            <li v-for="reason in recommendationReasons" :key="reason">{{ reason }}</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <footer class="opportunity-card__actions">
+      <span
+        v-if="opportunity.isPublic && opportunity.lastVerifiedAt"
+        :title="`Verified ${formatOpportunityDate(opportunity.lastVerifiedAt)}`"
+      >
+        <UIcon name="i-lucide-badge-check" aria-hidden="true" />
+        Verified
+      </span>
+      <NuxtLink :to="`/app/opportunities/${opportunity.id}`">
+        View opportunity
+        <UIcon name="i-lucide-arrow-right" aria-hidden="true" />
+      </NuxtLink>
     </footer>
   </article>
 </template>

@@ -45,10 +45,13 @@ async function copyResumeTemplate() {
                 <h2>{{ opportunity.portfolioValue.headline }}</h2>
               </div>
               <span :class="`portfolio-level portfolio-level--${opportunity.portfolioValue.level.toLowerCase()}`">
-                {{ opportunity.portfolioValue.score }} · {{ opportunity.portfolioValue.level }}
+                {{ opportunity.portfolioValue.level }} portfolio value · {{ opportunity.portfolioValue.score }}
               </span>
             </header>
-            <p>{{ opportunity.portfolioValue.summary }}</p>
+            <div class="portfolio-detail__why">
+              <h3>Why this helps</h3>
+              <p>{{ opportunity.portfolioValue.summary }}</p>
+            </div>
             <div class="portfolio-detail__grid">
               <section v-if="opportunity.portfolioValue.skillSignals?.length"><h3>Skills you may demonstrate</h3><ul><li v-for="item in opportunity.portfolioValue.skillSignals" :key="item">{{ item }}</li></ul></section>
               <section v-if="opportunity.portfolioValue.goalMatches?.length"><h3>Goals it supports</h3><ul><li v-for="item in opportunity.portfolioValue.goalMatches" :key="item">{{ item }}</li></ul></section>

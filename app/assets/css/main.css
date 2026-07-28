@@ -287,7 +287,7 @@ body {
 .radar-settings,
 .radar-settings__form {
   display: grid;
-  gap: 1.25rem;
+  gap: .85rem;
 }
 .radar-settings > header { display: grid; gap: .3rem; }
 .radar-settings > header p { margin: 0; color: var(--ns-accent); font-size: .72rem; font-weight: 750; letter-spacing: .1em; text-transform: uppercase; }
@@ -296,21 +296,128 @@ body {
 .radar-settings__selects { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: .8rem; }
 .radar-settings label:not(.radar-choice), .radar-settings fieldset { display: grid; gap: .4rem; min-width: 0; }
 .radar-settings label > span, .radar-settings legend { color: var(--ns-ink); font-size: .78rem; font-weight: 700; }
-.radar-settings fieldset { margin: 0; padding: .9rem; border: 1px solid var(--ns-border); border-radius: .75rem; }
+.radar-settings fieldset { margin: 0; padding: .8rem; border: 1px solid var(--ns-border); border-radius: .65rem; }
 .radar-settings legend small { color: var(--ns-text-muted); font-weight: 500; }
 .radar-settings__choices { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .35rem .7rem; }
 .radar-choice { display: inline-flex; min-height: 38px; align-items: center; gap: .5rem; color: var(--ns-text-muted); font-size: .78rem; }
 .radar-choice input { accent-color: var(--ns-accent); }
 .radar-settings__toggles { display: flex; flex-wrap: wrap; gap: .6rem 1.2rem; }
-.radar-settings__skills small, .radar-settings__error { color: var(--ns-text-muted); font-size: .72rem; }
 .radar-settings__error { margin: 0; color: #9b3d2f; }
-.radar-settings footer { display: flex; justify-content: flex-end; gap: .6rem; }
 .radar-settings__loading { display: grid; gap: .6rem; }
 .radar-settings__loading span { height: 2.5rem; border-radius: .5rem; background: var(--ns-border); }
+
+.radar-settings__group {
+  overflow: hidden;
+  border: 1px solid var(--ns-border);
+  border-radius: .75rem;
+  background: white;
+}
+.radar-settings__group h3 { margin: 0; }
+.radar-settings__group h3 > button {
+  display: flex;
+  width: 100%;
+  min-height: 58px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: .7rem .85rem;
+  border: 0;
+  background: transparent;
+  color: var(--ns-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.radar-settings__group h3 > button:hover { background: var(--ns-surface-soft); }
+.radar-settings__group h3 > button:focus-visible,
+.skill-chip-input:focus-within,
+.skill-chip button:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--ns-focus) 30%, transparent);
+  outline-offset: -3px;
+}
+.radar-settings__group h3 span { display: grid; gap: .12rem; }
+.radar-settings__group h3 strong { font-size: .88rem; }
+.radar-settings__group h3 small { color: var(--ns-text-muted); font-size: .72rem; font-weight: 500; }
+.radar-settings__panel {
+  display: grid;
+  gap: .8rem;
+  padding: 0 .85rem .85rem;
+  border-top: 1px solid var(--ns-border);
+}
+.radar-settings__panel > *:first-child { margin-top: .85rem; }
+.radar-settings__savebar {
+  position: sticky;
+  z-index: 4;
+  bottom: .5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  padding: .7rem;
+  border: 1px solid var(--ns-border);
+  border-radius: .75rem;
+  background: rgb(255 255 255 / 94%);
+  box-shadow: 0 8px 24px rgb(31 61 55 / 10%);
+  backdrop-filter: blur(8px);
+}
+.radar-settings__savebar > span { color: var(--ns-text-muted); font-size: .74rem; }
+.radar-settings__savebar > div { display: flex; gap: .5rem; }
+
+.skill-chip-field { display: grid; gap: .4rem; }
+.skill-chip-field > label { color: var(--ns-ink); font-size: .78rem; font-weight: 700; }
+.skill-chip-input {
+  display: flex;
+  min-height: 46px;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .4rem;
+  padding: .4rem .5rem;
+  border: 1px solid var(--ns-border-strong);
+  border-radius: .55rem;
+  background: white;
+}
+.skill-chip {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  gap: .25rem;
+  padding: .28rem .35rem .28rem .5rem;
+  border-radius: 999px;
+  background: var(--ns-surface-soft);
+  color: var(--ns-ink);
+  font-size: .74rem;
+  overflow-wrap: anywhere;
+}
+.skill-chip button {
+  display: grid;
+  width: 1.45rem;
+  height: 1.45rem;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ns-text-muted);
+  cursor: pointer;
+}
+.skill-chip-input > input {
+  min-width: 8rem;
+  min-height: 34px;
+  flex: 1 1 10rem;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--ns-ink);
+  font: inherit;
+  font-size: .78rem;
+}
+.skill-chip-field > small { color: var(--ns-text-muted); font-size: .7rem; }
+.skill-chip-field__message { min-height: 1rem; color: #9b3d2f !important; }
 
 .portfolio-detail { display: grid; gap: 1rem; }
 .portfolio-detail > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
 .portfolio-detail > header h2 { margin-bottom: 0; }
+.portfolio-detail__why { display: grid; gap: .35rem; padding: .85rem; border-left: 3px solid var(--ns-accent); background: var(--ns-surface-soft); }
 .opportunity-detail__content .portfolio-detail__grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .7rem; }
 .opportunity-detail__content .portfolio-detail__grid > section { padding: .85rem; border: 0; background: var(--ns-surface-soft); }
 .portfolio-detail h3 { margin: 0 0 .45rem; color: var(--ns-ink); font-size: .82rem; }
@@ -321,8 +428,9 @@ body {
 
 @media (max-width: 700px) {
   .radar-settings__selects, .radar-settings__choices, .opportunity-detail__content .portfolio-detail__grid { grid-template-columns: minmax(0,1fr); }
-  .radar-settings footer, .portfolio-detail > header, .portfolio-detail__resume { align-items: stretch; flex-direction: column; }
-  .radar-settings footer > *, .portfolio-detail__resume > button { width: 100%; justify-content: center; }
+  .radar-settings__savebar, .portfolio-detail > header, .portfolio-detail__resume { align-items: stretch; flex-direction: column; }
+  .radar-settings__savebar > div { display: grid; grid-template-columns: 1fr 1fr; }
+  .radar-settings__savebar > div > *, .portfolio-detail__resume > button { width: 100%; justify-content: center; }
 }
 
 .onboarding-layout, .app-home, .settings-page { min-height: 100svh; background: var(--ns-page); }
