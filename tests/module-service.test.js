@@ -8,6 +8,7 @@ import {
   createManualModule,
   enrolExistingModule,
   getModuleDossier,
+  listModules,
   requireModuleContext,
   searchModules,
   updateModuleEnrolment
@@ -39,6 +40,18 @@ function serializedEnrolment(extra = {}) {
   }
 }
 
+function importedEnrolment(code, academicUnits, sessionCount, indexNumber, extra = {}) {
+  return {
+    id: `e-${code}`, userId: 'user-1', userSemesterId: 'us1', targetGrade: null, colour: 'MINERAL', status: 'ACTIVE',
+    indexNumber, courseType: null, registrationStatus: 'REGISTERED', createdAt: new Date(), updatedAt: new Date(),
+    _count: { classSessions: sessionCount },
+    offering: {
+      id: `o-${code}`, sectionLabel: 'DEFAULT', academicTerm: activeSemester.academicTerm, instructorAssignments: [],
+      module: { ...moduleRecord, id: `m-${code}`, code, title: extra.title || code, academicUnits, description: extra.description ?? null }
+    }
+  }
+}
+
 describe('module academic context', () => {
   it('requires an academic profile', async () => {
     const database = contextModels({ userAcademicProfile: { findUnique: vi.fn().mockResolvedValue(null) } })
@@ -48,6 +61,44 @@ describe('module academic context', () => {
   it('requires an active semester', async () => {
     const database = contextModels({ userSemester: { findFirst: vi.fn().mockResolvedValue(null) } })
     await expect(requireModuleContext('user-1', database)).rejects.toMatchObject({ statusCode: 409 })
+  })
+})
+
+describe('active-semester module listing', () => {
+  it('returns all six imported enrolments with AU, index and session counts', async () => {
+    const records = [
+      importedEnrolment('AB0403', 3, 1, '00462', { title: 'DECISION MAKING WITH PROGRAMMING & ANALYTICS' }),
+      importedEnrolment('AB1088', 1, 2, '01215', { title: 'CAREER LAUNCHPAD' }),
+      importedEnrolment('AB1201', 3, 1, '00105', { title: 'FINANCIAL MANAGEMENT' }),
+      importedEnrolment('AB1501', 3, 2, '00879', { title: 'MARKETING' }),
+      importedEnrolment('AD1102', 3, 1, '01128', { title: 'FINANCIAL ACCOUNTING' }),
+      importedEnrolment('HE5091', 3, 2, '01062', { title: 'PRINCIPLES OF ECONOMICS' })
+    ]
+    const findMany = vi.fn().mockResolvedValue(records)
+    const database = contextModels({ userModuleEnrolment: { findMany } })
+    const result = await listModules('user-1', 'ACTIVE', database)
+
+    expect(result.modules).toHaveLength(6)
+    expect(result.modules.map(module => module.code)).toEqual(['AB0403', 'AB1088', 'AB1201', 'AB1501', 'AD1102', 'HE5091'])
+    expect(result.modules.reduce((total, module) => total + module.academicUnits, 0)).toBe(16)
+    expect(Object.fromEntries(result.modules.map(module => [module.code, module.sessionCount]))).toEqual({
+      AB0403: 1, AB1088: 2, AB1201: 1, AB1501: 2, AD1102: 1, HE5091: 2
+    })
+    expect(result.modules.find(module => module.code === 'HE5091')).toMatchObject({
+      title: 'Principles of Economics', indexNumber: '01062', registrationStatus: 'REGISTERED'
+    })
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { userId: 'user-1', userSemesterId: 'us1', status: 'ACTIVE' },
+      include: expect.objectContaining({ _count: { select: { classSessions: true } } })
+    }))
+  })
+
+  it('does not hide an imported enrolment when optional module fields are missing', async () => {
+    const record = importedEnrolment('AB1088', 1, 2, '01215', { title: 'CAREER LAUNCHPAD', description: null })
+    record.offering.module.lastVerifiedAt = null
+    const database = contextModels({ userModuleEnrolment: { findMany: vi.fn().mockResolvedValue([record]) } })
+    const result = await listModules('user-1', 'ACTIVE', database)
+    expect(result.modules).toEqual([expect.objectContaining({ code: 'AB1088', description: null, sessionCount: 2 })])
   })
 })
 

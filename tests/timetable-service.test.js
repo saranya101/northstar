@@ -135,6 +135,88 @@ describe('import confirmation concurrency', () => {
     const database = { $transaction: callback => callback(transaction) }
     await expect(confirmTimetableImport('user-1', 'import-1', { expectedUpdatedAt: updatedAt.toISOString(), modules: [moduleCandidate] }, database)).resolves.toMatchObject({ modulesReused: 1, sessionsCreated: 0, duplicatesSkipped: 1 })
     expect(transaction.userModuleEnrolment.create).not.toHaveBeenCalled()
+    expect(transaction.userModuleEnrolment.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'enrolment-1' },
+      data: expect.objectContaining({ userSemesterId: 'semester-1', status: 'ACTIVE', indexNumber: '00105' })
+    }))
+    expect(transaction.moduleOffering.upsert).toHaveBeenCalledTimes(1)
     expect(transaction.classSession.create).not.toHaveBeenCalled()
+  })
+
+  it('creates six active-semester enrolments, reuses term offerings, and preserves all nine sessions', async () => {
+    const updatedAt = new Date('2026-07-21T00:00:00.000Z')
+    const definitions = [
+      ['AD1102', 'Financial Accounting', 3, '01128', 1],
+      ['HE5091', 'Principles of Economics', 3, '01062', 2],
+      ['AB0403', 'Decision Making with Programming & Analytics', 3, '00462', 1],
+      ['AB1201', 'Financial Management', 3, '00105', 1],
+      ['AB1088', 'Career Launchpad', 1, '01215', 2],
+      ['AB1501', 'Marketing', 3, '00879', 2]
+    ]
+    let minute = 480
+    const modules = definitions.map(([code, title, academicUnits, indexNumber, count]) => ({
+      candidateId: `candidate-${code}`, code, title, academicUnits, indexNumber, courseType: null,
+      registrationStatus: 'REGISTERED', selected: true, publicEnrichment: null,
+      sessions: Array.from({ length: count }, (_, index) => {
+        const startMinutes = minute
+        minute += 60
+        return {
+          candidateId: `session-${code}-${index}`, blockId: `block-${code}-${index}`, selected: true,
+          classType: index ? 'TUTORIAL' : 'LECTURE', groupLabel: String(index + 1), dayOfWeek: 'MONDAY',
+          startMinutes, endMinutes: startMinutes + 50, venue: 'LT1', deliveryMode: 'IN_PERSON',
+          recurrence: 'WEEKLY', weekNumbers: [], confidence: 0.9
+        }
+      })
+    }))
+    const blockIds = modules.flatMap(module => module.sessions.map(session => session.blockId))
+    const detectedSessionBlocks = Object.fromEntries(modules.map(module => [module.code, module.sessions.length]))
+    const transaction = {
+      timetableImport: {
+        findFirst: vi.fn().mockResolvedValue({
+          id: 'import-1', userId: 'user-1', userSemesterId: 'semester-1', status: 'NEEDS_REVIEW', updatedAt,
+          candidatePayload: {
+            sourceSemester: { academicYearLabel: '2026/2027', semesterNumber: 1, displayLabel: '2026/2027 Semester 1' },
+            sourceSummary: { moduleCount: 6, totalAcademicUnits: 16 },
+            structure: {
+              gridVisible: true, gridModuleCodes: definitions.map(([code]) => code), physicalBlockIds: blockIds,
+              unresolvedBlockIds: [], duplicateSessionBlockCount: 0, detectedSessionBlocks,
+              detectedSessionBlockCount: 9, droppedSessionBlockCount: 0, examRowsDetected: 0, examRowsReconstructed: 0
+            }
+          }
+        }),
+        update: vi.fn().mockResolvedValue({})
+      },
+      userAcademicProfile: { findUnique: vi.fn().mockResolvedValue({ universityId: 'u1', schoolId: 'school-1' }) },
+      userSemester: { findFirst: vi.fn().mockResolvedValue({ id: 'semester-1', academicTermId: 'term-1', academicTerm: { universityId: 'u1', academicYear: '2026/2027', semesterNumber: 1, name: 'Semester 1' } }) },
+      module: {
+        findUnique: vi.fn().mockImplementation(({ where }) => Promise.resolve({
+          id: `module-${where.universityId_code.code}`, sourceStatus: 'USER_ENTERED', academicUnits: 3,
+          description: null, gradingBasis: null, officialUrl: null
+        })),
+        create: vi.fn(), update: vi.fn()
+      },
+      moduleOffering: {
+        upsert: vi.fn().mockImplementation(({ where }) => Promise.resolve({ id: `offering-${where.moduleId_academicTermId_sectionLabel.moduleId}` }))
+      },
+      userModuleEnrolment: {
+        findUnique: vi.fn().mockResolvedValue(null),
+        create: vi.fn().mockImplementation(({ data }) => Promise.resolve({ id: `enrolment-${data.offeringId}` })),
+        update: vi.fn()
+      },
+      classSession: {
+        findUnique: vi.fn().mockResolvedValue(null),
+        create: vi.fn().mockResolvedValue({}),
+        findMany: vi.fn().mockResolvedValue([])
+      }
+    }
+    const database = { $transaction: callback => callback(transaction) }
+    const result = await confirmTimetableImport('user-1', 'import-1', { expectedUpdatedAt: updatedAt.toISOString(), modules }, database)
+
+    expect(result).toMatchObject({ modulesReused: 6, sessionsCreated: 9, duplicatesSkipped: 0 })
+    expect(transaction.moduleOffering.upsert).toHaveBeenCalledTimes(6)
+    expect(transaction.userModuleEnrolment.create).toHaveBeenCalledTimes(6)
+    expect(transaction.classSession.create).toHaveBeenCalledTimes(9)
+    expect(transaction.userModuleEnrolment.create.mock.calls.every(([call]) => call.data.userSemesterId === 'semester-1')).toBe(true)
+    expect(transaction.moduleOffering.upsert.mock.calls.every(([call]) => call.create.academicTermId === 'term-1')).toBe(true)
   })
 })

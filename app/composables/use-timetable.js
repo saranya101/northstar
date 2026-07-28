@@ -17,6 +17,7 @@ export function useTimetable() {
   const nuxtApp = useNuxtApp()
   const requestFetch = useRequestFetch()
   const { user } = useCurrentSession()
+  const { clear: clearModules, load: loadModules } = useModules()
   const state = useState('northstar-timetable', () => null)
   const imports = useState('northstar-timetable-imports', () => ({}))
   const ownerId = useState('northstar-timetable-owner', () => null)
@@ -64,7 +65,16 @@ export function useTimetable() {
   }
   async function loadImport(id, force = false) { if (imports.value[id] && !force) return imports.value[id]; const result = await request(`import:${id}`, () => requestFetch(`/api/timetable/imports/${id}`)); imports.value[id] = result; return result }
   async function updateImport(id, body) { const result = await mutate(`/api/timetable/imports/${id}`, { method: 'PATCH', body }, 'Unable to save the review.'); if (result) imports.value[id] = result; return result }
-  async function confirmImport(id, body) { const result = await mutate(`/api/timetable/imports/${id}/confirm`, { method: 'POST', body }, 'Unable to confirm the import.'); if (result) { delete imports.value[id]; state.value = null }; return result }
+  async function confirmImport(id, body) {
+    const result = await mutate(`/api/timetable/imports/${id}/confirm`, { method: 'POST', body }, 'Unable to confirm the import.')
+    if (result) {
+      delete imports.value[id]
+      state.value = null
+      clearModules()
+      await Promise.allSettled([load(true), loadModules(true)])
+    }
+    return result
+  }
   async function cancelImport(id) { const result = await mutate(`/api/timetable/imports/${id}`, { method: 'DELETE' }, 'Unable to cancel the import.'); if (result) delete imports.value[id]; return result }
   async function addSession(enrolmentId, body) { const result = await mutate(`/api/modules/${enrolmentId}/sessions`, { method: 'POST', body }, 'Unable to add the session.'); if (result) await load(true); return result }
   async function updateSession(id, body) { const result = await mutate(`/api/sessions/${id}`, { method: 'PATCH', body }, 'Unable to update the session.'); if (result) await load(true); return result }

@@ -10,7 +10,7 @@ const addOpen = ref(false)
 const successMessage = ref('')
 const hasModules = computed(() => hasActiveModules(state.value))
 watch(user, (currentUser) => {
-  if (currentUser) void load().catch(() => {})
+  if (currentUser) void load(true).catch(() => {})
 }, { immediate: true })
 
 function moduleCreated(module) {
@@ -21,7 +21,7 @@ function moduleCreated(module) {
 <template>
   <main class="app-page modules-page">
     <header class="app-page__header">
-      <div><p class="app-page__eyebrow">Academic structure</p><h1>Set up your semester</h1><span>Upload your STARS timetable or registered-courses summary. Northstar will detect your modules and class sessions for review.</span></div>
+      <div><p class="app-page__eyebrow">Academic structure</p><h1>{{ hasModules ? 'Your semester modules' : 'Set up your semester' }}</h1><span>{{ hasModules ? 'Review your active modules, enrolment details and class-session coverage.' : 'Upload your STARS timetable or registered-courses summary. Northstar will detect your modules and class sessions for review.' }}</span></div>
       <UButton to="/app/timetable/import" icon="i-lucide-upload" size="lg">Import NTU timetable</UButton>
     </header>
 

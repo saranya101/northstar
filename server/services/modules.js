@@ -46,6 +46,16 @@ function dateValue(value) {
   return value instanceof Date ? value.toISOString() : value ?? null
 }
 
+function displayModuleTitle(value) {
+  if (!value || value !== value.toUpperCase()) return value
+  const minorWords = new Set(['AND', 'FOR', 'IN', 'OF', 'THE', 'TO', 'WITH'])
+  return value.split(/\s+/).map((word, index) => {
+    if (word === '&') return word
+    if (index > 0 && minorWords.has(word)) return word.toLowerCase()
+    return word.charAt(0) + word.slice(1).toLowerCase()
+  }).join(' ')
+}
+
 function instructorSummary(assignment) {
   return {
     id: assignment.instructor.id,
@@ -66,13 +76,17 @@ export function serializeEnrolment(enrolment) {
     moduleId: offering.module.id,
     moduleOfferingId: offering.id,
     code: offering.module.code,
-    title: offering.module.title,
+    title: displayModuleTitle(offering.module.title),
     description: offering.module.description,
     academicUnits: decimalValue(offering.module.academicUnits),
     sectionLabel: offering.sectionLabel,
     targetGrade: enrolment.targetGrade,
     colour: enrolment.colour,
     status: enrolment.status,
+    indexNumber: enrolment.indexNumber,
+    courseType: enrolment.courseType,
+    registrationStatus: enrolment.registrationStatus,
+    sessionCount: enrolment._count?.classSessions ?? enrolment.classSessions?.length ?? 0,
     instructors: offering.instructorAssignments.map(instructorSummary),
     sourceStatus: offering.module.sourceStatus,
     lastVerifiedAt: dateValue(offering.module.lastVerifiedAt),
@@ -106,7 +120,7 @@ export async function listModules(userId, status = 'ACTIVE', database = prisma) 
   const { academicProfile, activeSemester } = await requireModuleContext(userId, database)
   const enrolments = await database.userModuleEnrolment.findMany({
     where: { userId, userSemesterId: activeSemester.id, status },
-    include: { offering: { include: offeringInclude } },
+    include: { offering: { include: offeringInclude }, _count: { select: { classSessions: true } } },
     orderBy: [{ offering: { module: { code: 'asc' } } }, { createdAt: 'asc' }]
   })
   const activeCount = status === 'ACTIVE'

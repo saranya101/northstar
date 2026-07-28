@@ -153,7 +153,7 @@ export async function confirmTimetableImport(userId, id, input, database = prism
       const offering = await transaction.moduleOffering.upsert({ where: { moduleId_academicTermId_sectionLabel: { moduleId: module.id, academicTermId: activeSemester.academicTermId, sectionLabel: 'DEFAULT' } }, update: {}, create: { moduleId: module.id, academicTermId: activeSemester.academicTermId, sectionLabel: 'DEFAULT' } })
       const existingEnrolment = await transaction.userModuleEnrolment.findUnique({ where: { userId_offeringId: { userId, offeringId: offering.id } } })
       const enrolment = existingEnrolment
-        ? await transaction.userModuleEnrolment.update({ where: { id: existingEnrolment.id }, data: { indexNumber: candidate.indexNumber, courseType: candidate.courseType, registrationStatus: candidate.registrationStatus, status: 'ACTIVE' } })
+        ? await transaction.userModuleEnrolment.update({ where: { id: existingEnrolment.id }, data: { userSemesterId: activeSemester.id, indexNumber: candidate.indexNumber, courseType: candidate.courseType, registrationStatus: candidate.registrationStatus, status: 'ACTIVE' } })
         : await transaction.userModuleEnrolment.create({ data: { userId, userSemesterId: activeSemester.id, offeringId: offering.id, indexNumber: candidate.indexNumber, courseType: candidate.courseType, registrationStatus: candidate.registrationStatus } })
       if (candidate.registrationStatus === 'EXEMPTED') continue
       for (const session of candidate.sessions.filter(item => item.selected)) {

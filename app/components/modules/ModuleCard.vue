@@ -16,6 +16,9 @@ function humanize(value) {
       </div>
       <dl class="module-card__facts">
         <div v-if="module.academicUnits !== null"><dt>Academic units</dt><dd>{{ module.academicUnits }}</dd></div>
+        <div><dt>Index number</dt><dd>{{ module.indexNumber || 'Not set' }}</dd></div>
+        <div><dt>Registration</dt><dd>{{ humanize(module.registrationStatus) || 'Unknown' }}</dd></div>
+        <div><dt>Sessions</dt><dd>{{ module.sessionCount }}</dd></div>
         <div v-if="module.sectionLabel !== 'DEFAULT'"><dt>Section</dt><dd>{{ module.sectionLabel }}</dd></div>
         <div><dt>Target grade</dt><dd>{{ module.targetGrade || 'Not set' }}</dd></div>
       </dl>
