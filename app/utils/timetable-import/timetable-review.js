@@ -1,7 +1,28 @@
+import { timetableStructureIssues } from '~~/shared/utils/timetable-structure'
+
 const GROUP_FIELDS = ['classType', 'groupLabel', 'dayOfWeek', 'startMinutes', 'endMinutes']
 
 export function cloneReviewModules(value) {
   return JSON.parse(JSON.stringify(value || []))
+}
+
+export function applyPublicEnrichmentSuggestion(module, value, useSuggestion = true) {
+  if (!value?.available) {
+    module.publicEnrichmentConfirmed = true
+    module.titleNeedsReview = false
+    return module
+  }
+  if (useSuggestion) {
+    if (value.title) module.title = value.title
+    if (value.academicUnits !== null && value.academicUnits !== undefined) module.academicUnits = value.academicUnits
+  }
+  module.publicEnrichment = {
+    title: value.title, academicUnits: value.academicUnits, description: value.description, gradingBasis: value.gradingBasis,
+    school: value.school, officialUrl: value.officialUrl, fieldProvenance: value.fieldProvenance, verificationStatus: value.verificationStatus
+  }
+  module.publicEnrichmentConfirmed = true
+  module.titleNeedsReview = false
+  return module
 }
 
 export function sessionIssueFields(session) {
@@ -26,8 +47,8 @@ export function revealReviewIssue(expandedModules, expandedSessions, issue) {
   return issue.targetId
 }
 
-export function reviewIssues(modules = []) {
-  return modules.flatMap((module) => {
+export function reviewIssues(modules = [], draft = {}) {
+  return timetableStructureIssues(modules, draft).concat(modules.flatMap((module) => {
     if (!module.selected) return []
     const moduleIssues = module.publicEnrichmentConfirmed === false ? [{
       id: `${module.candidateId}-publicEnrichment`,
@@ -47,7 +68,7 @@ export function reviewIssues(modules = []) {
       context: [module.code, session.classType, session.groupLabel, session.dayOfWeek].filter(Boolean).join(' · '),
       targetId: issueTargetId(session.candidateId, issue.field)
     }))))
-  })
+  }))
 }
 
 export function moduleIssueCount(module) {

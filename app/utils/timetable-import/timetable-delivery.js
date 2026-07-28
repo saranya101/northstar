@@ -3,8 +3,9 @@ const TBC_PATTERN = /\bTBC\b/i
 const PHYSICAL_PATTERNS = [
   /\b(?:LT\d+[A-Z]?|LKC-LT|NIE-LT\d+)\b/i,
   /\b(?:TR|SR)\+?\d+[A-Z]?\b/i,
+  /\b(?:ESR|CR)\d+[A-Z]?\b/i,
   /\b[A-Z]\d+(?:-[A-Z0-9]+)+\b/i,
-  /\b(?:SWLAB\d+|SPL|EXAMHALL\s*[A-Z0-9]+|COLLAB\s*\d+|TCT-LT|LHN-TR\+?\d+)\b/i,
+  /\b(?:SWLAB\d+|SPL|EXAMHALL\s*[A-Z0-9]+|COLLAB\s*\d+|TCT-LT|LH[NS]-TR\+?\d+)\b/i,
   /\b(?:AUDITORIUM|SEMINAR ROOM|LECTURE THEATRE|TUTORIAL ROOM|LAB(?:ORATORY)?)\b/i
 ]
 

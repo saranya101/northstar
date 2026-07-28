@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { canConfirmReview, cloneReviewModules, groupReviewSessions, initialExpandedModuleIds, issueTargetId, revealReviewIssue, reviewIssues } from '../app/utils/timetable-import/timetable-review'
+import { applyPublicEnrichmentSuggestion, canConfirmReview, cloneReviewModules, groupReviewSessions, initialExpandedModuleIds, issueTargetId, revealReviewIssue, reviewIssues } from '../app/utils/timetable-import/timetable-review'
 
 const session = overrides => ({ candidateId: 's1', selected: true, classType: 'LECTURE', groupLabel: 'LE', dayOfWeek: 'MONDAY', startMinutes: 540, endMinutes: 600, timeConfirmed: true, timeAlternatives: [], venue: 'LT1', deliveryModeConfirmed: true, recurrence: 'CUSTOM', recurrenceConfirmed: true, weekNumbers: [1, 3], ...overrides })
 const module = overrides => ({ candidateId: 'm1', selected: true, code: 'AB1201', title: 'Test module', academicUnits: 3, indexNumber: '12345', publicEnrichmentConfirmed: true, sessions: [], ...overrides })
@@ -36,6 +36,43 @@ describe('timetable review presentation', () => {
   it('keeps confirmation disabled for a semester mismatch', () => {
     expect(canConfirmReview([module({})], 0, 'MISMATCH')).toBe(false)
     expect(canConfirmReview([module({})], 0, 'MATCH')).toBe(true)
+  })
+
+  it('reports each structural mismatch and blocks confirmation', () => {
+    const modules = [
+      module({ candidateId: 'm1', titleNeedsReview: true, examCandidate: null }),
+      module({ candidateId: 'm2', code: 'AB1201', indexNumber: '12345', academicUnits: 2, examCandidate: null })
+    ]
+    const draft = { sourceSummary: { moduleCount: 6, totalAcademicUnits: 16 }, structure: { gridVisible: true, gridModuleCodes: ['AB1201', 'AD1102'], examRowsDetected: 6 } }
+    const issues = reviewIssues(modules, draft)
+    expect(issues.map(item => item.label)).toEqual(expect.arrayContaining([
+      expect.stringContaining('6 courses'),
+      expect.stringContaining('16 AU'),
+      'A visible weekly grid produced no sessions',
+      expect.stringContaining('AD1102'),
+      expect.stringContaining('exam rows'),
+      'Review the visibly truncated title',
+      expect.stringContaining('Duplicate module/index')
+    ]))
+    expect(canConfirmReview(modules, issues.length, 'MATCH')).toBe(false)
+  })
+
+  it('applies only public title metadata and preserves index-specific timetable data', () => {
+    const imported = module({
+      code: 'AB1501', title: 'arketing', academicUnits: 3, indexNumber: '00879', registrationStatus: 'REGISTERED',
+      titleNeedsReview: true, examCandidate: { applicable: false, rawText: 'Not Applicable' },
+      sessions: [session({ groupLabel: '19', venue: 'TR+110', weekNumbers: [2, 3, 4] })]
+    })
+    applyPublicEnrichmentSuggestion(imported, {
+      available: true, title: 'Marketing', academicUnits: 3, description: null, gradingBasis: null, school: null,
+      officialUrl: 'https://www.ntu.edu.sg/', fieldProvenance: {}, verificationStatus: 'PUBLIC_SOURCE_CONFLICT'
+    })
+    expect(imported).toMatchObject({
+      title: 'Marketing', indexNumber: '00879', registrationStatus: 'REGISTERED',
+      examCandidate: { applicable: false, rawText: 'Not Applicable' },
+      sessions: [{ groupLabel: '19', venue: 'TR+110', weekNumbers: [2, 3, 4] }],
+      titleNeedsReview: false, publicEnrichmentConfirmed: true
+    })
   })
 
   it('clones a reloaded draft without losing candidate IDs or variants', () => {

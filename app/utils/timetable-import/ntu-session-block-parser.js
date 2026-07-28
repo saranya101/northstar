@@ -20,10 +20,10 @@ export function parseNtuSessionBlock(text, base = {}) {
     .trim()
   if (/^NBS\s+ONLINE$/i.test(remainder)) remainder = ''
   else remainder = remainder.replace(/\b(?:ONLINE|ZOOM|MS\s*TEAMS|TEAMS)\b/ig, '').trim()
-  const venue = deliveryMode === 'TBC' ? 'TBC' : hasPhysicalVenue(remainder) ? remainder.replace(/^;+|;+$/g, '').trim() : null
+  const venue = deliveryMode === 'TBC' ? 'TBC' : deliveryMode === 'ONLINE' && !remainder.replace(/;/g, '').trim() ? 'ONLINE' : hasPhysicalVenue(remainder) ? remainder.replace(/^;+|;+$/g, '').trim() : null
   const warnings = [...(base.warnings || [])]
   if (week.warning) warnings.push(week.warning)
-  if (!week.matched) warnings.push('Week pattern needs confirmation.')
+  if (!week.matched && !base.defaultWeekly) warnings.push('Week pattern needs confirmation.')
   if (deliveryMode === 'UNKNOWN') warnings.push('Delivery mode needs confirmation.')
   const startMinutes = base.startMinutes ?? null
   const endMinutes = base.endMinutes ?? null
@@ -42,7 +42,7 @@ export function parseNtuSessionBlock(text, base = {}) {
     deliveryMode,
     deliveryModeConfirmed: deliveryMode !== 'UNKNOWN',
     recurrence: week.recurrence || 'WEEKLY',
-    recurrenceConfirmed: Boolean(week.recurrence) || /\b(?:WEEKLY|EVERY\s+WEEK)\b/i.test(value),
+    recurrenceConfirmed: Boolean(week.recurrence) || Boolean(base.defaultWeekly) || /\b(?:WEEKLY|EVERY\s+WEEK)\b/i.test(value),
     weekNumbers: week.weekNumbers,
     confidence: base.confidence ?? (week.warning ? 0.35 : 0.7),
     selected: true,

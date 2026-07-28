@@ -26,13 +26,15 @@ function minutesAtY(y, times, rowHeight) {
   return value >= 480 && value <= 1410 ? value : null
 }
 
-function explicitTimeRange(text) {
-  const candidates = String(text || '').match(/\d[\d\sTOoIl|:–—-]{6,20}\d/g) || []
+export function explicitTimeRange(text) {
+  const value = String(text || '')
+  const candidates = [
+    ...value.matchAll(/(?:^|\D)(\d{4})\s*(?:TO|T0|[-–—])\s*(\d{4})(?=\D|$)/gi),
+    ...value.matchAll(/(?:^|\D)(\d{4})(\d{4})(?=\D|$)/g)
+  ]
   for (const candidate of candidates) {
-    const digits = candidate.replace(/\D/g, '')
-    if (digits.length < 8) continue
-    const startText = digits.slice(0, 4)
-    const endText = digits.slice(-4)
+    const startText = candidate[1]
+    const endText = candidate[2]
     const startMinutes = parseTime(startText)
     const endMinutes = parseTime(endText, { end: true })
     if (startMinutes !== null && endMinutes !== null && startMinutes >= 480 && endMinutes <= 1410 && endMinutes > startMinutes) return { startMinutes, endMinutes }
@@ -53,7 +55,14 @@ function textFromWords(words) {
 
 function weekdayColumns(positionedWords, region) {
   const dayOrder = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY']
-  const detected = positionedWords.map(word => ({ ...word, day: normalizeDay(clean(word.text)) })).filter(word => dayOrder.includes(word.day) && word.y <= region.y0 + Math.max(70, (region.y1 - region.y0) * 0.08)).sort((left, right) => left.x - right.x)
+  const headerCandidates = positionedWords.map(word => ({ ...word, day: normalizeDay(clean(word.text)) })).filter(word => dayOrder.includes(word.day))
+  const headerRows = []
+  for (const word of headerCandidates) {
+    let row = headerRows.find(item => Math.abs(item.y - word.y) <= 20)
+    if (!row) { row = { y: word.y, words: [] }; headerRows.push(row) }
+    row.words.push(word)
+  }
+  const detected = (headerRows.sort((left, right) => new Set(right.words.map(word => word.day)).size - new Set(left.words.map(word => word.day)).size || left.y - right.y)[0]?.words || []).sort((left, right) => left.x - right.x)
   if (detected.length < 4) return []
   const steps = []
   for (let left = 0; left < detected.length; left += 1) for (let right = left + 1; right < detected.length; right += 1) { const difference = dayOrder.indexOf(detected[right].day) - dayOrder.indexOf(detected[left].day); if (difference > 0) steps.push((detected[right].x - detected[left].x) / difference) }
@@ -134,17 +143,14 @@ export function parseNtuGrid(words = [], source = 'NTU_TIMETABLE_IMAGE', blocks 
       const lastWordBottom = Math.max(...chunkWords.map(word => word.bbox.y1))
       const geometryEnd = minutesAtY(lastWordBottom, labels, rowHeight)
       const geometryValid = geometryStart !== null && geometryEnd !== null && geometryEnd > geometryStart
-      const conflict = Boolean(explicit && geometryValid && (Math.abs(explicit.startMinutes - geometryStart) > 30 || Math.abs(explicit.endMinutes - geometryEnd) > 60))
+      const geometryDisagrees = Boolean(explicit && geometryValid && (Math.abs(explicit.startMinutes - geometryStart) > 30 || Math.abs(explicit.endMinutes - geometryEnd) > 60))
       const warnings = ['Day was assigned from the detected timetable column.']
       if (!explicit) warnings.push('Time was inferred from grid geometry because no clear time text was read.')
-      if (conflict) warnings.push(`Time conflict: cell text indicates ${explicit.startMinutes}-${explicit.endMinutes}, while grid geometry indicates ${geometryStart}-${geometryEnd}.`)
+      if (geometryDisagrees) warnings.push('The explicit time printed in the class block was preferred over approximate grid geometry.')
       const startMinutes = explicit?.startMinutes ?? geometryStart
       const endMinutes = explicit?.endMinutes ?? (geometryValid ? geometryEnd : null)
-      const timeAlternatives = conflict ? [
-        { source: 'EXPLICIT_TEXT', startMinutes: explicit.startMinutes, endMinutes: explicit.endMinutes, confidence: 0.9, label: 'Time printed in cell', reason: 'Read directly from the timetable cell.', warnings: [] },
-        { source: 'GRID_GEOMETRY', startMinutes: geometryStart, endMinutes: geometryEnd, confidence: 0.62, label: 'Time from grid position', reason: 'Inferred from the cell position against the timetable rows.', warnings: [] }
-      ] : []
-      const parsed = parseNtuSessionBlock(text, { dayOfWeek: column.day, startMinutes, endMinutes, timeConfirmed: !conflict && startMinutes !== null && endMinutes !== null, timeAlternatives, confidence: explicit && !conflict ? 0.9 : 0.62, warnings })
+      const timeAlternatives = []
+      const parsed = parseNtuSessionBlock(text, { dayOfWeek: column.day, startMinutes, endMinutes, timeConfirmed: startMinutes !== null && endMinutes !== null, timeAlternatives, defaultWeekly: true, confidence: explicit ? 0.9 : 0.62, warnings })
       if (!parsed) {
         unmatchedTimetableText.push({ candidateId: candidateId('unmatched'), text, selected: false, attachToCandidateId: null, warnings: ['A registered module code was seen, but the class details could not be reconstructed.'] })
         continue

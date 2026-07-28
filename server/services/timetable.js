@@ -1,6 +1,7 @@
 import { createError } from 'h3'
 import { prisma } from '../utils/prisma'
 import { requireModuleContext } from './modules'
+import { timetableStructureIssues } from '../../shared/utils/timetable-structure'
 
 const SESSION_INCLUDE = { userModuleEnrolment: { include: { offering: { include: { module: true, academicTerm: true } } } } }
 
@@ -104,6 +105,7 @@ export async function confirmTimetableImport(userId, id, input, database = prism
     if (record.userSemesterId !== activeSemester.id) throw domainError(409, 'This import targets a different semester. Cancel it and review the upload again after selecting the matching semester.')
     const semesterStatus = sourceSemesterStatus(record.candidatePayload.sourceSemester, activeSemester.academicTerm)
     if (semesterStatus !== 'MATCH') throw domainError(409, semesterStatus === 'MISMATCH' ? `Semester mismatch: the upload is for ${record.candidatePayload.sourceSemester.displayLabel}, but the selected target is ${activeSemester.academicTerm.academicYear} ${activeSemester.academicTerm.name}.` : 'Select a target semester explicitly before confirming this import.')
+    if (timetableStructureIssues(input.modules, record.candidatePayload).length) throw domainError(409, 'Resolve the structural timetable import issues before confirming.')
     let modulesCreated = 0
     let modulesReused = 0
     let sessionsCreated = 0

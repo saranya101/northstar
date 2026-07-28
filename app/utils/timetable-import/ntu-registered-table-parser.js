@@ -19,6 +19,11 @@ function canonicalCode(value) {
   return /^[A-Z]{2}\d{4}$/.test(result) ? result : null
 }
 
+function registeredCode(value) {
+  const raw = clean(value)
+  return /^[A-Z]{2}\d{4}$/.test(raw) ? raw : null
+}
+
 function substitutionCost(left, right) {
   if (left === right) return 0
   if (digit(left) === right || digit(right) === left) return 0.15
@@ -76,7 +81,12 @@ function columnWords(words, column, row) {
 }
 
 function selectTitle(tableValue, refinedValue) {
-  const cleanTitle = value => String(value || '').replace(/^[^A-Z0-9]+|[^A-Z0-9.)]+$/gi, '').replace(/\s+/g, ' ').trim()
+  const cleanTitle = value => String(value || '')
+    .replace(/^[|_]+/, '')
+    .replace(/\s*[*~#]+\s*$/g, '')
+    .replace(/[|_]+\s*$/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
   const table = cleanTitle(tableValue)
   const refined = cleanTitle(refinedValue)
   const tableWords = table.split(/\s+/).filter(Boolean).length
@@ -87,8 +97,9 @@ function selectTitle(tableValue, refinedValue) {
   return refined || table || null
 }
 
-function parseExam(rawText) {
+export function parseNtuExam(rawText) {
   const raw = rawText.replace(/\s+/g, ' ').trim()
+  if (!raw) return null
   if (/NOT\s+APPLICABLE/i.test(raw)) return { applicable: false, rawText: 'Not Applicable', date: null, startMinutes: null, endMinutes: null, confidence: 0.95 }
   const dateMatch = raw.match(/(\d{2})-([A-Z]{3})-(\d{4})/i)
   const clockDigits = raw.replace(dateMatch?.[0] || '', '').replace(/[^0-9]/g, '')
@@ -113,7 +124,7 @@ function parseExam(rawText) {
     break
   }
   const validRange = parsedStart !== null && parsedEnd !== null && parsedEnd > parsedStart
-  return { applicable: Boolean(date || parsedStart !== null), rawText: raw, date, startMinutes: validRange ? parsedStart : null, endMinutes: validRange ? parsedEnd : null, confidence: date && validRange ? 0.92 : 0.45 }
+  return { applicable: true, rawText: raw, date, startMinutes: validRange ? parsedStart : null, endMinutes: validRange ? parsedEnd : null, confidence: date && validRange ? 0.92 : 0.45 }
 }
 
 export function extractSourceSemester(words = []) {
@@ -133,11 +144,11 @@ export function parseNtuRegisteredTable(words = [], region, gridWords = [], refi
   const pool = gridCodePool(gridWords)
   const used = new Set()
   const modules = []
-  const reservedDirectCodes = new Set(geometry.rows.map(row => canonicalCode(wordsText(columnWords(scoped, geometry.columns.course, row)))).filter(code => code && pool.includes(code)))
+  const reservedDirectCodes = new Set(geometry.rows.map(row => registeredCode(wordsText(columnWords(scoped, geometry.columns.course, row)))).filter(Boolean))
   for (const [rowIndex, row] of geometry.rows.entries()) {
     const rawCode = wordsText(columnWords(scoped, geometry.columns.course, row))
-    const direct = canonicalCode(rawCode)
-    let code = direct && pool.includes(direct) ? direct : null
+    const direct = registeredCode(rawCode)
+    let code = direct
     if (!code) {
       const choices = pool.filter(value => !used.has(value) && !reservedDirectCodes.has(value)).map(value => ({ value, distance: ocrDistance(rawCode, value) })).sort((left, right) => left.distance - right.distance)
       if (choices[0] && choices[0].distance <= Math.max(2.5, clean(rawCode).length * 0.62)) code = choices[0].value
@@ -153,19 +164,23 @@ export function parseNtuRegisteredTable(words = [], region, gridWords = [], refi
     const auText = wordsText(columnWords(scoped, geometry.columns.academicUnits, row))
     const academicUnits = Number(auText.match(/\d+(?:\.\d+)?/)?.[0]) || null
     const statusText = wordsText(columnWords(scoped, geometry.columns.status, row))
-    const examCandidate = parseExam(wordsText(columnWords(scoped, geometry.columns.exam, row)))
+    const examText = wordsText(columnWords(scoped, geometry.columns.exam, row))
+    const examCandidate = parseNtuExam(examText)
+    const titleNeedsReview = Boolean(title && /^[a-z]/.test(title))
     modules.push({
       candidateId: candidateId('module'), code, title, academicUnits, indexNumber, courseType: null,
       registrationStatus: /REGISTER/i.test(statusText) ? 'REGISTERED' : 'UNKNOWN', confidence: 0.9, selected: true, sessions: [],
       examCandidate, fieldProvenance: { code: 'REGISTERED_COURSE_TABLE', title: 'REGISTERED_COURSE_TABLE', academicUnits: 'REGISTERED_COURSE_TABLE', indexNumber: 'REGISTERED_COURSE_TABLE', registrationStatus: 'REGISTERED_COURSE_TABLE', examCandidate: 'REGISTERED_COURSE_TABLE' },
-      corrections, publicEnrichment: null, publicEnrichmentConfirmed: true
+      corrections, publicEnrichment: null, publicEnrichmentConfirmed: true, titleNeedsReview
     })
   }
   const totalWords = geometry.total ? scoped.filter(word => centre(word).y >= geometry.total.bbox.y0 - 5) : []
   const totalText = wordsText(totalWords)
   const count = Number(totalText.match(/TOTAL\s+(\d+)/i)?.[1]) || null
   const totalAcademicUnits = Number(totalText.match(/(?:COURSE\(S\)\s*)?(\d+)\s*AU/i)?.[1]) || modules.reduce((sum, module) => sum + (module.academicUnits || 0), 0)
-  return { modules, sourceSemester: extractSourceSemester(scoped), sourceSummary: { moduleCount: count, totalAcademicUnits }, geometry, warnings: modules.length !== count && count ? [`The table reports ${count} courses, but ${modules.length} rows were reconstructed.`] : [] }
+  const examRowsDetected = geometry.headers.exam ? geometry.rows.length : 0
+  const examRowsReconstructed = modules.filter(module => module.examCandidate && (!module.examCandidate.applicable || (module.examCandidate.date && module.examCandidate.startMinutes !== null && module.examCandidate.endMinutes !== null))).length
+  return { modules, sourceSemester: extractSourceSemester(scoped), sourceSummary: { moduleCount: count, totalAcademicUnits }, examRowsDetected, examRowsReconstructed, geometry, warnings: modules.length !== count && count ? [`The table reports ${count} courses, but ${modules.length} rows were reconstructed.`] : [] }
 }
 
 export { canonicalCode }
