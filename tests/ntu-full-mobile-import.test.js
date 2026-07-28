@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { parseNtuTimetableImage } from '../app/utils/timetable-import/ntu-timetable-image-parser'
 import { explicitTimeRange, parseNtuGrid } from '../app/utils/timetable-import/ntu-grid-parser'
+import { parseNtuSessionBlock } from '../app/utils/timetable-import/ntu-session-block-parser'
 import { matchAllowedCode, parseNtuExam } from '../app/utils/timetable-import/ntu-registered-table-parser'
-import { reviewIssues } from '../app/utils/timetable-import/timetable-review'
+import { canConfirmReview, reviewIssues } from '../app/utils/timetable-import/timetable-review'
 import { findTimetableConflicts } from '../app/utils/timetable-import/timetable-conflicts'
 import { createTimetableImportSchema } from '../shared/schemas/timetable'
 import { ntuFullMobileOcrFixture } from './fixtures/ntu-full-mobile-ocr'
@@ -38,6 +39,7 @@ describe('full NTU WISH mobile screenshot import', () => {
   it('creates nine separate sessions using explicit printed time ranges', () => {
     const sessions = result.modules.flatMap(module => module.sessions.map(session => ({ code: module.code, ...session })))
     expect(sessions).toHaveLength(9)
+    expect(result.structure).toMatchObject({ detectedSessionBlockCount: 9, droppedSessionBlockCount: 0 })
     expect(Object.fromEntries(result.modules.map(module => [module.code, module.sessions.length]))).toEqual({ AD1102: 1, HE5091: 2, AB0403: 1, AB1201: 1, AB1088: 2, AB1501: 2 })
     expect(sessions).toEqual(expect.arrayContaining([
       expect.objectContaining({ code: 'HE5091', dayOfWeek: 'MONDAY', startMinutes: 510, endMinutes: 620, venue: 'LT2A' }),
@@ -78,6 +80,55 @@ describe('full NTU WISH mobile screenshot import', () => {
     expect(grid.modules[0].sessions).toHaveLength(1)
     expect(grid.modules[0].sessions[0]).toMatchObject({ dayOfWeek: 'TUESDAY', venue: null, startMinutes: 510, endMinutes: 620 })
     expect(grid.unmatchedTimetableText.map(item => item.text)).toContain('S4-SR2')
+  })
+
+  it('uses complementary OCR passes without duplicating sessions', () => {
+    expect(ntuFullMobileOcrFixture.words.map(word => word.text)).toEqual(expect.arrayContaining(['Heat', 'Fr']))
+    expect(ntuFullMobileOcrFixture.words.map(word => word.text)).not.toEqual(expect.arrayContaining(['LT2A', 'S4-SR20']))
+    expect(result.modules.flatMap(module => module.sessions)).toHaveLength(9)
+    const repeated = parseNtuTimetableImage({ ...ntuFullMobileOcrFixture, wordVariants: [ntuFullMobileOcrFixture.wordVariants[0], ntuFullMobileOcrFixture.wordVariants[0]] })
+    expect(repeated.modules.flatMap(module => module.sessions)).toHaveLength(9)
+  })
+
+  it('tolerates edge offsets but rejects equally plausible cross-column boxes', () => {
+    const word = (text, x, y, width = 40) => ({ text, bbox: { x0: x, y0: y, x1: x + width, y1: y + 14 } })
+    const headers = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'].map((day, index) => word(day, 100 + index * 200, 20))
+    const grid = parseNtuGrid([
+      ...headers,
+      word('0830', -30, 100), word('0930', -30, 180), word('1330', -30, 300), word('1630', -30, 420),
+      word('HE5091', 18, 110, 105), word('LEC/STU LEC2', 40, 128, 110), word('LT2A', 45, 146), word('0830to1020', 45, 164, 90),
+      word('AD1102', 870, 310, 105), word('SEM 14', 885, 328, 70), word('54-', 900, 346), word('SR20', 900, 364), word('1330to1620', 885, 382, 90),
+      word('S4-SR99', 320, 140, 200)
+    ], 'NTU_TIMETABLE_IMAGE', [], { allowedCodes: ['HE5091', 'AD1102'], region: { x0: 0, y0: 10, x1: 1200, y1: 500 } })
+    expect(grid.modules.find(module => module.code === 'HE5091').sessions[0]).toMatchObject({ dayOfWeek: 'MONDAY', startMinutes: 510, endMinutes: 620, venue: 'LT2A' })
+    expect(grid.modules.find(module => module.code === 'AD1102').sessions[0]).toMatchObject({ dayOfWeek: 'FRIDAY', startMinutes: 810, endMinutes: 980, venue: 'S4-SR20' })
+    expect(grid.modules.flatMap(module => module.sessions).map(session => session.venue)).not.toContain('S4-SR99')
+  })
+
+  it('normalises only the observed NTU room-code OCR pattern', () => {
+    expect(parseNtuSessionBlock('AD1102 SEM 14 54- SR20 1330to1620', { dayOfWeek: 'FRIDAY', startMinutes: 810, endMinutes: 980, defaultWeekly: true, codeTokens: ['AD1102'] })).toMatchObject({ groupLabel: '14', venue: 'S4-SR20' })
+  })
+
+  it.each([
+    ['HE5091', 'MONDAY', 'HE5091 has 2 visible class blocks, but only 1 session was reconstructed'],
+    ['AD1102', 'FRIDAY', 'AD1102 has 1 visible class block, but only 0 sessions were reconstructed']
+  ])('blocks confirmation when the %s class block is missing', (code, day, expected) => {
+    const incomplete = structuredClone(result)
+    incomplete.modules.find(module => module.code === code).sessions = incomplete.modules.find(module => module.code === code).sessions.filter(session => session.dayOfWeek !== day)
+    const issues = reviewIssues(incomplete.modules, incomplete)
+    expect(issues.map(issue => issue.label)).toContain(expected)
+    expect(issues.some(issue => issue.field === 'structure')).toBe(true)
+    expect(canConfirmReview(incomplete.modules, issues.length, 'MATCH')).toBe(false)
+  })
+
+  it('blocks confirmation for a strong unmatched class block without a reusable module anchor', () => {
+    const incomplete = structuredClone(result)
+    incomplete.structure.detectedSessionBlocks = {}
+    incomplete.structure.detectedSessionBlockCount = 10
+    incomplete.structure.droppedSessionBlockCount = 1
+    const issues = reviewIssues(incomplete.modules, incomplete)
+    expect(issues.map(issue => issue.label)).toContain('1 recognised class block was dropped during validation')
+    expect(canConfirmReview(incomplete.modules, issues.length, 'MATCH')).toBe(false)
   })
 
   it('is schema-valid and has no structural issue beyond the truncated title review', () => {

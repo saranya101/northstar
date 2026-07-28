@@ -43,13 +43,14 @@ describe('timetable review presentation', () => {
       module({ candidateId: 'm1', titleNeedsReview: true, examCandidate: null }),
       module({ candidateId: 'm2', code: 'AB1201', indexNumber: '12345', academicUnits: 2, examCandidate: null })
     ]
-    const draft = { sourceSummary: { moduleCount: 6, totalAcademicUnits: 16 }, structure: { gridVisible: true, gridModuleCodes: ['AB1201', 'AD1102'], examRowsDetected: 6 } }
+    const draft = { sourceSummary: { moduleCount: 6, totalAcademicUnits: 16 }, structure: { gridVisible: true, gridModuleCodes: ['AB1201', 'AD1102'], detectedSessionBlocks: { AB1201: 1 }, droppedSessionBlockCount: 1, examRowsDetected: 6 } }
     const issues = reviewIssues(modules, draft)
     expect(issues.map(item => item.label)).toEqual(expect.arrayContaining([
       expect.stringContaining('6 courses'),
       expect.stringContaining('16 AU'),
       'A visible weekly grid produced no sessions',
       expect.stringContaining('AD1102'),
+      expect.stringContaining('visible class block'),
       expect.stringContaining('exam rows'),
       'Review the visibly truncated title',
       expect.stringContaining('Duplicate module/index')

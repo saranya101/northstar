@@ -44,8 +44,20 @@ rows.forEach((row, index) => {
 word('Total', 28, 1850); word('6', 118, 1850); word('Course(s)', 145, 1850); word('16', 650, 1850); word('AU(s)', 678, 1850)
 word('Legend', 1000, 1900); word('Registered', 1000, 1920)
 
+const normalWords = words.map(item => ({ ...item, bbox: { ...item.bbox } }))
+const highContrastWords = normalWords.filter(item => !(
+  (item.bbox.y0 >= 310 && item.bbox.y0 <= 346 && item.bbox.x0 < 370 && ['HE5091', 'LT2A'].includes(item.text))
+  || (item.bbox.y0 >= 710 && item.bbox.y0 <= 790 && item.bbox.x0 >= 800 && ['AD1102', 'S4-SR20'].includes(item.text))
+))
+highContrastWords.push(
+  { text: 'Heat', confidence: 0.61, bbox: { x0: 215, y0: 310, x1: 271, y1: 362 } },
+  { text: 'Fr', confidence: 0.58, bbox: { x0: 835, y0: 710, x1: 895, y1: 746 } },
+  { text: '54-', confidence: 0.78, bbox: { x0: 888, y0: 710, x1: 910, y1: 726 } }
+)
+
 export const ntuFullMobileOcrFixture = {
-  words,
+  words: highContrastWords,
+  wordVariants: [normalWords],
   refinedTitles: rows.map(row => row.title.join(' ')),
   dimensions: { width: 1200, height: 2100 }
 }

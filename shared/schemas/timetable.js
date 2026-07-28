@@ -112,7 +112,15 @@ export const timetableCandidateSchema = z.object({
   modules: z.array(timetableModuleCandidateSchema).min(1).max(100),
   sourceSemester: sourceSemesterSchema.nullable().default(null),
   sourceSummary: z.object({ moduleCount: z.coerce.number().int().min(0).max(100).nullable(), totalAcademicUnits: z.coerce.number().min(0).max(500).nullable() }).strict().nullable().default(null),
-  structure: z.object({ gridVisible: z.boolean(), gridModuleCodes: z.array(z.string().regex(/^[A-Z]{2}\d{4}$/)).max(100), examRowsDetected: z.coerce.number().int().min(0).max(100), examRowsReconstructed: z.coerce.number().int().min(0).max(100).default(0) }).strict().nullable().default(null),
+  structure: z.object({
+    gridVisible: z.boolean(),
+    gridModuleCodes: z.array(z.string().regex(/^[A-Z]{2}\d{4}$/)).max(100),
+    detectedSessionBlocks: z.record(z.string().regex(/^[A-Z]{2}\d{4}$/), z.coerce.number().int().min(0).max(100)).default({}),
+    detectedSessionBlockCount: z.coerce.number().int().min(0).max(100).default(0),
+    droppedSessionBlockCount: z.coerce.number().int().min(0).max(100).default(0),
+    examRowsDetected: z.coerce.number().int().min(0).max(100),
+    examRowsReconstructed: z.coerce.number().int().min(0).max(100).default(0)
+  }).strict().nullable().default(null),
   unmatchedTimetableText: z.array(z.object({ candidateId: candidateIdSchema, text: z.string().trim().min(1).max(1000), selected: z.boolean().default(false), attachToCandidateId: candidateIdSchema.nullable().default(null), warnings: z.array(z.string().trim().min(1).max(200)).max(10).default([]) }).strict()).max(100).default([]),
   segmentation: z.object({ confidence: confidenceSchema, warnings: z.array(z.string().trim().min(1).max(200)).max(20).default([]) }).strict().nullable().default(null),
   warnings: z.array(z.string().trim().min(1).max(200)).max(50).default([])

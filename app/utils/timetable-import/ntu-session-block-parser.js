@@ -4,6 +4,14 @@ import { parseWeekExpression } from './week-expression'
 
 const CLASS_PATTERN = /\b(LEC(?:TURE)?(?:\/STU)?|TUT(?:ORIAL)?|SEM(?:INAR)?|LAB(?:ORATORY)?|PRJ|PROJECT|DES|WORKSHOP|FIELDWORK)(?:\s*\/\s*STU)?\s*((?:[A-Z]{1,4}\d+)|LE|\d+)?/i
 
+function normaliseNtuVenue(value) {
+  return String(value || '')
+    .replace(/\s*([+-])\s*/g, '$1')
+    .replace(/\b54-(SR\d+)\b/gi, 'S4-$1')
+    .replace(/[-;,]+\s*$/g, '')
+    .trim()
+}
+
 export function parseNtuSessionBlock(text, base = {}) {
   const value = String(text || '').replace(/\s+/g, ' ').trim()
   const classMatch = value.match(CLASS_PATTERN)
@@ -22,7 +30,8 @@ export function parseNtuSessionBlock(text, base = {}) {
   if (codeTokens.size) remainder = remainder.split(/\s+/).filter(token => !codeTokens.has(token.toUpperCase().replace(/[^A-Z0-9]/g, ''))).join(' ').trim()
   if (/^NBS\s+ONLINE$/i.test(remainder)) remainder = ''
   else remainder = remainder.replace(/\b(?:ONLINE|ZOOM|MS\s*TEAMS|TEAMS)\b/ig, '').trim()
-  const venue = deliveryMode === 'TBC' ? 'TBC' : deliveryMode === 'ONLINE' && !remainder.replace(/;/g, '').trim() ? 'ONLINE' : hasPhysicalVenue(remainder) ? remainder.replace(/^;+|;+$/g, '').trim() : null
+  const normalisedRemainder = normaliseNtuVenue(remainder.replace(/^;+|;+$/g, ''))
+  const venue = deliveryMode === 'TBC' ? 'TBC' : deliveryMode === 'ONLINE' && !normalisedRemainder ? 'ONLINE' : hasPhysicalVenue(normalisedRemainder) ? normalisedRemainder : null
   const warnings = [...(base.warnings || [])]
   if (week.warning) warnings.push(week.warning)
   if (!week.matched && !base.defaultWeekly) warnings.push('Week pattern needs confirmation.')

@@ -14,6 +14,15 @@ export function timetableStructureIssues(modules = [], draft = {}) {
   if (structure?.gridVisible && sessions.length === 0) issues.push(issue('zero-sessions', 'A visible weekly grid produced no sessions'))
   const moduleCodes = new Set(modules.map(module => module.code))
   for (const code of structure?.gridModuleCodes || []) if (!moduleCodes.has(code)) issues.push(issue(`missing-grid-${code}`, `${code} appears in the grid but has no registered-course candidate`, code))
+  let sessionStructureMismatch = false
+  for (const [code, detected] of Object.entries(structure?.detectedSessionBlocks || {})) {
+    const reconstructed = modules.find(module => module.code === code)?.sessions?.length || 0
+    if (detected > reconstructed) {
+      sessionStructureMismatch = true
+      issues.push(issue(`missing-session-${code}`, `${code} has ${detected} visible class block${detected === 1 ? '' : 's'}, but only ${reconstructed} session${reconstructed === 1 ? ' was' : 's were'} reconstructed`, code))
+    }
+  }
+  if (!sessionStructureMismatch && structure?.droppedSessionBlockCount > 0) issues.push(issue('dropped-session-blocks', `${structure.droppedSessionBlockCount} recognised class block${structure.droppedSessionBlockCount === 1 ? ' was' : 's were'} dropped during validation`))
   const examRowsReconstructed = structure?.examRowsReconstructed ?? modules.filter(module => module.examCandidate !== null && module.examCandidate !== undefined).length
   if (structure?.examRowsDetected > examRowsReconstructed) issues.push(issue('exam-rows', `${structure.examRowsDetected} exam rows were visible, but only ${examRowsReconstructed} were reconstructed`))
   for (const module of modules) if (module.titleNeedsReview) issues.push({ ...issue(`title-${module.candidateId}`, 'Review the visibly truncated title', module.code), moduleCandidateId: module.candidateId, field: 'title', targetId: `review-${module.candidateId}-title` })

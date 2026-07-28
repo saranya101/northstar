@@ -89,14 +89,15 @@ export async function extractImage(file, options = {}) {
       options.onProgress?.({ label: index ? 'Checking table detail' : 'Reading timetable structure', progress: 0.15 + index * 0.25 })
       results.push(normaliseExtraction(await extractor.recognise(await canvasBlob(canvas)), 2))
     }
-    const best = results.sort((left, right) => extractionScore(right) - extractionScore(left))[0]
+    const rankedResults = [...results].sort((left, right) => extractionScore(right) - extractionScore(left))
+    const best = rankedResults[0]
     const dimensions = { width: bitmap.width, height: bitmap.height }
     const headerRegion = { x0: 0, y0: bitmap.height * 0.01, x1: bitmap.width, y1: bitmap.height * 0.075 }
     const headerCanvas = regionCanvas(bitmap, headerRegion, 4)
     canvases.push(headerCanvas)
     const headerExtraction = placeRegionExtraction(await extractor.recognise(await canvasBlob(headerCanvas), { pageSegmentationMode: '11' }), headerRegion, 4)
     const safeHeaderWords = headerExtraction.words.filter(word => /^(?:TIME\\?DAY|TIMEDAY|MON|TUE|WED|THU|FRI|SAT)$/i.test(word.text.replace(/[^A-Z\\]/gi, '')))
-    best.words = [...best.words, ...safeHeaderWords]
+    for (const result of results) result.words = [...result.words, ...safeHeaderWords]
     const initialRegions = detectNtuImageRegions(best.words, dimensions)
     const tableCanvas = regionCanvas(bitmap, initialRegions.registeredCoursesRegion, 4)
     canvases.push(tableCanvas)
@@ -107,7 +108,14 @@ export async function extractImage(file, options = {}) {
     const regions = detectNtuImageRegions(best.words, dimensions)
     options.onProgress?.({ label: 'Refining registered-course titles', progress: 0.68 })
     const refinedTitles = await refinedTableTitles(extractor, bitmap, best.words, regions, canvases, options.signal)
-    return { ...best, dimensions, regions, refinedTitles, preprocessing: { variants: 4, upscale: 2, grayscaleContrastVariant: true, headerUpscale: 4, tableUpscale: 4, titleCellUpscale: 6, deskewDegrees: 0 } }
+    return {
+      ...best,
+      dimensions,
+      regions,
+      refinedTitles,
+      wordVariants: rankedResults.filter(result => result !== best).map(result => result.words),
+      preprocessing: { variants: 4, upscale: 2, grayscaleContrastVariant: true, headerUpscale: 4, tableUpscale: 4, titleCellUpscale: 6, deskewDegrees: 0 }
+    }
   } finally {
     for (const canvas of canvases) { canvas.width = 0; canvas.height = 0 }
     bitmap?.close()

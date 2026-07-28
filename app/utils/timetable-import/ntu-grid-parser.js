@@ -79,6 +79,10 @@ function weekdayColumns(positionedWords, region) {
   }))
 }
 
+function columnHeaderBottom(columns) {
+  return Math.max(...columns.map(column => column.header.bbox.y1))
+}
+
 function timeLabels(positionedWords, firstColumnX, region) {
   return positionedWords.filter(word => word.x < firstColumnX && word.y > region.y0 && word.y < region.y1)
     .map(word => ({ ...word, minutes: /^\d{4}$/.test(clean(word.text)) ? parseTime(clean(word.text)) : null }))
@@ -90,10 +94,33 @@ function looksLikeRejectedCode(value) {
   return token.length >= 5 && token.length <= 10 && /[A-Z]/.test(token) && /\d/.test(token) && !/^(?:WK|WKI|WEEK|TR|LT|SR|SCL|LHN|EXAM|SWLAB|LEC|TUT|LAB|SEM|PRJ)/.test(token) && !/^\d{3,4}(?:TO|T0|O)?\d{3,4}$/.test(token)
 }
 
-function overlapsColumn(word, column) {
+const CLASS_FRAGMENT_PATTERN = /\b(?:LEC(?:TURE)?(?:\/STU)?|TUT(?:ORIAL)?|SEM(?:INAR)?|LAB(?:ORATORY)?|PRJ|PROJECT|DES|WORKSHOP|FIELDWORK)\b/i
+
+function strongSessionBlockCount(words, blockExtent) {
+  const explicitTimes = words.filter(word => explicitTimeRange(word.text))
+  const classFragments = words.filter(word => CLASS_FRAGMENT_PATTERN.test(word.text) && explicitTimes.some(time => Math.abs(time.y - word.y) <= blockExtent))
+    .sort((left, right) => left.y - right.y)
+  return classFragments.filter((word, index) => !classFragments.slice(0, index).some(previous => Math.abs(previous.y - word.y) <= 20)).length
+}
+
+function columnOverlap(word, column) {
   const width = Math.max(1, word.bbox.x1 - word.bbox.x0)
   const overlap = Math.max(0, Math.min(word.bbox.x1, column.x1) - Math.max(word.bbox.x0, column.x0))
-  return overlap / width >= 0.5
+  return overlap / width
+}
+
+function assignedColumn(word, columns) {
+  const step = median(columns.slice(1).map((column, index) => column.header.x - columns[index].header.x)) || 1
+  const candidates = columns.map(column => {
+    const overlap = columnOverlap(word, column)
+    const distance = Math.abs(word.x - column.header.x) / step
+    return { column, overlap, distance, score: overlap - distance * 0.2 }
+  }).filter(candidate => candidate.overlap >= 0.2 || candidate.distance <= 0.5)
+    .sort((left, right) => right.score - left.score || left.distance - right.distance)
+  if (!candidates.length) return null
+  const [best, second] = candidates
+  if (second && Math.abs(best.score - second.score) <= 0.02 && Math.abs(best.distance - second.distance) <= 0.05) return null
+  return best.column
 }
 
 function uniqueStarts(words, allowedCodes) {
@@ -141,15 +168,26 @@ export function parseNtuGrid(words = [], source = 'NTU_TIMETABLE_IMAGE', blocks 
   const modules = new Map(allowedCodes.map(code => [code, baseModule(code)]))
   const unmatchedTimetableText = []
   const corrections = []
-  if (!columns.length) return { source, modules: [...modules.values()], unmatchedTimetableText, corrections, warnings: ['Weekday headers could not be reconstructed. No grid sessions were created.'] }
+  if (!columns.length) return { source, modules: [...modules.values()], unmatchedTimetableText, corrections, detectedSessionBlocks: {}, detectedSessionBlockCount: 0, droppedSessionBlockCount: 0, warnings: ['Weekday headers could not be reconstructed. No grid sessions were created.'] }
   const labels = timeLabels(positionedWords, columns[0].x0, region)
   const rowHeight = inferredRowHeight(labels)
+  const wordsByColumn = new Map(columns.map(column => [column.day, []]))
+  for (const word of positionedWords) {
+    if (word.y <= columnHeaderBottom(columns) || word.y >= region.y1) continue
+    const column = assignedColumn(word, columns)
+    if (column) wordsByColumn.get(column.day).push(word)
+  }
+  const detectedSessionBlocks = {}
+  let detectedSessionBlockCount = 0
+  let droppedSessionBlockCount = 0
 
   for (const column of columns) {
-    const columnWords = positionedWords.filter(word => overlapsColumn(word, column) && word.y > column.header.bbox.y1 && word.y < region.y1)
+    const columnWords = wordsByColumn.get(column.day)
     const starts = uniqueStarts(columnWords, allowedCodes)
+    for (const start of starts) detectedSessionBlocks[start.match.code] = (detectedSessionBlocks[start.match.code] || 0) + 1
     const consumed = new Set()
     const blockExtent = Math.max(48, Math.min(120, (rowHeight || 38) * 2.4))
+    detectedSessionBlockCount += strongSessionBlockCount(columnWords, blockExtent)
     for (const [index, start] of starts.entries()) {
       const previousY = starts[index - 1]?.word.y
       const nextY = starts[index + 1]?.word.y
@@ -171,6 +209,7 @@ export function parseNtuGrid(words = [], source = 'NTU_TIMETABLE_IMAGE', blocks 
       const timeAlternatives = []
       const parsed = parseNtuSessionBlock(text, { dayOfWeek: column.day, startMinutes, endMinutes, timeConfirmed: startMinutes !== null && endMinutes !== null, timeAlternatives, defaultWeekly: true, codeTokens: [start.word.text, start.match.code], confidence: explicit ? 0.9 : 0.62, warnings })
       if (!parsed) {
+        droppedSessionBlockCount += 1
         unmatchedTimetableText.push({ candidateId: candidateId('unmatched'), text, selected: false, attachToCandidateId: null, warnings: ['A registered module code was seen, but the class details could not be reconstructed.'] })
         chunkWords.forEach(word => consumed.add(word))
         continue
@@ -190,6 +229,9 @@ export function parseNtuGrid(words = [], source = 'NTU_TIMETABLE_IMAGE', blocks 
   return {
     source,
     modules: [...modules.values()], corrections,
+    detectedSessionBlocks,
+    detectedSessionBlockCount,
+    droppedSessionBlockCount,
     unmatchedTimetableText: unmatchedTimetableText.filter(item => { const key = clean(item.text); if (seenUnmatched.has(key)) return false; seenUnmatched.add(key); return true }),
     warnings: columns.length < 6 ? ['Some timetable weekday columns were not detected.'] : []
   }
