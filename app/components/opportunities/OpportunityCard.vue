@@ -109,11 +109,9 @@ const primaryDate = computed(() => {
   return null
 })
 
-const place = computed(() =>
-  props.opportunity.location
-  || (props.opportunity.mode !== 'UNKNOWN'
-    ? modeLabel.value
-    : ''),
+const hasMode = computed(() =>
+  props.opportunity.mode
+  && props.opportunity.mode !== 'UNKNOWN',
 )
 
 const goalMatches = computed(() =>
@@ -143,6 +141,8 @@ const recommendationReasons = computed(() =>
 const hasDisclosure = computed(() =>
   Boolean(
     portfolio.value?.summary
+    || props.opportunity.location
+    || hasMode.value
     || goalMatches.value.length
     || evidenceIdeas.value.length
     || maximiseActions.value.length
@@ -219,16 +219,12 @@ const hasDisclosure = computed(() =>
     </section>
 
     <dl
-      v-if="primaryDate || place || opportunity.personal"
+      v-if="primaryDate || opportunity.personal"
       class="opportunity-card__meta"
     >
       <div v-if="primaryDate">
         <dt>{{ primaryDate.label }}</dt>
         <dd>{{ formatOpportunityDate(primaryDate.value) }}</dd>
-      </div>
-      <div v-if="place" class="opportunity-card__location">
-        <dt>{{ opportunity.location ? 'Location' : 'Mode' }}</dt>
-        <dd :title="place">{{ place }}</dd>
       </div>
       <div v-if="opportunity.personal">
         <dt>Tracking</dt>
@@ -259,6 +255,20 @@ const hasDisclosure = computed(() =>
         class="opportunity-card__disclosure-content"
       >
         <p v-if="portfolio.summary">{{ portfolio.summary }}</p>
+
+        <dl
+          v-if="opportunity.location || hasMode"
+          class="opportunity-card__secondary-meta"
+        >
+          <div v-if="opportunity.location">
+            <dt>Location</dt>
+            <dd>{{ opportunity.location }}</dd>
+          </div>
+          <div v-if="hasMode">
+            <dt>Mode</dt>
+            <dd>{{ modeLabel }}</dd>
+          </div>
+        </dl>
 
         <div v-if="goalMatches.length">
           <strong>Goals supported</strong>

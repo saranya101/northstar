@@ -2,7 +2,7 @@ import {
   opportunityMatchesSource,
 } from './opportunity-presentation.js'
 
-export const OPPORTUNITY_RESULT_PAGE_SIZE = 12
+export const OPPORTUNITY_RESULT_PAGE_SIZE = 9
 
 const dateValue = (value, fallback) => {
   const timestamp = value ? new Date(value).getTime() : NaN
@@ -72,10 +72,47 @@ export function filterAndSortOpportunities(
   return indexed.map(entry => entry.item)
 }
 
-export function visibleOpportunityResults(
-  items,
-  visibleCount,
+export function paginateOpportunityResults(
+  items = [],
+  requestedPage = 1,
+  pageSize = OPPORTUNITY_RESULT_PAGE_SIZE,
 ) {
+  const uniqueItems = uniqueOpportunities(items)
+  const safePageSize = Math.max(1, pageSize)
+  const pageCount = Math.max(
+    1,
+    Math.ceil(uniqueItems.length / safePageSize),
+  )
+  const page = Math.min(
+    pageCount,
+    Math.max(1, Math.trunc(requestedPage) || 1),
+  )
+  const startIndex = (page - 1) * safePageSize
+  const pageItems = uniqueItems.slice(
+    startIndex,
+    startIndex + safePageSize,
+  )
+
+  return {
+    items: pageItems,
+    page,
+    pageCount,
+    total: uniqueItems.length,
+    rangeStart: pageItems.length ? startIndex + 1 : 0,
+    rangeEnd: startIndex + pageItems.length,
+  }
+}
+
+export function opportunityPreview(
+  items = [],
+  excludedIds = [],
+  limit = 3,
+) {
+  const excluded = excludedIds instanceof Set
+    ? excludedIds
+    : new Set(excludedIds)
+
   return uniqueOpportunities(items)
-    .slice(0, Math.max(0, visibleCount))
+    .filter(item => !excluded.has(item.id))
+    .slice(0, Math.max(0, limit))
 }

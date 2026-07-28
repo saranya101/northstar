@@ -69,12 +69,18 @@ describe('personalised Opportunity Radar UI', () => {
     expect(settings).toContain('radar-settings__savebar')
   })
 
-  it('progressively displays twelve recommendations and resets only for filter changes', () => {
+  it('paginates nine recommendations and resets for material result changes', () => {
     const page = read('app/pages/app/opportunities/index.vue')
-    expect(page).toContain('OPPORTUNITY_RESULT_PAGE_SIZE')
-    expect(page).toContain('Load 12 more')
-    expect(page).toContain('Showing {{ visibleResults.length }} of {{ filteredResults.length }} opportunities')
-    expect(page).toContain('visibleCount.value = OPPORTUNITY_RESULT_PAGE_SIZE')
+    expect(page).toContain('paginateOpportunityResults')
+    expect(page).not.toContain('Load 12 more')
+    expect(page).toContain('Showing {{ paginatedResults.rangeStart }}–{{ paginatedResults.rangeEnd }}')
+    expect(page).toContain('Page {{ paginatedResults.page }} of {{ paginatedResults.pageCount }}')
+    expect(page).toContain(':aria-current=')
+    expect(page).toContain('aria-label="Go to previous page"')
+    expect(page).toContain('aria-label="Go to next page"')
+    expect(page).toContain('currentPage.value = 1')
+    expect(page).toContain('paginationResetSignature')
+    expect(page).toContain('resultIds: filteredResults.value.map(item => item.id)')
     expect(page).toContain('selectedCategory.value')
     expect(page).toContain('selectedMode.value')
     expect(page).toContain('selectedSort.value')
@@ -88,6 +94,29 @@ describe('personalised Opportunity Radar UI', () => {
     expect(css).toMatch(/max-width: 700px[\s\S]*grid-template-columns: minmax\(0, 1fr\)/)
     expect(css).toContain('align-items: start')
     expect(css).toContain('height: auto')
+  })
+
+  it('limits and deduplicates dashboard previews', () => {
+    const page = read('app/pages/app/opportunities/index.vue')
+    expect(page).toContain('visibleResultIds')
+    expect(page).toContain('filteredClosingSoon.value.map(item => item.id)')
+    expect(page).toMatch(/filteredClosingSoon[\s\S]*opportunityPreview\([\s\S]*3/)
+    expect(page).toMatch(/filteredNewest[\s\S]*opportunityPreview\([\s\S]*3/)
+    expect(page).toContain('opportunity-preview-empty')
+  })
+
+  it('uses primary treatment for Add opportunity and secondary treatments for other actions', () => {
+    const page = read('app/pages/app/opportunities/index.vue')
+    const actions = page.slice(
+      page.indexOf('<div class="opportunity-radar-actions">'),
+      page.indexOf('</div>', page.indexOf('<div class="opportunity-radar-actions">')),
+    )
+    expect(actions.indexOf('Add opportunity'))
+      .toBeLessThan(actions.indexOf('Refresh now'))
+    expect(actions).toContain('opportunity-radar-actions__primary')
+    expect(actions).toContain('color="neutral"')
+    expect(actions).toContain('variant="outline"')
+    expect(page).toContain(':disabled="coolingDown"')
   })
 
   it('keeps refresh authenticated without exposing the cron endpoint', () => {

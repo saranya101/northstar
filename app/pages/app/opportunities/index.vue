@@ -12,8 +12,8 @@ import {
 } from '~/utils/opportunity-cadence'
 import {
   filterAndSortOpportunities,
-  OPPORTUNITY_RESULT_PAGE_SIZE,
-  visibleOpportunityResults,
+  opportunityPreview,
+  paginateOpportunityResults,
 } from '~/utils/opportunity-results'
 
 definePageMeta({
@@ -43,7 +43,8 @@ const selectedSource = ref('all')
 const selectedCategory = ref('')
 const selectedMode = ref('')
 const selectedSort = ref('')
-const visibleCount = ref(OPPORTUNITY_RESULT_PAGE_SIZE)
+const currentPage = ref(1)
+const recommendedSection = ref(null)
 const clock = ref(Date.now())
 let cadenceTimer = null
 let clockTimer = null
@@ -77,26 +78,18 @@ const temporaryFilters = computed(() => ({
   sort: effectiveSort.value,
 }))
 
-function preview(items) {
+function filteredPreview(items) {
   return filterAndSortOpportunities(
     items,
     {
       ...temporaryFilters.value,
       sort: 'RECOMMENDED',
     },
-  ).slice(0, 6)
+  )
 }
 
-const filteredClosingSoon = computed(() =>
-  preview(discovery.value?.closingSoon || []),
-)
-
-const filteredNewest = computed(() =>
-  preview(discovery.value?.newest || []),
-)
-
 const filteredSaved = computed(() =>
-  preview(discovery.value?.saved || []),
+  filteredPreview(discovery.value?.saved || []).slice(0, 6),
 )
 
 const filteredResults = computed(() =>
@@ -106,15 +99,59 @@ const filteredResults = computed(() =>
   ),
 )
 
-const visibleResults = computed(() =>
-  visibleOpportunityResults(
+const paginatedResults = computed(() =>
+  paginateOpportunityResults(
     filteredResults.value,
-    visibleCount.value,
+    currentPage.value,
   ),
 )
 
-const hasMoreResults = computed(() =>
-  visibleResults.value.length < filteredResults.value.length,
+const visibleResults = computed(() =>
+  paginatedResults.value.items,
+)
+
+const visibleResultIds = computed(() =>
+  new Set(visibleResults.value.map(item => item.id)),
+)
+
+const filteredClosingSoon = computed(() =>
+  opportunityPreview(
+    filteredPreview(discovery.value?.closingSoon || []),
+    visibleResultIds.value,
+    3,
+  ),
+)
+
+const filteredNewest = computed(() => {
+  const excluded = new Set([
+    ...visibleResultIds.value,
+    ...filteredClosingSoon.value.map(item => item.id),
+  ])
+
+  return opportunityPreview(
+    filteredPreview(discovery.value?.newest || []),
+    excluded,
+    3,
+  )
+})
+
+const pageNumbers = computed(() =>
+  Array.from(
+    { length: paginatedResults.value.pageCount },
+    (_, index) => index + 1,
+  ),
+)
+
+const paginationResetSignature = computed(() =>
+  JSON.stringify({
+    filters: {
+      source: selectedSource.value,
+      category: selectedCategory.value,
+      mode: selectedMode.value,
+      sort: effectiveSort.value,
+    },
+    resultIds: filteredResults.value.map(item => item.id),
+  }),
 )
 
 const hasActiveFilters = computed(() =>
@@ -181,19 +218,37 @@ function clearFilters() {
   selectedSort.value = ''
 }
 
-function loadMore() {
-  visibleCount.value += OPPORTUNITY_RESULT_PAGE_SIZE
+async function changePage(page) {
+  const nextPage = Math.min(
+    paginatedResults.value.pageCount,
+    Math.max(1, page),
+  )
+  if (nextPage === currentPage.value) return
+
+  currentPage.value = nextPage
+  await nextTick()
+  recommendedSection.value?.focus({
+    preventScroll: true,
+  })
+  recommendedSection.value?.scrollIntoView({
+    behavior: 'smooth',
+    block: 'start',
+  })
 }
 
 watch(
-  () => JSON.stringify([
-    selectedSource.value,
-    selectedCategory.value,
-    selectedMode.value,
-    selectedSort.value,
-  ]),
+  paginationResetSignature,
   () => {
-    visibleCount.value = OPPORTUNITY_RESULT_PAGE_SIZE
+    currentPage.value = 1
+  },
+)
+
+watch(
+  () => paginatedResults.value.pageCount,
+  pageCount => {
+    if (currentPage.value > pageCount) {
+      currentPage.value = pageCount
+    }
   },
 )
 
@@ -256,6 +311,13 @@ watch(
       </div>
       <div class="opportunity-radar-actions">
         <UButton
+          to="/app/opportunities/new"
+          icon="i-lucide-plus"
+          class="opportunity-radar-actions__primary"
+        >
+          Add opportunity
+        </UButton>
+        <UButton
           icon="i-lucide-refresh-cw"
           color="neutral"
           variant="outline"
@@ -267,9 +329,6 @@ watch(
         </UButton>
         <UButton to="/app/opportunities#saved-opportunities" color="neutral" variant="outline">
           View saved
-        </UButton>
-        <UButton to="/app/opportunities/new" icon="i-lucide-plus">
-          Add opportunity
         </UButton>
       </div>
     </header>
@@ -361,7 +420,12 @@ watch(
       </div>
     </section>
 
-    <section class="opportunity-section opportunity-recommended" aria-labelledby="recommended-heading">
+    <section
+      ref="recommendedSection"
+      class="opportunity-section opportunity-recommended"
+      aria-labelledby="recommended-heading"
+      tabindex="-1"
+    >
       <div class="opportunity-section__heading">
         <div>
           <p>Personalised</p>
@@ -380,9 +444,55 @@ watch(
         <UButton v-if="hasActiveFilters" color="neutral" variant="outline" @click="clearFilters">Clear filters</UButton>
       </div>
 
-      <footer v-if="filteredResults.length" class="opportunity-load-more" aria-live="polite">
-        <span>Showing {{ visibleResults.length }} of {{ filteredResults.length }} opportunities</span>
-        <UButton v-if="hasMoreResults" color="neutral" variant="outline" @click="loadMore">Load 12 more</UButton>
+      <footer
+        v-if="filteredResults.length"
+        class="opportunity-pagination"
+      >
+        <div class="opportunity-pagination__status" aria-live="polite" aria-atomic="true">
+          <span>
+            Showing {{ paginatedResults.rangeStart }}–{{ paginatedResults.rangeEnd }}
+            of {{ paginatedResults.total }} opportunities
+          </span>
+          <strong>
+            Page {{ paginatedResults.page }} of {{ paginatedResults.pageCount }}
+          </strong>
+        </div>
+        <nav
+          v-if="paginatedResults.pageCount > 1"
+          class="opportunity-pagination__controls"
+          aria-label="Recommended opportunity pages"
+        >
+          <UButton
+            color="neutral"
+            variant="outline"
+            :disabled="paginatedResults.page === 1"
+            aria-label="Go to previous page"
+            @click="changePage(paginatedResults.page - 1)"
+          >
+            Previous
+          </UButton>
+          <button
+            v-for="page in pageNumbers"
+            :key="page"
+            type="button"
+            class="opportunity-pagination__page"
+            :class="{ 'is-current': page === paginatedResults.page }"
+            :aria-label="`Go to page ${page}`"
+            :aria-current="page === paginatedResults.page ? 'page' : undefined"
+            @click="changePage(page)"
+          >
+            {{ page }}
+          </button>
+          <UButton
+            color="neutral"
+            variant="outline"
+            :disabled="paginatedResults.page === paginatedResults.pageCount"
+            aria-label="Go to next page"
+            @click="changePage(paginatedResults.page + 1)"
+          >
+            Next
+          </UButton>
+        </nav>
       </footer>
     </section>
 
@@ -391,7 +501,7 @@ watch(
         <div>
           <p>Time-sensitive view</p>
           <h2 id="closing-soon-heading">Closing soon</h2>
-          <span>A separate deadline view; opportunities may also appear in recommendations.</span>
+          <span>Three urgent opportunities not already shown on this recommendation page.</span>
         </div>
         <strong class="opportunity-section__count">{{ filteredClosingSoon.length }}</strong>
       </div>
@@ -407,7 +517,7 @@ watch(
 
     <section class="opportunity-section opportunity-section--preview" aria-labelledby="new-opportunities-heading">
       <div class="opportunity-section__heading">
-        <div><p>Recently discovered</p><h2 id="new-opportunities-heading">New opportunities</h2><span>A six-item preview of fresh additions to your feed.</span></div>
+        <div><p>Recently discovered</p><h2 id="new-opportunities-heading">New opportunities</h2><span>Three fresh additions not already shown above.</span></div>
         <strong class="opportunity-section__count">{{ filteredNewest.length }}</strong>
       </div>
       <div v-if="filteredNewest.length" class="opportunity-grid">

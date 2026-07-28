@@ -49,10 +49,13 @@ describe('opportunity portfolio value intelligence', () => {
     expect(result.level).toBe('HIGH')
     expect(result.skillSignals).toContain('JavaScript')
     expect(result.goalMatches).toContain('Technical skills')
-    expect(result.evidenceIdeas.join(' ')).toMatch(/approved project|truthful/i)
+    expect(result.headline).toBe('Strong product execution evidence')
+    expect(result.summary).toMatch(/registration alone/i)
+    expect(result.maximiseActions.join(' ')).toMatch(/product feature/i)
+    expect(result.evidenceIdeas.join(' ')).toMatch(/demo|repository/i)
   })
 
-  it('keeps ordinary volunteering medium unless ownership or impact is present', () => {
+  it('keeps ordinary volunteering cautious and boosts leadership responsibility', () => {
     const ordinary = scoreOpportunityPortfolioValue(base({
       category: 'VOLUNTEERING',
       description: 'Volunteer at a community event and support attendees.',
@@ -63,14 +66,26 @@ describe('opportunity portfolio value intelligence', () => {
     }), preferences, {}, NOW)
 
     expect(ordinary.level).toBe('MEDIUM')
+    expect(ordinary.headline).toBe('Useful community engagement evidence')
+    expect(ordinary.summary).toMatch(/general participation/i)
     expect(leadership.score).toBeGreaterThan(ordinary.score)
+    expect(leadership.headline).toBe('Strong facilitation and leadership evidence')
+    expect(leadership.maximiseActions.join(' ')).toMatch(/activity area|workstream/i)
   })
 
-  it('penalises passive attendance, expiry, and missing information', () => {
+  it('explains that passive attendance needs a follow-up output', () => {
     const conference = scoreOpportunityPortfolioValue(base({
       category: 'TALK',
       description: 'Attend a general conference talk.',
     }), preferences, {}, NOW)
+
+    expect(conference.level).toBe('LOW')
+    expect(conference.headline).toBe('Limited evidence from attendance alone')
+    expect(conference.summary).toMatch(/follow-up project/i)
+    expect(conference.maximiseActions[0]).toMatch(/reflection|follow-up/i)
+  })
+
+  it('penalises expiry and missing information', () => {
     const expired = scoreOpportunityPortfolioValue(base({
       category: 'HACKATHON',
       deadline: '2026-07-01T08:00:00.000Z',
@@ -83,9 +98,48 @@ describe('opportunity portfolio value intelligence', () => {
       active: true,
     }, preferences, {}, NOW)
 
-    expect(conference.level).toBe('LOW')
     expect(expired.score).toBeLessThan(45)
     expect(missing.level).toBe('LOW')
+  })
+
+  it('uses research-specific guidance', () => {
+    const result = scoreOpportunityPortfolioValue(base({
+      category: 'RESEARCH',
+      title: 'Undergraduate research assistant',
+      description: 'Support literature review and data analysis for a study.',
+    }), preferences, {}, NOW)
+
+    expect(result.headline).toMatch(/research and analytical evidence/i)
+    expect(result.summary).toMatch(/research methods|literature review/i)
+    expect(result.evidenceIdeas.join(' ')).toMatch(/report|poster|analysis|publication/i)
+  })
+
+  it('uses internship-specific professional guidance', () => {
+    const result = scoreOpportunityPortfolioValue(base({
+      category: 'INTERNSHIP',
+      title: 'Product operations intern',
+      description: 'Support business operations and communicate with stakeholders.',
+    }), preferences, {}, NOW)
+
+    expect(result.headline).toBe('Professional delivery and responsibility evidence')
+    expect(result.summary).toMatch(/stakeholder exposure/i)
+    expect(result.maximiseActions.join(' ')).toMatch(/work outcome|responsibility/i)
+  })
+
+  it('does not manufacture participant counts or completed outcomes', () => {
+    const result = scoreOpportunityPortfolioValue(base({
+      category: 'VOLUNTEERING',
+      description: 'Facilitate a community activity and manage logistics.',
+    }), preferences, {}, NOW)
+    const guidance = [
+      result.headline,
+      result.summary,
+      ...result.evidenceIdeas,
+      ...result.maximiseActions,
+    ].join(' ')
+
+    expect(guidance).not.toMatch(/\b\d+\b/)
+    expect(guidance).toMatch(/truthful|verify|feedback/i)
   })
 
   it('uses honest resume placeholders and never fabricates numbers', () => {

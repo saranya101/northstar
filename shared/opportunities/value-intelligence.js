@@ -1,4 +1,4 @@
-export const OPPORTUNITY_VALUE_VERSION = 'opportunity-value-v1'
+export const OPPORTUNITY_VALUE_VERSION = 'opportunity-value-v2'
 
 const ACTIVE_CATEGORIES = new Set([
   'HACKATHON',
@@ -15,6 +15,12 @@ const PASSIVE_CATEGORIES = new Set([
   'WORKSHOP',
   'NETWORKING',
   'CERTIFICATION',
+])
+
+const PROFESSIONAL_CATEGORIES = new Set([
+  'INTERNSHIP',
+  'PART_TIME_JOB',
+  'GRADUATE_PROGRAMME',
 ])
 
 const GOAL_LABELS = Object.freeze({
@@ -150,6 +156,152 @@ function headlineFor(level, signals, goalMatches) {
   return 'Limited evidence unless you create a follow-up output'
 }
 
+function categoryGuidance(category, signals, level) {
+  if (category === 'HACKATHON' || category === 'COMPETITION') {
+    return {
+      headline: level === 'HIGH'
+        ? 'Strong product execution evidence'
+        : 'Product execution evidence with a completed submission',
+      summary: 'This can help demonstrate product thinking, technical implementation, teamwork and presentation when you build and retain a working submission. Registration alone does not provide strong portfolio evidence.',
+      skills: [
+        'Product execution',
+        'Technical decision-making',
+      ],
+      evidence: [
+        'Save the demo, repository and any judging feedback you are allowed to retain.',
+        'Record the technical or product decisions you personally made.',
+        'Measure a truthful project outcome such as users, accuracy or speed.',
+      ],
+      actions: [
+        'Own one complete product feature or clearly defined part of the submission.',
+        'Document your decisions and the outcome you can verify.',
+      ],
+    }
+  }
+
+  if (category === 'VOLUNTEERING') {
+    if (
+      signals.leadership
+      || signals.ownership
+      || signals.volunteerResponsibility
+      || signals.measurableImpact
+    ) {
+      return {
+        headline: 'Strong facilitation and leadership evidence',
+        summary: 'This may provide evidence of coordination, responsibility and community impact when you lead an activity, manage logistics or own a defined workstream. Keep the claim proportional to the responsibility you actually hold.',
+        skills: [
+          'Volunteer coordination',
+          'Community facilitation',
+        ],
+        evidence: [
+          'Record the activity area or workstream you were responsible for.',
+          'Track a truthful measure of people supported or work completed.',
+          'Request organiser feedback on your contribution.',
+        ],
+        actions: [
+          'Ask to lead one activity area or own a defined workstream.',
+          'Record a problem you solved and the outcome you can verify.',
+        ],
+      }
+    }
+
+    return {
+      headline: 'Useful community engagement evidence',
+      summary: 'General participation can show community involvement, but usually provides limited evidence of leadership or impact. It becomes stronger when you take a defined responsibility and obtain organiser feedback.',
+      skills: [
+        'Community engagement',
+      ],
+      evidence: [
+        'Request organiser feedback or confirmation of your contribution.',
+      ],
+      actions: [
+        'Ask to own one clearly defined responsibility during the activity.',
+      ],
+    }
+  }
+
+  if (
+    PASSIVE_CATEGORIES.has(category)
+    && signals.passive
+  ) {
+    return {
+      headline: 'Limited evidence from attendance alone',
+      summary: 'Attendance alone usually provides limited portfolio evidence. It may become useful when you make a relevant connection, document a practical takeaway or apply the learning in coursework or a follow-up project.',
+      skills: [],
+      evidence: [
+        'Save a short reflection, article or practical follow-up project.',
+        'Record a relevant professional follow-up and what resulted from it.',
+      ],
+      actions: [
+        'Publish a short reflection or build a follow-up project using what you learned.',
+      ],
+    }
+  }
+
+  if (category === 'LEADERSHIP') {
+    return {
+      headline: level === 'HIGH'
+        ? 'Strong decision-making and team leadership evidence'
+        : 'Decision-making and team leadership evidence',
+      summary: 'This can help demonstrate responsibility, team coordination and stakeholder management when you own decisions and can verify the resulting work or outcome.',
+      skills: [
+        'Decision-making',
+        'Stakeholder management',
+      ],
+      evidence: [
+        'Document the decisions, stakeholders and workstream you were responsible for.',
+        'Record a truthful team or project outcome.',
+      ],
+      actions: [
+        'Define the decision or outcome you will own before starting.',
+        'Request feedback from a stakeholder or team member.',
+      ],
+    }
+  }
+
+  if (category === 'RESEARCH') {
+    return {
+      headline: level === 'HIGH'
+        ? 'Strong research and analytical evidence'
+        : 'Research and analytical evidence',
+      summary: 'This may provide evidence of research methods, literature review, analysis and data work when you contribute to a verifiable written or presented output.',
+      skills: [
+        'Research methods',
+        'Analysis',
+      ],
+      evidence: [
+        'Retain an approved report, poster, analysis or publication contribution.',
+        'Document the method, data work or literature review you completed.',
+      ],
+      actions: [
+        'Agree on a specific research output or analytical responsibility.',
+        'Record the method you used and the conclusion it supported.',
+      ],
+    }
+  }
+
+  if (PROFESSIONAL_CATEGORIES.has(category)) {
+    return {
+      headline: 'Professional delivery and responsibility evidence',
+      summary: 'This can help demonstrate professional delivery, stakeholder exposure and business or technical responsibility when your contribution and work outcomes can be verified.',
+      skills: [
+        'Professional delivery',
+        'Stakeholder communication',
+      ],
+      evidence: [
+        'Keep approved examples of work and feedback that verify your contribution.',
+        'Record a truthful business, technical or operational outcome.',
+      ],
+      actions: [
+        'Clarify the work outcome or responsibility you will own.',
+        'Request a reference or verified feedback on your delivery.',
+      ],
+    }
+  }
+
+  return null
+}
+
 export function scoreOpportunityPortfolioValue(
   opportunity,
   preferences = {},
@@ -171,6 +323,8 @@ export function scoreOpportunityPortfolioValue(
   const deliverable = ['HACKATHON', 'COMPETITION', 'PROJECT', 'RESEARCH'].includes(category)
     || hasAny(text, ['prototype', 'portfolio', 'submission', 'report', 'publication', 'pitch', 'deliverable'])
   const measurableImpact = hasAny(text, ['impact', 'participants', 'beneficiaries', 'outcome', 'metric', 'fundrais'])
+  const volunteerResponsibility = category === 'VOLUNTEERING'
+    && hasAny(text, ['facilitat', 'manage logistics', 'managing logistics', 'activity lead', 'workstream'])
   const networking = category === 'NETWORKING'
     || hasAny(text, ['networking', 'mentor', 'industry leaders', 'conference', 'professional'])
   const credibility = Boolean(
@@ -191,12 +345,19 @@ export function scoreOpportunityPortfolioValue(
   score += ownership && !leadership ? 5 : 0
   score += deliverable ? 10 : 0
   score += measurableImpact ? 4 : 0
+  score += volunteerResponsibility ? 5 : 0
   score += networking ? 3 : 0
   score += credibility ? 4 : 0
   score += Math.min(6, completeness)
   score += category === 'VOLUNTEERING' ? 6 : 0
 
-  if (category === 'VOLUNTEERING' && !leadership && !ownership && !measurableImpact) {
+  if (
+    category === 'VOLUNTEERING'
+    && !leadership
+    && !ownership
+    && !volunteerResponsibility
+    && !measurableImpact
+  ) {
     score = Math.min(score, 64)
   }
   if (passive) score -= 12
@@ -218,10 +379,17 @@ export function scoreOpportunityPortfolioValue(
     deliverable,
     measurableImpact,
     networking,
+    volunteerResponsibility,
   }
 
+  const guidance = categoryGuidance(
+    category,
+    signals,
+    level,
+  )
   const skillSignals = unique([
     ...matchedSkills,
+    ...(guidance?.skills || []),
     leadership && 'Team leadership',
     ownership && 'Ownership',
     deliverable && 'Project delivery',
@@ -231,6 +399,7 @@ export function scoreOpportunityPortfolioValue(
 
   const goalMatches = matchedGoals.map(goal => GOAL_LABELS[goal])
   const evidenceIdeas = unique([
+    ...(guidance?.evidence || []),
     deliverable && 'Save the approved project, submission, report or other output.',
     measurableImpact && 'Record a truthful before-and-after measure or outcome.',
     leadership && 'Document your responsibilities and the team or workstream you led.',
@@ -239,6 +408,7 @@ export function scoreOpportunityPortfolioValue(
     passive && 'Create a reflection, article or small follow-up project.',
   ])
   const maximiseActions = unique([
+    ...(guidance?.actions || []),
     leadership ? 'Define the outcome you will own before starting.' : active && 'Ask to own one clearly defined responsibility.',
     deliverable && 'Agree what tangible output you can retain or describe.',
     measurableImpact && 'Choose a truthful measure to track before the activity.',
@@ -249,10 +419,12 @@ export function scoreOpportunityPortfolioValue(
   return {
     score: finalScore,
     level,
-    headline: headlineFor(level, signals, matchedGoals),
-    summary: active
-      ? 'This can help demonstrate contribution when you take responsibility, retain approved evidence and describe only outcomes you can verify.'
-      : 'This may be useful when you turn attendance into a truthful follow-up output or meaningful professional connection.',
+    headline: guidance?.headline
+      || headlineFor(level, signals, matchedGoals),
+    summary: guidance?.summary
+      || (active
+        ? 'This can help demonstrate contribution when you take responsibility, retain approved evidence and describe only outcomes you can verify.'
+        : 'This may be useful when you turn attendance into a truthful follow-up output or meaningful professional connection.'),
     skillSignals,
     goalMatches,
     evidenceIdeas,
