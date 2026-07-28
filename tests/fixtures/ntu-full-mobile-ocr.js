@@ -55,9 +55,29 @@ highContrastWords.push(
   { text: '54-', confidence: 0.78, bbox: { x0: 888, y0: 710, x1: 910, y1: 726 } }
 )
 
+const physicalBlocks = [
+  ['he5091-mon', 'MONDAY', 168, 304, 322, 382, 510, 620],
+  ['ab0403-tue', 'TUESDAY', 323, 304, 477, 382, 510, 620],
+  ['ab1501-wed', 'WEDNESDAY', 478, 384, 632, 462, 570, 620],
+  ['he5091-tue', 'TUESDAY', 323, 464, 477, 554, 630, 680],
+  ['ab1501-thu', 'THURSDAY', 633, 464, 787, 562, 630, 740],
+  ['ab1201-tue', 'TUESDAY', 323, 704, 477, 789, 810, 980],
+  ['ab1088-wed', 'WEDNESDAY', 478, 790, 632, 882, 870, 980],
+  ['ab1088-thu', 'THURSDAY', 633, 790, 787, 882, 870, 1040],
+  ['ad1102-fri', 'FRIDAY', 788, 704, 942, 789, 810, 980]
+].map(([blockId, dayOfWeek, x0, y0, x1, y1, geometryStartMinutes, geometryEndMinutes]) => ({
+  blockId: `ntu-block-${blockId}`,
+  dayOfWeek,
+  bbox: { x0, y0, x1, y1 },
+  geometryStartMinutes,
+  geometryEndMinutes,
+  geometryTimeReliable: true
+}))
+
 export const ntuFullMobileOcrFixture = {
   words: highContrastWords,
   wordVariants: [normalWords],
+  physicalBlocks,
   refinedTitles: rows.map(row => row.title.join(' ')),
   dimensions: { width: 1200, height: 2100 }
 }

@@ -1,4 +1,5 @@
 import { createOcrExtractor } from './ocr-extractor.client'
+import { detectNtuClassRectangles } from './ntu-grid-geometry'
 import { detectNtuImageRegions, tableGeometry } from './ntu-image-regions'
 
 function canvasBlob(canvas) {
@@ -76,6 +77,27 @@ async function refinedTableTitles(extractor, bitmap, words, regions, canvases, s
   return titles
 }
 
+async function refinedGridBlocks(extractor, bitmap, blocks, canvases, signal) {
+  const words = []
+  for (const [index, block] of blocks.entries()) {
+    if (signal?.aborted) throw new DOMException('Import cancelled.', 'AbortError')
+    const padding = 4
+    const region = {
+      x0: Math.max(0, block.bbox.x0 - padding),
+      y0: Math.max(0, block.bbox.y0 - padding),
+      x1: Math.min(bitmap.width, block.bbox.x1 + padding),
+      y1: Math.min(bitmap.height, block.bbox.y1 + padding)
+    }
+    const scale = 4
+    const canvas = regionCanvas(bitmap, region, scale)
+    canvases.push(canvas)
+    const extraction = await extractor.recognise(await canvasBlob(canvas), { pageSegmentationMode: '6' })
+    words.push(...placeRegionExtraction(extraction, region, scale).words)
+    if (index % 3 === 2) await new Promise(resolve => setTimeout(resolve, 0))
+  }
+  return words
+}
+
 export async function extractImage(file, options = {}) {
   const extractor = await createOcrExtractor(options)
   const canvases = []
@@ -99,6 +121,11 @@ export async function extractImage(file, options = {}) {
     const safeHeaderWords = headerExtraction.words.filter(word => /^(?:TIME\\?DAY|TIMEDAY|MON|TUE|WED|THU|FRI|SAT)$/i.test(word.text.replace(/[^A-Z\\]/gi, '')))
     for (const result of results) result.words = [...result.words, ...safeHeaderWords]
     const initialRegions = detectNtuImageRegions(best.words, dimensions)
+    const geometryCanvas = variantCanvas(bitmap, { scale: 1 })
+    canvases.push(geometryCanvas)
+    const gridGeometry = detectNtuClassRectangles(geometryCanvas, best.words, initialRegions.timetableGridRegion)
+    options.onProgress?.({ label: 'Refining physical class blocks', progress: 0.48 })
+    const refinedGridWords = await refinedGridBlocks(extractor, bitmap, gridGeometry.blocks, canvases, options.signal)
     const tableCanvas = regionCanvas(bitmap, initialRegions.registeredCoursesRegion, 4)
     canvases.push(tableCanvas)
     options.onProgress?.({ label: 'Reading registered-course rows', progress: 0.58 })
@@ -113,8 +140,10 @@ export async function extractImage(file, options = {}) {
       dimensions,
       regions,
       refinedTitles,
-      wordVariants: rankedResults.filter(result => result !== best).map(result => result.words),
-      preprocessing: { variants: 4, upscale: 2, grayscaleContrastVariant: true, headerUpscale: 4, tableUpscale: 4, titleCellUpscale: 6, deskewDegrees: 0 }
+      physicalBlocks: gridGeometry.blocks,
+      geometryWarnings: gridGeometry.warnings,
+      wordVariants: [...rankedResults.filter(result => result !== best).map(result => result.words), refinedGridWords],
+      preprocessing: { variants: 4, upscale: 2, grayscaleContrastVariant: true, headerUpscale: 4, tableUpscale: 4, titleCellUpscale: 6, gridBlockUpscale: 4, geometryScale: 1, deskewDegrees: 0 }
     }
   } finally {
     for (const canvas of canvases) { canvas.width = 0; canvas.height = 0 }

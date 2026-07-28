@@ -1,4 +1,6 @@
 import { timetableStructureIssues } from '~~/shared/utils/timetable-structure'
+import { findTimetableConflicts, overlappingWeekNumbers } from './timetable-conflicts'
+import { formatMinutes } from './timetable-time'
 
 const GROUP_FIELDS = ['classType', 'groupLabel', 'dayOfWeek', 'startMinutes', 'endMinutes']
 
@@ -28,6 +30,7 @@ export function applyPublicEnrichmentSuggestion(module, value, useSuggestion = t
 export function sessionIssueFields(session) {
   if (!session?.selected) return []
   const issues = []
+  if (session.moduleAssignmentConfirmed === false) issues.push({ field: 'moduleCode', label: 'Choose the registered module for this class block' })
   if (!session.dayOfWeek) issues.push({ field: 'dayOfWeek', label: 'Choose a weekday' })
   if (session.startMinutes === null) issues.push({ field: 'startMinutes', label: 'Enter a start time' })
   if (session.endMinutes === null || (session.startMinutes !== null && session.endMinutes <= session.startMinutes)) issues.push({ field: 'endMinutes', label: session.endMinutes === null ? 'Enter an end time' : 'Fix the end time' })
@@ -48,7 +51,21 @@ export function revealReviewIssue(expandedModules, expandedSessions, issue) {
 }
 
 export function reviewIssues(modules = [], draft = {}) {
-  return timetableStructureIssues(modules, draft).concat(modules.flatMap((module) => {
+  const selectedSessions = modules.filter(module => module.selected).flatMap(module => module.sessions.filter(session => session.selected).map(session => ({ ...session, code: module.code, moduleCandidateId: module.candidateId })))
+  const conflictIssues = findTimetableConflicts(selectedSessions).map(({ first, second }, index) => {
+    const weeks = overlappingWeekNumbers(first, second)
+    const weekLabel = weeks.length >= 20 ? 'weekly overlap' : `weeks ${weeks.join(', ')}`
+    return {
+      id: `conflict-${first.candidateId}-${second.candidateId}-${index}`,
+      moduleCandidateId: first.moduleCandidateId,
+      sessionCandidateId: first.candidateId,
+      field: 'conflict',
+      label: `${first.code} conflicts with ${second.code}`,
+      context: `${first.dayOfWeek} ${formatMinutes(first.startMinutes)}–${formatMinutes(first.endMinutes)} · ${weekLabel}`,
+      targetId: `review-${first.candidateId}-conflict`
+    }
+  })
+  return timetableStructureIssues(modules, draft).concat(conflictIssues, modules.flatMap((module) => {
     if (!module.selected) return []
     const moduleIssues = module.publicEnrichmentConfirmed === false ? [{
       id: `${module.candidateId}-publicEnrichment`,

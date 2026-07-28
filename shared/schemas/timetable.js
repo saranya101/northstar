@@ -40,6 +40,7 @@ const timeAlternativeSchema = z.object({
   warnings: z.array(z.string().trim().min(1).max(200)).max(10).default([])
 }).strict().superRefine((value, context) => { if (value.startMinutes !== null && value.endMinutes !== null && value.endMinutes <= value.startMinutes) context.addIssue({ code: 'custom', path: ['endMinutes'], message: 'Alternative end time must be after its start time.' }) })
 const correctionSchema = z.object({ original: z.string().trim().min(1).max(80), corrected: z.string().trim().min(1).max(80), reason: z.string().trim().min(1).max(200) }).strict()
+const originalSessionValueSchema = z.union([z.string().max(200), z.number(), z.array(z.coerce.number().int().min(1).max(20)).max(20), z.null()])
 
 const enrichmentFieldSchema = z.object({
   sourceUrl: z.url().refine(value => ['www.ntu.edu.sg', 'wish.wis.ntu.edu.sg'].includes(new URL(value).hostname), 'Use an approved public NTU source.'),
@@ -64,6 +65,10 @@ const publicEnrichmentSchema = z.object({
 
 export const timetableSessionCandidateSchema = z.object({
   candidateId: candidateIdSchema,
+  blockId: nullableText(120),
+  moduleAssignmentConfirmed: z.boolean().default(true),
+  fieldSources: z.record(z.string().max(40), z.enum(['EXTRACTED', 'INFERRED', 'MANUAL'])).default({}),
+  originalValues: z.record(z.string().max(40), originalSessionValueSchema).default({}),
   classType: z.enum(CLASS_SESSION_TYPES).default('OTHER'),
   groupLabel: z.string().trim().max(100).transform(value => value || 'DEFAULT').default('DEFAULT'),
   dayOfWeek: z.enum(DAYS_OF_WEEK).nullable(),
@@ -115,13 +120,24 @@ export const timetableCandidateSchema = z.object({
   structure: z.object({
     gridVisible: z.boolean(),
     gridModuleCodes: z.array(z.string().regex(/^[A-Z]{2}\d{4}$/)).max(100),
+    physicalBlockIds: z.array(z.string().trim().min(1).max(120)).max(100).default([]),
+    unresolvedBlockIds: z.array(z.string().trim().min(1).max(120)).max(100).default([]),
+    duplicateSessionBlockCount: z.coerce.number().int().min(0).max(100).default(0),
     detectedSessionBlocks: z.record(z.string().regex(/^[A-Z]{2}\d{4}$/), z.coerce.number().int().min(0).max(100)).default({}),
     detectedSessionBlockCount: z.coerce.number().int().min(0).max(100).default(0),
     droppedSessionBlockCount: z.coerce.number().int().min(0).max(100).default(0),
     examRowsDetected: z.coerce.number().int().min(0).max(100),
     examRowsReconstructed: z.coerce.number().int().min(0).max(100).default(0)
   }).strict().nullable().default(null),
-  unmatchedTimetableText: z.array(z.object({ candidateId: candidateIdSchema, text: z.string().trim().min(1).max(1000), selected: z.boolean().default(false), attachToCandidateId: candidateIdSchema.nullable().default(null), warnings: z.array(z.string().trim().min(1).max(200)).max(10).default([]) }).strict()).max(100).default([]),
+  unmatchedTimetableText: z.array(z.object({
+    candidateId: candidateIdSchema,
+    blockId: nullableText(120),
+    text: z.string().trim().min(1).max(1000),
+    sessionCandidate: timetableSessionCandidateSchema.nullable().default(null),
+    selected: z.boolean().default(false),
+    attachToCandidateId: candidateIdSchema.nullable().default(null),
+    warnings: z.array(z.string().trim().min(1).max(200)).max(10).default([])
+  }).strict()).max(100).default([]),
   segmentation: z.object({ confidence: confidenceSchema, warnings: z.array(z.string().trim().min(1).max(200)).max(20).default([]) }).strict().nullable().default(null),
   warnings: z.array(z.string().trim().min(1).max(200)).max(50).default([])
 }).strict()
@@ -141,6 +157,7 @@ export const confirmTimetableImportSchema = z.object({
     if (module.selected && !module.publicEnrichmentConfirmed) context.addIssue({ code: 'custom', path: ['modules', index, 'publicEnrichment'], message: 'Resolve the public-source discrepancy.' })
     for (const [sessionIndex, session] of module.sessions.entries()) {
       if (!module.selected || !session.selected) continue
+      if (!session.moduleAssignmentConfirmed) context.addIssue({ code: 'custom', path: ['modules', index, 'sessions', sessionIndex, 'moduleAssignmentConfirmed'], message: 'Choose the registered module for this class block.' })
       if (!session.dayOfWeek) context.addIssue({ code: 'custom', path: ['modules', index, 'sessions', sessionIndex, 'dayOfWeek'], message: 'Choose a day.' })
       if (session.startMinutes === null) context.addIssue({ code: 'custom', path: ['modules', index, 'sessions', sessionIndex, 'startMinutes'], message: 'Enter a start time.' })
       if (session.endMinutes === null) context.addIssue({ code: 'custom', path: ['modules', index, 'sessions', sessionIndex, 'endMinutes'], message: 'Enter an end time.' })

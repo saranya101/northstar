@@ -44,4 +44,16 @@ describe('timetable validation', () => {
     const selected = confirmTimetableImportSchema.safeParse({ expectedUpdatedAt: new Date().toISOString(), modules: [module(session({ startMinutes: alternatives[0].startMinutes, endMinutes: alternatives[0].endMinutes, timeConfirmed: true, timeAlternatives: [], deliveryMode: 'IN_PERSON', deliveryModeConfirmed: true, recurrenceConfirmed: true }))] })
     expect(selected.success).toBe(true)
   })
+  it('rejects an unresolved physical-block module assignment at confirmation', () => {
+    const unresolved = confirmTimetableImportSchema.safeParse({
+      expectedUpdatedAt: new Date().toISOString(),
+      modules: [module(session({
+        blockId: 'block-ambiguous', moduleAssignmentConfirmed: false,
+        startMinutes: 540, endMinutes: 600, timeConfirmed: true,
+        deliveryMode: 'IN_PERSON', deliveryModeConfirmed: true, recurrenceConfirmed: true
+      }))]
+    })
+    expect(unresolved.success).toBe(false)
+    expect(unresolved.error.issues.some(issue => issue.path.at(-1) === 'moduleAssignmentConfirmed')).toBe(true)
+  })
 })

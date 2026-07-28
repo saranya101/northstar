@@ -1,36 +1,23 @@
 import { candidateId } from './timetable-candidate-normaliser'
 import { hasPhysicalVenue } from './timetable-delivery'
+import { calibrateTimeScale, calibrateWeekdayColumns, gridMinutesAtY, inferredRowHeight, itemCentre, median } from './ntu-grid-geometry'
 import { parseNtuSessionBlock } from './ntu-session-block-parser'
 import { matchAllowedCode } from './ntu-registered-table-parser'
 import { normalizeDay, parseTime } from './timetable-time'
 import { findModuleCodes } from './timetable-text-parser'
 
-function centre(item) { return { x: (item.bbox.x0 + item.bbox.x1) / 2, y: (item.bbox.y0 + item.bbox.y1) / 2 } }
-function median(values) { const sorted = [...values].sort((a, b) => a - b); return sorted.length ? sorted[Math.floor(sorted.length / 2)] : null }
+const centre = itemCentre
 function clean(value) { return String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '') }
 
-function inferredRowHeight(times) {
-  const values = []
-  const sorted = [...times].sort((left, right) => left.minutes - right.minutes)
-  for (let index = 1; index < sorted.length; index += 1) {
-    const minuteDifference = sorted[index].minutes - sorted[index - 1].minutes
-    const pixelDifference = Math.abs(sorted[index].y - sorted[index - 1].y)
-    if (minuteDifference >= 30 && minuteDifference <= 120 && pixelDifference > 0) values.push(pixelDifference / (minuteDifference / 30))
-  }
-  return median(values)
-}
-
 function minutesAtY(y, times, rowHeight) {
-  if (!times.length || !rowHeight) return null
-  const nearest = times.reduce((best, time) => !best || Math.abs(time.y - y) < Math.abs(best.y - y) ? time : best, null)
-  const value = nearest.minutes + Math.round((y - nearest.y) / rowHeight) * 30
-  return value >= 480 && value <= 1410 ? value : null
+  return gridMinutesAtY(y, times, rowHeight)
 }
 
 export function explicitTimeRange(text) {
   const value = String(text || '')
   const candidates = [
     ...value.matchAll(/(?:^|\D)(\d{4})\s*(?:TO|T0|[-–—])\s*(\d{4})(?=\D|$)/gi),
+    ...value.matchAll(/(?:^|\D)(\d{4})\s*[0O]\s*(\d{4})(?=\D|$)/gi),
     ...value.matchAll(/(?:^|\D)(\d{4})(\d{4})(?=\D|$)/g)
   ]
   for (const candidate of candidates) {
@@ -54,39 +41,12 @@ function textFromWords(words) {
   return lines.sort((left, right) => left.y - right.y).map(line => line.words.sort((left, right) => left.bbox.x0 - right.bbox.x0).map(word => word.text).join(' ')).join('\n')
 }
 
-function weekdayColumns(positionedWords, region) {
-  const dayOrder = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY']
-  const headerCandidates = positionedWords.map(word => ({ ...word, day: normalizeDay(clean(word.text)) })).filter(word => dayOrder.includes(word.day))
-  const headerRows = []
-  for (const word of headerCandidates) {
-    let row = headerRows.find(item => Math.abs(item.y - word.y) <= 20)
-    if (!row) { row = { y: word.y, words: [] }; headerRows.push(row) }
-    row.words.push(word)
-  }
-  const detected = (headerRows.sort((left, right) => new Set(right.words.map(word => word.day)).size - new Set(left.words.map(word => word.day)).size || left.y - right.y)[0]?.words || []).sort((left, right) => left.x - right.x)
-  if (detected.length < 4) return []
-  const steps = []
-  for (let left = 0; left < detected.length; left += 1) for (let right = left + 1; right < detected.length; right += 1) { const difference = dayOrder.indexOf(detected[right].day) - dayOrder.indexOf(detected[left].day); if (difference > 0) steps.push((detected[right].x - detected[left].x) / difference) }
-  const step = median(steps)
-  const origins = detected.map(header => header.x - dayOrder.indexOf(header.day) * step)
-  const origin = median(origins)
-  const headers = dayOrder.map((day, index) => detected.find(header => header.day === day) || { day, x: origin + index * step, bbox: detected[0].bbox, inferred: true })
-  return headers.map((header, index) => ({
-    day: header.day,
-    x0: index ? (headers[index - 1].x + header.x) / 2 : Math.max(region.x0, header.x - step / 2),
-    x1: index < headers.length - 1 ? (header.x + headers[index + 1].x) / 2 : Math.min(region.x1, header.x + step / 2),
-    header
-  }))
-}
-
 function columnHeaderBottom(columns) {
   return Math.max(...columns.map(column => column.header.bbox.y1))
 }
 
 function timeLabels(positionedWords, firstColumnX, region) {
-  return positionedWords.filter(word => word.x < firstColumnX && word.y > region.y0 && word.y < region.y1)
-    .map(word => ({ ...word, minutes: /^\d{4}$/.test(clean(word.text)) ? parseTime(clean(word.text)) : null }))
-    .filter(word => word.minutes !== null)
+  return calibrateTimeScale(positionedWords, [{ x0: firstColumnX }], region).labels
 }
 
 function looksLikeRejectedCode(value) {
@@ -136,6 +96,179 @@ function baseModule(code) {
   return { candidateId: candidateId('module'), code, title: null, academicUnits: null, indexNumber: null, courseType: null, registrationStatus: 'UNKNOWN', confidence: 0.45, selected: true, sessions: [], examCandidate: null, fieldProvenance: {}, corrections: [], publicEnrichment: null, publicEnrichmentConfirmed: true }
 }
 
+function overlapRatio(word, block) {
+  const x = Math.max(0, Math.min(word.bbox.x1, block.bbox.x1) - Math.max(word.bbox.x0, block.bbox.x0))
+  const y = Math.max(0, Math.min(word.bbox.y1, block.bbox.y1) - Math.max(word.bbox.y0, block.bbox.y0))
+  const area = Math.max(1, (word.bbox.x1 - word.bbox.x0) * (word.bbox.y1 - word.bbox.y0))
+  return x * y / area
+}
+
+function wordsByPhysicalBlock(words, blocks) {
+  const assignments = new Map(blocks.map(block => [block.blockId, []]))
+  for (const word of words.filter(item => item.bbox)) {
+    const point = centre(word)
+    const candidates = blocks.map(block => {
+      const inside = point.x >= block.bbox.x0 - 2 && point.x <= block.bbox.x1 + 2 && point.y >= block.bbox.y0 - 2 && point.y <= block.bbox.y1 + 2
+      const overlap = overlapRatio(word, block)
+      return { block, inside, overlap, score: Number(inside) * 2 + overlap }
+    }).filter(item => item.inside || item.overlap >= 0.35).sort((left, right) => right.score - left.score)
+    if (!candidates.length) continue
+    if (candidates[1] && Math.abs(candidates[0].score - candidates[1].score) <= 0.05) continue
+    assignments.get(candidates[0].block.blockId).push(word)
+  }
+  return assignments
+}
+
+function resolveRegisteredCode(words, allowedCodes) {
+  const matches = words.map(word => ({ word, match: matchAllowedCode(word.text, allowedCodes), exact: allowedCodes.includes(clean(word.text)) })).filter(item => item.match)
+  const exactCodes = [...new Set(matches.filter(item => item.exact).map(item => item.match.code))]
+  if (exactCodes.length > 1) return { code: null, ambiguous: true, exact: false, matches }
+  if (exactCodes.length === 1) return { code: exactCodes[0], ambiguous: false, exact: true, matches }
+  const correctedCodes = [...new Set(matches.map(item => item.match.code))]
+  if (correctedCodes.length !== 1) return { code: null, ambiguous: correctedCodes.length > 1, exact: false, matches }
+  return { code: correctedCodes[0], ambiguous: false, exact: false, matches }
+}
+
+function blockPassCandidate(words, block, allowedCodes) {
+  const text = textFromWords(words)
+  const code = resolveRegisteredCode(words, allowedCodes)
+  const explicit = explicitTimeRange(text)
+  const geometryValid = Number.isInteger(block.geometryStartMinutes) && Number.isInteger(block.geometryEndMinutes) && block.geometryEndMinutes > block.geometryStartMinutes
+  const startMinutes = explicit?.startMinutes ?? (geometryValid ? block.geometryStartMinutes : null)
+  const endMinutes = explicit?.endMinutes ?? (geometryValid ? block.geometryEndMinutes : null)
+  const warnings = ['Day was assigned from the detected physical class rectangle.']
+  const timeAlternatives = []
+  if (!explicit) {
+    warnings.push(geometryValid ? 'Time was inferred from calibrated rectangle geometry and must be confirmed.' : 'No reliable time was found inside this class rectangle.')
+    if (geometryValid) timeAlternatives.push({ source: 'GRID_GEOMETRY', startMinutes, endMinutes, confidence: block.geometryTimeReliable ? 0.7 : 0.45, label: `Use ${String(Math.floor(startMinutes / 60)).padStart(2, '0')}:${String(startMinutes % 60).padStart(2, '0')}–${String(Math.floor(endMinutes / 60)).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}`, warnings: [] })
+  }
+  if (code.ambiguous) warnings.push('Module assignment is ambiguous across registered modules.')
+  const parsed = parseNtuSessionBlock(text, {
+    dayOfWeek: block.dayOfWeek,
+    startMinutes,
+    endMinutes,
+    timeConfirmed: Boolean(explicit),
+    timeAlternatives,
+    defaultWeekly: true,
+    codeTokens: code.matches.flatMap(item => [item.word.text, item.match.code]),
+    confidence: explicit && code.exact ? 0.96 : explicit ? 0.84 : 0.55,
+    warnings
+  })
+  if (!parsed) return { code, text, explicit, session: null, score: 0 }
+  const fieldSources = {
+    moduleCode: code.exact ? 'EXTRACTED' : code.code ? 'INFERRED' : 'INFERRED',
+    classType: 'EXTRACTED',
+    groupLabel: parsed.groupLabel === 'DEFAULT' ? 'INFERRED' : 'EXTRACTED',
+    dayOfWeek: 'INFERRED',
+    startMinutes: explicit ? 'EXTRACTED' : 'INFERRED',
+    endMinutes: explicit ? 'EXTRACTED' : 'INFERRED',
+    venue: parsed.venue ? 'EXTRACTED' : 'INFERRED',
+    deliveryMode: parsed.deliveryMode === 'UNKNOWN' ? 'INFERRED' : 'EXTRACTED',
+    recurrence: parsed.weekNumbers.length ? 'EXTRACTED' : 'INFERRED',
+    weekNumbers: parsed.weekNumbers.length ? 'EXTRACTED' : 'INFERRED'
+  }
+  const session = {
+    ...parsed,
+    blockId: block.blockId,
+    moduleAssignmentConfirmed: Boolean(code.code && !code.ambiguous),
+    fieldSources,
+    originalValues: {
+      moduleCode: code.code,
+      classType: parsed.classType,
+      groupLabel: parsed.groupLabel,
+      dayOfWeek: parsed.dayOfWeek,
+      startMinutes: parsed.startMinutes,
+      endMinutes: parsed.endMinutes,
+      venue: parsed.venue,
+      deliveryMode: parsed.deliveryMode,
+      recurrence: parsed.recurrence,
+      weekNumbers: parsed.weekNumbers
+    }
+  }
+  const score = Number(code.exact) * 8 + Number(Boolean(code.code)) * 4 + Number(Boolean(explicit)) * 5 + Number(Boolean(parsed.venue)) + Number(parsed.groupLabel !== 'DEFAULT') + Math.min(parsed.weekNumbers.length, 13) / 10
+  return { code, text, explicit, session, score }
+}
+
+function mergeBlockCandidates(candidates, resolvedCode) {
+  const eligible = candidates.filter(candidate => candidate.session && (!candidate.code.code || candidate.code.code === resolvedCode)).sort((left, right) => right.score - left.score)
+  if (!eligible.length) return null
+  const best = structuredClone(eligible[0].session)
+  const sameBlock = eligible.map(candidate => candidate.session)
+  const richerGroup = sameBlock.find(session => session.groupLabel !== 'DEFAULT')
+  const richerVenue = sameBlock.find(session => session.venue)
+  const richerWeeks = sameBlock.find(session => session.weekNumbers.length)
+  const explicitTime = eligible.find(candidate => candidate.explicit)?.session
+  if (best.groupLabel === 'DEFAULT' && richerGroup) best.groupLabel = richerGroup.groupLabel
+  if (!best.venue && richerVenue) { best.venue = richerVenue.venue; best.deliveryMode = richerVenue.deliveryMode; best.deliveryModeConfirmed = richerVenue.deliveryModeConfirmed }
+  if (!best.weekNumbers.length && richerWeeks) { best.recurrence = richerWeeks.recurrence; best.recurrenceConfirmed = richerWeeks.recurrenceConfirmed; best.weekNumbers = richerWeeks.weekNumbers }
+  if (explicitTime) {
+    best.startMinutes = explicitTime.startMinutes
+    best.endMinutes = explicitTime.endMinutes
+    best.timeConfirmed = true
+    best.timeAlternatives = []
+    best.fieldSources.startMinutes = 'EXTRACTED'
+    best.fieldSources.endMinutes = 'EXTRACTED'
+  }
+  best.moduleAssignmentConfirmed = true
+  best.originalValues = { ...best.originalValues, moduleCode: resolvedCode }
+  return best
+}
+
+function parsePhysicalGrid(wordVariants, physicalBlocks, source, allowedCodes) {
+  const uniqueBlocks = []
+  const seenBlockIds = new Set()
+  let duplicateSessionBlockCount = 0
+  for (const block of physicalBlocks) {
+    if (seenBlockIds.has(block.blockId)) { duplicateSessionBlockCount += 1; continue }
+    seenBlockIds.add(block.blockId)
+    uniqueBlocks.push(block)
+  }
+  const assignments = wordVariants.map(words => wordsByPhysicalBlock(words, uniqueBlocks))
+  const modules = new Map(allowedCodes.map(code => [code, baseModule(code)]))
+  const unmatchedTimetableText = []
+  const unresolvedBlockIds = []
+  const detectedSessionBlocks = {}
+  const corrections = []
+  for (const block of uniqueBlocks) {
+    const candidates = assignments.map(assignment => blockPassCandidate(assignment.get(block.blockId) || [], block, allowedCodes))
+    const exactCodes = [...new Set(candidates.filter(candidate => candidate.code.exact).map(candidate => candidate.code.code).filter(Boolean))]
+    const possibleCodes = [...new Set(candidates.map(candidate => candidate.code.code).filter(Boolean))]
+    const resolvedCode = exactCodes.length === 1 ? exactCodes[0] : exactCodes.length === 0 && possibleCodes.length === 1 ? possibleCodes[0] : null
+    const session = resolvedCode ? mergeBlockCandidates(candidates, resolvedCode) : null
+    if (!resolvedCode || !session) {
+      unresolvedBlockIds.push(block.blockId)
+      const fallback = candidates.filter(candidate => candidate.session).sort((left, right) => right.score - left.score)[0]
+      unmatchedTimetableText.push({
+        candidateId: candidateId('unmatched'),
+        blockId: block.blockId,
+        text: [...new Set(candidates.map(candidate => candidate.text).filter(Boolean))].join('\n---\n') || `Unresolved ${block.dayOfWeek} class block`,
+        sessionCandidate: fallback ? { ...fallback.session, moduleAssignmentConfirmed: false } : null,
+        selected: false,
+        attachToCandidateId: null,
+        warnings: [resolvedCode ? 'The class rectangle did not produce one valid session candidate.' : 'The module code could not be resolved uniquely against the registered-course table.']
+      })
+      continue
+    }
+    modules.get(resolvedCode).sessions.push(session)
+    detectedSessionBlocks[resolvedCode] = (detectedSessionBlocks[resolvedCode] || 0) + 1
+    const corrected = candidates.find(candidate => candidate.code.code === resolvedCode && !candidate.code.exact)?.code.matches.find(item => item.match.code === resolvedCode)
+    if (!candidates.some(candidate => candidate.code.exact && candidate.code.code === resolvedCode) && corrected) corrections.push({ code: resolvedCode, original: corrected.word.text, corrected: resolvedCode, reason: `Corrected inside physical block ${block.blockId} using the registered-course table allowlist.` })
+  }
+  return {
+    source,
+    modules: [...modules.values()],
+    corrections,
+    physicalBlockIds: uniqueBlocks.map(block => block.blockId),
+    unresolvedBlockIds,
+    duplicateSessionBlockCount,
+    detectedSessionBlocks,
+    detectedSessionBlockCount: uniqueBlocks.length,
+    droppedSessionBlockCount: unresolvedBlockIds.length,
+    unmatchedTimetableText,
+    warnings: duplicateSessionBlockCount ? ['Duplicate physical class block IDs were rejected.'] : []
+  }
+}
+
 export function parseNtuGrid(words = [], source = 'NTU_TIMETABLE_IMAGE', blocks = [], options = {}) {
   const positionedWords = words.filter(word => word.bbox).map(word => ({ ...word, ...centre(word) }))
   const region = options.region || { x0: 0, y0: 0, x1: Math.max(1, ...positionedWords.map(word => word.bbox.x1)), y1: Math.max(1, ...positionedWords.map(word => word.bbox.y1)) }
@@ -164,10 +297,14 @@ export function parseNtuGrid(words = [], source = 'NTU_TIMETABLE_IMAGE', blocks 
     return { source, modules: [...modules.values()], unmatchedTimetableText: [], warnings: ['No registered-course allowlist was available; review every detected module.'] }
   }
 
-  const columns = weekdayColumns(positionedWords, region)
+  const columns = calibrateWeekdayColumns(positionedWords, region)
   const modules = new Map(allowedCodes.map(code => [code, baseModule(code)]))
   const unmatchedTimetableText = []
   const corrections = []
+  if (options.physicalBlocks?.length) {
+    const variants = [words, ...(options.wordVariants || [])].map(variant => variant.filter(word => word.bbox))
+    return parsePhysicalGrid(variants, options.physicalBlocks, source, allowedCodes)
+  }
   if (!columns.length) return { source, modules: [...modules.values()], unmatchedTimetableText, corrections, detectedSessionBlocks: {}, detectedSessionBlockCount: 0, droppedSessionBlockCount: 0, warnings: ['Weekday headers could not be reconstructed. No grid sessions were created.'] }
   const labels = timeLabels(positionedWords, columns[0].x0, region)
   const rowHeight = inferredRowHeight(labels)

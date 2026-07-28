@@ -7,8 +7,8 @@ const CLASS_PATTERN = /\b(LEC(?:TURE)?(?:\/STU)?|TUT(?:ORIAL)?|SEM(?:INAR)?|LAB(
 function normaliseNtuVenue(value) {
   return String(value || '')
     .replace(/\s*([+-])\s*/g, '$1')
-    .replace(/\b54-(SR\d+)\b/gi, 'S4-$1')
-    .replace(/[-;,]+\s*$/g, '')
+    .replace(/(?:\b54-|\$4-)(SR\d+)\b/gi, 'S4-$1')
+    .replace(/[^A-Z0-9+]+$/gi, '')
     .trim()
 }
 
@@ -20,7 +20,7 @@ export function parseNtuSessionBlock(text, base = {}) {
   const deliveryMode = detectDeliveryMode(value)
   const groupLabel = classMatch[2] || 'DEFAULT'
   let remainder = value.slice((classMatch.index || 0) + classMatch[0].length)
-    .replace(/;?\s*\b(?:WK|WEEK|WEEKS)\s*[\d\s,–—-]+.*$/i, '')
+    .replace(/;?\s*\b(?:WKK?|WEEK|WEEKS)\s*[\d\s,–—-]+.*$/i, '')
     .replace(/\b(?:MON(?:DAY)?|TUE(?:SDAY)?|WED(?:NESDAY)?|THU(?:RSDAY)?|FRI(?:DAY)?|SAT(?:URDAY)?|SUN(?:DAY)?)\b/ig, '')
     .replace(/\b\d{1,2}:?\d{2}\s*(?:AM|PM)?\s*[-–—]\s*\d{1,2}:?\d{2}\s*(?:AM|PM)?\b/ig, '')
     .replace(/\b\d{4}\s*(?:TO|T0|[-–—])?\s*\d{4}\s*-?\b/ig, '')

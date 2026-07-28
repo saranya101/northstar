@@ -1,7 +1,7 @@
 import { createError } from 'h3'
 import { prisma } from '../utils/prisma'
 import { requireModuleContext } from './modules'
-import { timetableStructureIssues } from '../../shared/utils/timetable-structure'
+import { timetableStructureIssues } from '#shared/utils/timetable-structure'
 
 const SESSION_INCLUDE = { userModuleEnrolment: { include: { offering: { include: { module: true, academicTerm: true } } } } }
 
@@ -94,6 +94,17 @@ function conflictPairs(sessions) {
   return result
 }
 
+function candidateConflictPairs(modules) {
+  const sessions = modules.filter(module => module.selected).flatMap(module => module.sessions.filter(session => session.selected).map(session => ({ ...session, code: module.code })))
+  const result = []
+  for (let left = 0; left < sessions.length; left += 1) {
+    for (let right = left + 1; right < sessions.length; right += 1) {
+      if (overlap(sessions[left], sessions[right])) result.push({ first: sessions[left], second: sessions[right] })
+    }
+  }
+  return result
+}
+
 export async function confirmTimetableImport(userId, id, input, database = prisma) {
   return runTransaction(database, async (transaction) => {
     const record = await transaction.timetableImport.findFirst({ where: { id, userId } })
@@ -106,6 +117,11 @@ export async function confirmTimetableImport(userId, id, input, database = prism
     const semesterStatus = sourceSemesterStatus(record.candidatePayload.sourceSemester, activeSemester.academicTerm)
     if (semesterStatus !== 'MATCH') throw domainError(409, semesterStatus === 'MISMATCH' ? `Semester mismatch: the upload is for ${record.candidatePayload.sourceSemester.displayLabel}, but the selected target is ${activeSemester.academicTerm.academicYear} ${activeSemester.academicTerm.name}.` : 'Select a target semester explicitly before confirming this import.')
     if (timetableStructureIssues(input.modules, record.candidatePayload).length) throw domainError(409, 'Resolve the structural timetable import issues before confirming.')
+    const candidateConflicts = candidateConflictPairs(input.modules)
+    if (candidateConflicts.length) {
+      const first = candidateConflicts[0]
+      throw domainError(409, `Resolve timetable conflicts before confirming. ${first.first.code} overlaps ${first.second.code} on ${first.first.dayOfWeek}.`)
+    }
     let modulesCreated = 0
     let modulesReused = 0
     let sessionsCreated = 0

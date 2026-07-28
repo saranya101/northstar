@@ -39,7 +39,9 @@ describe('full NTU WISH mobile screenshot import', () => {
   it('creates nine separate sessions using explicit printed time ranges', () => {
     const sessions = result.modules.flatMap(module => module.sessions.map(session => ({ code: module.code, ...session })))
     expect(sessions).toHaveLength(9)
-    expect(result.structure).toMatchObject({ detectedSessionBlockCount: 9, droppedSessionBlockCount: 0 })
+    expect(result.structure).toMatchObject({ detectedSessionBlockCount: 9, droppedSessionBlockCount: 0, duplicateSessionBlockCount: 0, unresolvedBlockIds: [] })
+    expect(new Set(result.structure.physicalBlockIds).size).toBe(9)
+    expect(new Set(sessions.map(session => session.blockId))).toEqual(new Set(result.structure.physicalBlockIds))
     expect(Object.fromEntries(result.modules.map(module => [module.code, module.sessions.length]))).toEqual({ AD1102: 1, HE5091: 2, AB0403: 1, AB1201: 1, AB1088: 2, AB1501: 2 })
     expect(sessions).toEqual(expect.arrayContaining([
       expect.objectContaining({ code: 'HE5091', dayOfWeek: 'MONDAY', startMinutes: 510, endMinutes: 620, venue: 'LT2A' }),
@@ -55,7 +57,10 @@ describe('full NTU WISH mobile screenshot import', () => {
       [2, 3, 6, 7, 8, 9, 10, 11]
     ])
     expect(explicitTimeRange('AB1201 SEM 11 ESR4 1330to1620')).toEqual({ startMinutes: 810, endMinutes: 980 })
+    expect(explicitTimeRange('AD1102 SEM 14 S4-SR20 133001620')).toEqual({ startMinutes: 810, endMinutes: 980 })
     expect(sessions.every(session => session.timeConfirmed)).toBe(true)
+    expect(sessions.every(session => session.moduleAssignmentConfirmed)).toBe(true)
+    expect(sessions.every(session => session.fieldSources.startMinutes === 'EXTRACTED' && session.originalValues.moduleCode === session.code)).toBe(true)
     expect(findTimetableConflicts(sessions)).toHaveLength(0)
     expect(JSON.stringify(result.unmatchedTimetableText)).not.toMatch(/\\p0403|S4-SR2|LHS-TR\+51/i)
   })
@@ -88,6 +93,33 @@ describe('full NTU WISH mobile screenshot import', () => {
     expect(result.modules.flatMap(module => module.sessions)).toHaveLength(9)
     const repeated = parseNtuTimetableImage({ ...ntuFullMobileOcrFixture, wordVariants: [ntuFullMobileOcrFixture.wordVariants[0], ntuFullMobileOcrFixture.wordVariants[0]] })
     expect(repeated.modules.flatMap(module => module.sessions)).toHaveLength(9)
+    expect(new Set(repeated.modules.flatMap(module => module.sessions.map(session => session.blockId))).size).toBe(9)
+  })
+
+  it('prefers explicit text time over rectangle geometry and records provenance', () => {
+    const word = (text, x, y, width = 80) => ({ text, bbox: { x0: x, y0: y, x1: x + width, y1: y + 14 } })
+    const block = { blockId: 'block-explicit', dayOfWeek: 'TUESDAY', bbox: { x0: 200, y0: 100, x1: 400, y1: 220 }, geometryStartMinutes: 600, geometryEndMinutes: 660, geometryTimeReliable: true }
+    const grid = parseNtuGrid([
+      word('AB1201', 220, 115), word('SEM 11', 220, 140), word('ESR4', 220, 165), word('1330to1620', 220, 190, 100)
+    ], 'NTU_TIMETABLE_IMAGE', [], { allowedCodes: ['AB1201'], physicalBlocks: [block] })
+    expect(grid.modules[0].sessions[0]).toMatchObject({
+      blockId: 'block-explicit', startMinutes: 810, endMinutes: 980, timeConfirmed: true,
+      fieldSources: { startMinutes: 'EXTRACTED', endMinutes: 'EXTRACTED' },
+      originalValues: { moduleCode: 'AB1201', startMinutes: 810, endMinutes: 980 }
+    })
+  })
+
+  it('keeps a physically detected block unresolved when OCR passes identify different registered modules', () => {
+    const word = text => ({ text, bbox: { x0: 220, y0: 120, x1: 320, y1: 136 } })
+    const block = { blockId: 'block-ambiguous', dayOfWeek: 'MONDAY', bbox: { x0: 200, y0: 100, x1: 400, y1: 220 }, geometryStartMinutes: 510, geometryEndMinutes: 620, geometryTimeReliable: true }
+    const first = [word('AB1201'), { ...word('SEM 11'), bbox: { x0: 220, y0: 145, x1: 320, y1: 161 } }, { ...word('0830to1020'), bbox: { x0: 220, y0: 170, x1: 340, y1: 186 } }]
+    const second = first.map(item => ({ ...item, bbox: { ...item.bbox } }))
+    second[0].text = 'HE5091'
+    const grid = parseNtuGrid(first, 'NTU_TIMETABLE_IMAGE', [], { allowedCodes: ['AB1201', 'HE5091'], physicalBlocks: [block], wordVariants: [second] })
+
+    expect(grid.modules.flatMap(module => module.sessions)).toHaveLength(0)
+    expect(grid.unresolvedBlockIds).toEqual(['block-ambiguous'])
+    expect(grid.unmatchedTimetableText[0]).toMatchObject({ blockId: 'block-ambiguous', sessionCandidate: { moduleAssignmentConfirmed: false } })
   })
 
   it('tolerates edge offsets but rejects equally plausible cross-column boxes', () => {

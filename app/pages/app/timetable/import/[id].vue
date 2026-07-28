@@ -1,6 +1,6 @@
 <script setup>
 import { CLASS_SESSION_TYPES, DAYS_OF_WEEK, REGISTRATION_STATUSES, SESSION_DELIVERY_MODES, SESSION_RECURRENCES } from '~~/shared/schemas/timetable'
-import { findTimetableConflicts } from '~/utils/timetable-import/timetable-conflicts'
+import { findTimetableConflicts, overlappingWeekNumbers } from '~/utils/timetable-import/timetable-conflicts'
 import { deliveryModeIcon, deliveryModeLabel } from '~/utils/timetable-import/timetable-delivery'
 import { parseNtuSessionBlock } from '~/utils/timetable-import/ntu-session-block-parser'
 import { applyPublicEnrichmentSuggestion, canConfirmReview, cloneReviewModules, groupReviewSessions, initialExpandedModuleIds, initialExpandedSessionIds, moduleIssueCount, revealReviewIssue, reviewIssues, sessionIssueFields } from '~/utils/timetable-import/timetable-review'
@@ -65,8 +65,10 @@ async function navigateToIssue(issue) {
   target?.focus({ preventScroll: true })
 }
 function timeValue(session, key) { return formatMinutes(session[key]) }
+function markManual(session, field) { session.fieldSources ||= {}; session.fieldSources[field] = 'MANUAL' }
 function setTime(session, key, event) {
   session[key] = event.target.value ? parseTime(event.target.value, { end: key === 'endMinutes' }) : null
+  markManual(session, key)
   session.timeConfirmed = Number.isInteger(session.startMinutes) && Number.isInteger(session.endMinutes) && session.endMinutes > session.startMinutes
   if (session.timeConfirmed) session.timeAlternatives = []
 }
@@ -90,11 +92,41 @@ async function enrichOne(module) {
   else if (value.verificationStatus === 'PUBLIC_SOURCE_CONFLICT' || value.reason?.includes('not found')) { module.publicEnrichmentConfirmed = false; expandedModules.add(module.candidateId) }
 }
 async function enrichAll() { await Promise.all(modules.value.map(enrichOne)) }
-function setDeliveryMode(session, value) { session.deliveryMode = value; session.deliveryModeConfirmed = value !== 'UNKNOWN' }
-function setRecurrence(session, value) { session.recurrence = value; session.recurrenceConfirmed = true; if (value !== 'CUSTOM') session.weekNumbers = [] }
-function setWeeks(session, event) { session.weekNumbers = [...new Set(event.target.value.split(/[, ]+/).filter(Boolean).map(Number).filter(value => value >= 1 && value <= 20))].sort((left, right) => left - right) }
-function chooseTime(session, alternative) { session.startMinutes = alternative.startMinutes; session.endMinutes = alternative.endMinutes; session.timeConfirmed = true; session.timeAlternatives = [] }
-function attachUnmatched(item) { const module = modules.value.find(value => value.candidateId === item.attachToCandidateId); if (!module) return; const session = parseNtuSessionBlock(item.text, { confidence: 0.3, warnings: ['Attached manually from unmatched OCR text. Confirm every field.'] }); if (session) module.sessions.push(session); unmatchedText.value = unmatchedText.value.filter(value => value.candidateId !== item.candidateId) }
+function setDeliveryMode(session, value) { session.deliveryMode = value; session.deliveryModeConfirmed = value !== 'UNKNOWN'; markManual(session, 'deliveryMode') }
+function setRecurrence(session, value) { session.recurrence = value; session.recurrenceConfirmed = true; if (value !== 'CUSTOM') session.weekNumbers = []; markManual(session, 'recurrence') }
+function setWeeks(session, event) { session.weekNumbers = [...new Set(event.target.value.split(/[, ]+/).filter(Boolean).map(Number).filter(value => value >= 1 && value <= 20))].sort((left, right) => left - right); markManual(session, 'weekNumbers') }
+function chooseTime(session, alternative) { session.startMinutes = alternative.startMinutes; session.endMinutes = alternative.endMinutes; session.timeConfirmed = true; session.timeAlternatives = []; markManual(session, 'startMinutes'); markManual(session, 'endMinutes') }
+function moveSession(sourceModule, session, targetId) {
+  if (!targetId || targetId === sourceModule.candidateId) return
+  const target = modules.value.find(module => module.candidateId === targetId)
+  if (!target) return
+  sourceModule.sessions = sourceModule.sessions.filter(item => item.candidateId !== session.candidateId)
+  session.moduleAssignmentConfirmed = true
+  markManual(session, 'moduleCode')
+  target.sessions.push(session)
+  expandedModules.add(target.candidateId)
+}
+function attachUnmatched(item) {
+  const module = modules.value.find(value => value.candidateId === item.attachToCandidateId)
+  if (!module) return
+  const session = item.sessionCandidate || parseNtuSessionBlock(item.text, { confidence: 0.3, warnings: ['Attached manually from unmatched OCR text. Confirm every field.'] })
+  if (!session) return
+  session.blockId ||= item.blockId || null
+  session.moduleAssignmentConfirmed = true
+  session.fieldSources ||= {}
+  session.originalValues ||= {}
+  markManual(session, 'moduleCode')
+  module.sessions.push(session)
+  if (item.blockId && draft.value?.structure) {
+    draft.value.structure.unresolvedBlockIds = (draft.value.structure.unresolvedBlockIds || []).filter(blockId => blockId !== item.blockId)
+    draft.value.structure.droppedSessionBlockCount = draft.value.structure.unresolvedBlockIds.length
+  }
+  unmatchedText.value = unmatchedText.value.filter(value => value.candidateId !== item.candidateId)
+}
+function conflictWeeks(first, second) {
+  const weeks = overlappingWeekNumbers(first, second)
+  return weeks.length >= 20 ? 'Weekly overlap' : `Weeks ${weeks.join(', ')}`
+}
 async function saveReview() { const value = await updateImport(route.params.id, { modules: modules.value, unmatchedTimetableText: unmatchedText.value, warnings: draft.value.warnings }); if (value) loadedDraft.value = value; return value }
 async function confirm() { const saved = await saveReview(); if (!saved) return; result.value = await confirmImport(route.params.id, { expectedUpdatedAt: saved.updatedAt, modules: modules.value }) }
 async function cancel() { if (await cancelImport(route.params.id)) await router.push('/app/timetable/import') }
@@ -132,7 +164,8 @@ async function cancel() { if (await cancelImport(route.params.id)) await router.
             <div class="session-variants">
               <details v-for="session in group.sessions" :key="session.candidateId" :open="expandedSessions.has(session.candidateId)" class="session-variant" :class="{ 'needs-attention': sessionIssues(session).length }" @toggle="trackSessionToggle(session.candidateId, $event)">
                 <summary><label @click.stop><input v-model="session.selected" type="checkbox"> Include</label><span>{{ variantSummary(session) }}</span><UBadge v-if="sessionIssues(session).length" color="warning" variant="soft">{{ sessionIssues(session).length }}</UBadge><UIcon name="i-lucide-chevron-down" /></summary>
-                <div class="review-fields"><label>Class type<select v-model="session.classType"><option v-for="item in CLASS_SESSION_TYPES" :key="item">{{ item }}</option></select></label><label>Group<input v-model.trim="session.groupLabel"></label><label>Day<select :id="`review-${session.candidateId}-dayOfWeek`" v-model="session.dayOfWeek"><option :value="null">Choose day</option><option v-for="item in DAYS_OF_WEEK" :key="item">{{ item }}</option></select></label><label>Start<input :id="`review-${session.candidateId}-startMinutes`" type="time" :value="timeValue(session, 'startMinutes')" @input="setTime(session, 'startMinutes', $event)"></label><label>End<input :id="`review-${session.candidateId}-endMinutes`" type="time" :value="timeValue(session, 'endMinutes')" @input="setTime(session, 'endMinutes', $event)"></label><label>Venue<input v-model.trim="session.venue" maxlength="200"></label><label>Delivery mode<span class="delivery-control"><UIcon :name="deliveryModeIcon(session.deliveryMode)" /><select :id="`review-${session.candidateId}-deliveryMode`" :value="session.deliveryMode" @change="setDeliveryMode(session, $event.target.value)"><option v-for="item in SESSION_DELIVERY_MODES" :key="item" :value="item">{{ deliveryModeLabel(item) }}</option></select></span></label><label>Recurrence<select :id="`review-${session.candidateId}-recurrence`" :value="session.recurrence" @change="setRecurrence(session, $event.target.value)"><option v-for="item in SESSION_RECURRENCES" :key="item">{{ item }}</option></select></label><label v-if="session.recurrence === 'CUSTOM'">Teaching weeks<input :value="session.weekNumbers.join(', ')" placeholder="2, 3, 4" @input="setWeeks(session, $event)"></label></div>
+                <div :id="`review-${session.candidateId}-conflict`" class="review-fields" tabindex="-1"><label>Module<select :id="`review-${session.candidateId}-moduleCode`" :value="module.candidateId" @change="moveSession(module, session, $event.target.value)"><option v-for="target in modules" :key="target.candidateId" :value="target.candidateId">{{ target.code }}</option></select></label><label>Class type<select v-model="session.classType" @change="markManual(session, 'classType')"><option v-for="item in CLASS_SESSION_TYPES" :key="item">{{ item }}</option></select></label><label>Group<input v-model.trim="session.groupLabel" @input="markManual(session, 'groupLabel')"></label><label>Day<select :id="`review-${session.candidateId}-dayOfWeek`" v-model="session.dayOfWeek" @change="markManual(session, 'dayOfWeek')"><option :value="null">Choose day</option><option v-for="item in DAYS_OF_WEEK" :key="item">{{ item }}</option></select></label><label>Start<input :id="`review-${session.candidateId}-startMinutes`" type="time" :value="timeValue(session, 'startMinutes')" @input="setTime(session, 'startMinutes', $event)"></label><label>End<input :id="`review-${session.candidateId}-endMinutes`" type="time" :value="timeValue(session, 'endMinutes')" @input="setTime(session, 'endMinutes', $event)"></label><label>Venue<input v-model.trim="session.venue" maxlength="200" @input="markManual(session, 'venue')"></label><label>Delivery mode<span class="delivery-control"><UIcon :name="deliveryModeIcon(session.deliveryMode)" /><select :id="`review-${session.candidateId}-deliveryMode`" :value="session.deliveryMode" @change="setDeliveryMode(session, $event.target.value)"><option v-for="item in SESSION_DELIVERY_MODES" :key="item" :value="item">{{ deliveryModeLabel(item) }}</option></select></span></label><label>Recurrence<select :id="`review-${session.candidateId}-recurrence`" :value="session.recurrence" @change="setRecurrence(session, $event.target.value)"><option v-for="item in SESSION_RECURRENCES" :key="item">{{ item }}</option></select></label><label v-if="session.recurrence === 'CUSTOM'">Teaching weeks<input :value="session.weekNumbers.join(', ')" placeholder="2, 3, 4" @input="setWeeks(session, $event)"></label></div>
+                <p v-if="session.blockId" class="review-provenance">Physical block {{ session.blockId }} · {{ Object.entries(session.fieldSources || {}).map(([field, source]) => `${field}: ${source.toLowerCase()}`).join(' · ') }}</p>
                 <div v-if="session.timeConfirmed === false && session.timeAlternatives?.length" class="enrichment-actions"><UButton v-for="alternative in session.timeAlternatives" :key="`${alternative.source}-${alternative.startMinutes}-${alternative.endMinutes}`" size="sm" :color="alternative.source === 'EXPLICIT_TEXT' ? 'primary' : 'neutral'" :variant="alternative.source === 'EXPLICIT_TEXT' ? 'solid' : 'outline'" @click="chooseTime(session, alternative)">{{ alternative.label || `Use ${alternative.source.toLowerCase().replaceAll('_', ' ')}` }}</UButton></div><label v-if="session.deliveryMode === 'UNKNOWN' && !session.deliveryModeConfirmed" class="review-confirm"><input v-model="session.deliveryModeConfirmed" type="checkbox"> Confirm unknown delivery mode</label><label v-if="session.recurrence === 'WEEKLY' && !session.recurrenceConfirmed" class="review-confirm"><input v-model="session.recurrenceConfirmed" type="checkbox"> Confirm this class occurs every teaching week</label><ul v-if="session.warnings.length"><li v-for="warning in session.warnings" :key="warning">{{ warning }}</li></ul>
               </details>
             </div>
@@ -142,7 +175,7 @@ async function cancel() { if (await cancelImport(route.params.id)) await router.
         </div>
       </section>
       <section v-if="unmatchedText.length" class="dossier-section"><div class="dossier-section__heading"><div><p>Review only</p><h2>Unmatched timetable text</h2></div><UBadge color="warning">{{ unmatchedText.length }}</UBadge></div><p>These OCR blocks were not allowed to create module cards.</p><article v-for="item in unmatchedText" :key="item.candidateId" class="unmatched-block"><textarea v-model="item.text" rows="2" /><select v-model="item.attachToCandidateId"><option :value="null">Choose a registered module</option><option v-for="module in modules" :key="module.candidateId" :value="module.candidateId">{{ module.code }}</option></select><div class="enrichment-actions"><UButton size="sm" :disabled="!item.attachToCandidateId" @click="attachUnmatched(item)">Attach manually</UButton><UButton size="sm" color="neutral" variant="ghost" @click="unmatchedText = unmatchedText.filter(value => value.candidateId !== item.candidateId)">Ignore</UButton></div></article></section>
-      <details class="review-preview"><summary><h2>Weekly preview</h2><span>{{ selectedSessions.length }} selected rules · {{ conflicts.length }} conflicts</span><UIcon name="i-lucide-chevron-down" /></summary><p v-if="!selectedSessions.length">No complete sessions to preview.</p><ol><li v-for="session in selectedSessions" :key="session.candidateId"><strong>{{ session.code }}</strong> {{ session.dayOfWeek || 'Day missing' }} · {{ formatMinutes(session.startMinutes) || 'Start missing' }}–{{ formatMinutes(session.endMinutes) || 'End missing' }} · <span class="delivery-label"><UIcon :name="deliveryModeIcon(session.deliveryMode)" /> {{ deliveryModeLabel(session.deliveryMode) }}</span> · {{ session.recurrence === 'CUSTOM' ? `Weeks ${session.weekNumbers.join(', ')}` : session.recurrence }}</li></ol><p v-if="conflicts.length" class="module-alert">{{ conflicts.length }} overlapping session pair{{ conflicts.length === 1 ? '' : 's' }} found.</p></details>
+      <details class="review-preview"><summary><h2>Weekly preview</h2><span>{{ selectedSessions.length }} selected rules · {{ conflicts.length }} conflicts</span><UIcon name="i-lucide-chevron-down" /></summary><p v-if="!selectedSessions.length">No complete sessions to preview.</p><ol><li v-for="session in selectedSessions" :key="session.candidateId"><strong>{{ session.code }}</strong> {{ session.dayOfWeek || 'Day missing' }} · {{ formatMinutes(session.startMinutes) || 'Start missing' }}–{{ formatMinutes(session.endMinutes) || 'End missing' }} · <span class="delivery-label"><UIcon :name="deliveryModeIcon(session.deliveryMode)" /> {{ deliveryModeLabel(session.deliveryMode) }}</span> · {{ session.recurrence === 'CUSTOM' ? `Weeks ${session.weekNumbers.join(', ')}` : session.recurrence }}</li></ol><div v-if="conflicts.length" class="module-alert"><strong>{{ conflicts.length }} overlapping session pair{{ conflicts.length === 1 ? '' : 's' }} found.</strong><ol><li v-for="pair in conflicts" :key="`${pair.first.candidateId}-${pair.second.candidateId}`"><strong>{{ pair.first.code }}</strong> {{ pair.first.dayOfWeek }} {{ formatMinutes(pair.first.startMinutes) }}–{{ formatMinutes(pair.first.endMinutes) }} conflicts with <strong>{{ pair.second.code }}</strong> {{ formatMinutes(pair.second.startMinutes) }}–{{ formatMinutes(pair.second.endMinutes) }} · {{ conflictWeeks(pair.first, pair.second) }}</li></ol></div></details>
       <p v-if="Object.keys(fieldErrors).length" class="module-alert">Some reviewed fields are invalid. Check highlighted or missing information.</p>
       <footer class="review-actions"><div class="review-actions__status"><span><strong>{{ selectedModuleCount }}</strong> modules</span><span><strong>{{ selectedSessions.length }}</strong> session rules</span><span :class="{ 'has-issues': needsAttention }"><strong>{{ needsAttention }}</strong> unresolved</span><span v-if="draft.semesterMatchStatus !== 'MATCH'" class="semester-block"><UIcon name="i-lucide-triangle-alert" /> Semester {{ draft.semesterMatchStatus.toLowerCase() }}</span></div><div class="review-actions__buttons"><UButton color="neutral" variant="ghost" @click="cancel">Cancel</UButton><UButton color="neutral" variant="outline" :loading="saving" @click="saveReview">Save draft</UButton><UButton :disabled="!canConfirm" :loading="saving" @click="confirm">Confirm</UButton></div></footer>
     </template>

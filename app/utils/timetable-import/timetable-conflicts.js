@@ -5,9 +5,13 @@ function recurrenceWeeks(session) {
   return Array.from({ length: 52 }, (_, index) => index + 1)
 }
 
-export function recurrencesOverlap(left, right) {
+export function overlappingWeekNumbers(left, right) {
   const rightWeeks = new Set(recurrenceWeeks(right))
-  return recurrenceWeeks(left).some(week => rightWeeks.has(week))
+  return recurrenceWeeks(left).filter(week => rightWeeks.has(week))
+}
+
+export function recurrencesOverlap(left, right) {
+  return overlappingWeekNumbers(left, right).length > 0
 }
 
 export function sessionsConflict(left, right) {
@@ -23,4 +27,3 @@ export function findTimetableConflicts(sessions) {
   }
   return conflicts
 }
-

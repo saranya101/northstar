@@ -12,6 +12,12 @@ export function timetableStructureIssues(modules = [], draft = {}) {
   if (summary?.totalAcademicUnits !== null && summary?.totalAcademicUnits !== undefined && Math.abs(summary.totalAcademicUnits - academicUnits) > 0.001) issues.push(issue('academic-units', `Source lists ${summary.totalAcademicUnits} AU, but reconstructed courses total ${academicUnits} AU`))
   const sessions = modules.flatMap(module => module.sessions || [])
   if (structure?.gridVisible && sessions.length === 0) issues.push(issue('zero-sessions', 'A visible weekly grid produced no sessions'))
+  const selectedSessions = modules.filter(module => module.selected).flatMap(module => (module.sessions || []).filter(session => session.selected))
+  const selectedBlockIds = selectedSessions.map(session => session.blockId).filter(Boolean)
+  const duplicateBlockIds = [...new Set(selectedBlockIds.filter((blockId, index) => selectedBlockIds.indexOf(blockId) !== index))]
+  if (structure?.duplicateSessionBlockCount > 0 || duplicateBlockIds.length) issues.push(issue('duplicate-session-blocks', 'More than one session candidate maps to the same physical class block'))
+  if (structure?.unresolvedBlockIds?.length) issues.push(issue('unresolved-session-blocks', `${structure.unresolvedBlockIds.length} physical class block${structure.unresolvedBlockIds.length === 1 ? '' : 's'} still need a module assignment or valid session`))
+  if (structure?.physicalBlockIds?.length && selectedBlockIds.length !== structure.physicalBlockIds.length) issues.push(issue('selected-block-count', `${structure.physicalBlockIds.length} physical class blocks were detected, but ${selectedBlockIds.length} valid block-linked sessions are selected`))
   const moduleCodes = new Set(modules.map(module => module.code))
   for (const code of structure?.gridModuleCodes || []) if (!moduleCodes.has(code)) issues.push(issue(`missing-grid-${code}`, `${code} appears in the grid but has no registered-course candidate`, code))
   let sessionStructureMismatch = false

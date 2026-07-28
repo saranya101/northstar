@@ -63,6 +63,41 @@ describe('import confirmation concurrency', () => {
     expect(transaction.module.create).not.toHaveBeenCalled()
     expect(transaction.classSession.create).not.toHaveBeenCalled()
   })
+  it('rejects candidate timetable conflicts before module or session writes', async () => {
+    const updatedAt = new Date('2026-07-21T00:00:00.000Z')
+    const candidateSession = (candidateId, blockId, startMinutes, endMinutes) => ({
+      candidateId, blockId, selected: true, classType: 'LECTURE', groupLabel: 'LE', dayOfWeek: 'MONDAY',
+      startMinutes, endMinutes, recurrence: 'CUSTOM', weekNumbers: [7]
+    })
+    const modules = [
+      { candidateId: 'm1', code: 'AB1201', title: 'First', academicUnits: 3, indexNumber: '00105', selected: true, sessions: [candidateSession('s1', 'block-1', 540, 630)] },
+      { candidateId: 'm2', code: 'HE5091', title: 'Second', academicUnits: 3, indexNumber: '01062', selected: true, sessions: [candidateSession('s2', 'block-2', 600, 660)] }
+    ]
+    const transaction = {
+      timetableImport: { findFirst: vi.fn().mockResolvedValue({
+        id: 'import-1', userId: 'user-1', userSemesterId: 'semester-1', status: 'NEEDS_REVIEW', updatedAt,
+        candidatePayload: {
+          sourceSemester: { academicYearLabel: '2026/2027', semesterNumber: 1, displayLabel: '2026/2027 Semester 1' },
+          sourceSummary: { moduleCount: 2, totalAcademicUnits: 6 },
+          structure: {
+            gridVisible: true, gridModuleCodes: ['AB1201', 'HE5091'], physicalBlockIds: ['block-1', 'block-2'],
+            unresolvedBlockIds: [], duplicateSessionBlockCount: 0, detectedSessionBlocks: { AB1201: 1, HE5091: 1 },
+            detectedSessionBlockCount: 2, droppedSessionBlockCount: 0, examRowsDetected: 0, examRowsReconstructed: 0
+          }
+        }
+      }) },
+      userAcademicProfile: { findUnique: vi.fn().mockResolvedValue({ universityId: 'u1' }) },
+      userSemester: { findFirst: vi.fn().mockResolvedValue({ id: 'semester-1', academicTermId: 'term-1', academicTerm: { universityId: 'u1', academicYear: '2026/2027', semesterNumber: 1, name: 'Semester 1' } }) },
+      module: { create: vi.fn() },
+      classSession: { create: vi.fn() }
+    }
+    const database = { $transaction: callback => callback(transaction) }
+    await expect(confirmTimetableImport('user-1', 'import-1', { expectedUpdatedAt: updatedAt.toISOString(), modules }, database)).rejects.toMatchObject({
+      statusCode: 409, statusMessage: expect.stringContaining('Resolve timetable conflicts before confirming')
+    })
+    expect(transaction.module.create).not.toHaveBeenCalled()
+    expect(transaction.classSession.create).not.toHaveBeenCalled()
+  })
   it('reuses an enrolment and skips an identical session on a repeated import', async () => {
     const updatedAt = new Date('2026-07-21T00:00:00.000Z')
     const moduleCandidate = {

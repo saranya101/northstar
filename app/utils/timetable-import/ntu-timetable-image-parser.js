@@ -24,11 +24,28 @@ export function parseNtuTimetableImage(extraction, source = 'NTU_TIMETABLE_IMAGE
   const allGridWords = gridWordVariants.flat()
   const gridModuleCodes = [...new Set(allGridWords.map(word => String(word.text || '').toUpperCase().replace(/[^A-Z0-9]/g, '')).filter(value => /^[A-Z]{2}\d{4}$/.test(value)))]
   const gridVisible = allGridWords.some(word => /^(?:MON|TUE|WED|THU|FRI|SAT)$/i.test(String(word.text || '').replace(/[^A-Z]/gi, ''))) && allGridWords.some(word => /^\d{3,4}$/.test(String(word.text || '').replace(/\D/g, '')))
-  const structure = { gridVisible, gridModuleCodes, detectedSessionBlocks: {}, detectedSessionBlockCount: 0, droppedSessionBlockCount: 0, examRowsDetected: table.examRowsDetected || 0, examRowsReconstructed: table.examRowsReconstructed || 0 }
+  const structure = {
+    gridVisible,
+    gridModuleCodes,
+    physicalBlockIds: [],
+    unresolvedBlockIds: [],
+    duplicateSessionBlockCount: 0,
+    detectedSessionBlocks: {},
+    detectedSessionBlockCount: 0,
+    droppedSessionBlockCount: 0,
+    examRowsDetected: table.examRowsDetected || 0,
+    examRowsReconstructed: table.examRowsReconstructed || 0
+  }
   if (!table.modules.length) return { source, modules: [], sourceSemester: table.sourceSemester, sourceSummary: table.sourceSummary, structure, unmatchedTimetableText: [], segmentation: { confidence: regions.confidence, warnings: regions.warnings }, warnings: [...regions.warnings, ...table.warnings] }
   const allowedCodes = table.modules.map(module => module.code)
-  const grids = gridWordVariants.map(variant => parseNtuGrid(variant, source, [], { allowedCodes, region: regions.timetableGridRegion }))
+  const physicalBlocks = extraction.physicalBlocks || []
+  const grids = physicalBlocks.length
+    ? [parseNtuGrid(gridWords, source, [], { allowedCodes, region: regions.timetableGridRegion, physicalBlocks, wordVariants: gridWordVariants.slice(1) })]
+    : gridWordVariants.map(variant => parseNtuGrid(variant, source, [], { allowedCodes, region: regions.timetableGridRegion }))
   const grid = grids[0]
+  structure.physicalBlockIds = grid.physicalBlockIds || []
+  structure.unresolvedBlockIds = grid.unresolvedBlockIds || []
+  structure.duplicateSessionBlockCount = grid.duplicateSessionBlockCount || 0
   const sessionsByCode = new Map(allowedCodes.map(code => [code, []]))
   for (const parsedGrid of grids) {
     structure.detectedSessionBlockCount = Math.max(structure.detectedSessionBlockCount, parsedGrid.detectedSessionBlockCount || 0)
@@ -45,7 +62,7 @@ export function parseNtuTimetableImage(extraction, source = 'NTU_TIMETABLE_IMAGE
   }
   const codeMismatchCount = Object.entries(structure.detectedSessionBlocks).reduce((count, [code, detected]) => count + Math.max(0, detected - (sessionsByCode.get(code)?.length || 0)), 0)
   const totalSessionCount = [...sessionsByCode.values()].reduce((count, sessions) => count + sessions.length, 0)
-  structure.droppedSessionBlockCount = Math.max(codeMismatchCount, structure.detectedSessionBlockCount - totalSessionCount, 0)
+  structure.droppedSessionBlockCount = Math.max(grid.droppedSessionBlockCount || 0, codeMismatchCount, structure.detectedSessionBlockCount - totalSessionCount, 0)
   const correctionsByCode = new Map()
   for (const parsedGrid of grids) {
     for (const correction of parsedGrid.corrections || []) {
@@ -55,7 +72,7 @@ export function parseNtuTimetableImage(extraction, source = 'NTU_TIMETABLE_IMAGE
     }
   }
   const modules = table.modules.map(module => ({ ...module, sessions: sessionsByCode.get(module.code) || [], corrections: [...module.corrections, ...(correctionsByCode.get(module.code) || [])] }))
-  const warnings = [...new Set([...regions.warnings, ...table.warnings, ...grids.flatMap(parsedGrid => parsedGrid.warnings)])]
+  const warnings = [...new Set([...regions.warnings, ...(extraction.geometryWarnings || []), ...table.warnings, ...grids.flatMap(parsedGrid => parsedGrid.warnings)])]
   if (table.sourceSummary?.moduleCount && table.sourceSummary.moduleCount !== modules.length) warnings.push('The registered-course total does not match the reconstructed module rows.')
   return { source, modules, sourceSemester: table.sourceSemester, sourceSummary: table.sourceSummary, structure, unmatchedTimetableText: grid.unmatchedTimetableText, segmentation: { confidence: regions.confidence, warnings: regions.warnings }, warnings }
 }

@@ -38,6 +38,21 @@ describe('timetable review presentation', () => {
     expect(canConfirmReview([module({})], 0, 'MATCH')).toBe(true)
   })
 
+  it('reports the exact conflicting pair and immediately clears after an edit', () => {
+    const modules = [
+      module({ candidateId: 'm1', code: 'AB1201', sessions: [session({ candidateId: 's1', weekNumbers: [3, 7], startMinutes: 540, endMinutes: 630 })] }),
+      module({ candidateId: 'm2', code: 'HE5091', indexNumber: '54321', sessions: [session({ candidateId: 's2', weekNumbers: [7, 8], startMinutes: 600, endMinutes: 660 })] })
+    ]
+    const conflicts = reviewIssues(modules)
+    expect(conflicts).toEqual(expect.arrayContaining([expect.objectContaining({
+      field: 'conflict', label: 'AB1201 conflicts with HE5091', context: 'MONDAY 09:00–10:30 · weeks 7'
+    })]))
+    expect(canConfirmReview(modules, conflicts.length, 'MATCH')).toBe(false)
+
+    modules[1].sessions[0].dayOfWeek = 'TUESDAY'
+    expect(reviewIssues(modules).filter(issue => issue.field === 'conflict')).toHaveLength(0)
+  })
+
   it('reports each structural mismatch and blocks confirmation', () => {
     const modules = [
       module({ candidateId: 'm1', titleNeedsReview: true, examCandidate: null }),
@@ -88,5 +103,9 @@ describe('timetable review presentation', () => {
     const page = readFileSync(join(new URL('..', import.meta.url).pathname, 'app/pages/app/timetable/import/[id].vue'), 'utf8')
     expect(page).toMatch(/updateImport\(route\.params\.id, \{ modules: modules\.value/)
     expect(page).toMatch(/modules\.value = cloneReviewModules\(value\.modules\)/)
+    expect(page).toMatch(/moveSession\(module, session/)
+    expect(page).toMatch(/markManual\(session, 'dayOfWeek'\)/)
+    expect(page).toMatch(/Physical block/)
+    expect(page).toMatch(/findTimetableConflicts\(selectedSessions\.value\)/)
   })
 })
