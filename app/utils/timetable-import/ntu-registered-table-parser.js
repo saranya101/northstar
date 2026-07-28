@@ -40,6 +40,21 @@ function ocrDistance(leftValue, rightValue) {
   return rows[left.length][right.length]
 }
 
+function numericTail(value) {
+  const raw = clean(value)
+  if (raw.length < 5) return null
+  const tail = raw.slice(-4)
+  const normalized = [...tail].map(character => ({ O: '0', I: '1', L: '1', B: '8' }[character] || character)).join('')
+  return /^\d{4}$/.test(normalized) ? normalized : null
+}
+
+function prefixCompatible(rawPrefix, allowedPrefix, originalValue) {
+  if (/[\\/]/.test(String(originalValue)) && rawPrefix.length <= 2) return true
+  const equivalent = (left, right) => left === right || ({ 0: 'O', 1: 'I', 8: 'B' }[left] || left) === right
+  if (rawPrefix.length === 1) return equivalent(rawPrefix, allowedPrefix[0]) || equivalent(rawPrefix, allowedPrefix[1])
+  return rawPrefix.length === 2 && [...rawPrefix].every((character, index) => equivalent(character, allowedPrefix[index]))
+}
+
 export function matchAllowedCode(value, allowedCodes) {
   const raw = clean(value)
   const candidates = [raw, raw.match(/^([A-Z0-9]{6})/)?.[1]].filter(Boolean)
@@ -47,8 +62,17 @@ export function matchAllowedCode(value, allowedCodes) {
     const canonical = canonicalCode(candidate)
     if (canonical && allowedCodes.includes(canonical)) return { code: canonical, original: value, corrected: clean(value) !== canonical }
   }
+  const tail = numericTail(value)
+  if (tail && (/[A-Z]/.test(raw.slice(0, -4)) || /[\\/]/.test(String(value)))) {
+    const rawPrefix = raw.slice(0, -4)
+    const suffixMatches = allowedCodes.filter(code => code.slice(-4) === tail && prefixCompatible(rawPrefix, code.slice(0, 2), value))
+    if (suffixMatches.length === 1) return { code: suffixMatches[0], original: value, corrected: true }
+    if (suffixMatches.length > 1) return null
+  }
   const choices = allowedCodes.map(code => ({ code, distance: ocrDistance(raw, code) })).sort((left, right) => left.distance - right.distance)
-  return choices[0] && choices[0].distance <= Math.max(1.3, Math.min(2.3, raw.length * 0.3)) ? { code: choices[0].code, original: value, corrected: true } : null
+  const threshold = Math.max(1.3, Math.min(2.3, raw.length * 0.3))
+  const uniqueMargin = !choices[1] || choices[1].distance - choices[0].distance >= 0.55
+  return choices[0] && uniqueMargin && choices[0].distance <= threshold ? { code: choices[0].code, original: value, corrected: true } : null
 }
 
 function gridCodePool(words) {

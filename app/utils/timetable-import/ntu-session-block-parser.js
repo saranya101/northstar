@@ -2,7 +2,7 @@ import { detectDeliveryMode, hasPhysicalVenue } from './timetable-delivery'
 import { candidateId, mapClassType } from './timetable-candidate-normaliser'
 import { parseWeekExpression } from './week-expression'
 
-const CLASS_PATTERN = /\b(LEC(?:TURE)?(?:\/STU)?|TUT(?:ORIAL)?|SEM(?:INAR)?|LAB(?:ORATORY)?|WORKSHOP|PROJECT|FIELDWORK)(?:\s*\/\s*STU)?\s*((?:[A-Z]{1,4}\d+)|LE|\d+)?/i
+const CLASS_PATTERN = /\b(LEC(?:TURE)?(?:\/STU)?|TUT(?:ORIAL)?|SEM(?:INAR)?|LAB(?:ORATORY)?|PRJ|PROJECT|DES|WORKSHOP|FIELDWORK)(?:\s*\/\s*STU)?\s*((?:[A-Z]{1,4}\d+)|LE|\d+)?/i
 
 export function parseNtuSessionBlock(text, base = {}) {
   const value = String(text || '').replace(/\s+/g, ' ').trim()
@@ -18,6 +18,8 @@ export function parseNtuSessionBlock(text, base = {}) {
     .replace(/\b\d{4}\s*(?:TO|T0|[-–—])?\s*\d{4}\s*-?\b/ig, '')
     .replace(/\b\d{8,10}\s*-?\b/g, '')
     .trim()
+  const codeTokens = new Set((base.codeTokens || []).map(token => String(token || '').toUpperCase().replace(/[^A-Z0-9]/g, '')).filter(Boolean))
+  if (codeTokens.size) remainder = remainder.split(/\s+/).filter(token => !codeTokens.has(token.toUpperCase().replace(/[^A-Z0-9]/g, ''))).join(' ').trim()
   if (/^NBS\s+ONLINE$/i.test(remainder)) remainder = ''
   else remainder = remainder.replace(/\b(?:ONLINE|ZOOM|MS\s*TEAMS|TEAMS)\b/ig, '').trim()
   const venue = deliveryMode === 'TBC' ? 'TBC' : deliveryMode === 'ONLINE' && !remainder.replace(/;/g, '').trim() ? 'ONLINE' : hasPhysicalVenue(remainder) ? remainder.replace(/^;+|;+$/g, '').trim() : null

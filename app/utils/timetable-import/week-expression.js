@@ -1,7 +1,7 @@
 const WEEK_MARKER = /\b(?:WEEKS|WEEK|WK)\s*/i
 
 export function parseWeekExpression(value) {
-  const text = String(value || '').replace(/[–—]/g, '-').trim()
+  const text = String(value || '').replace(/[–—]/g, '-').replace(/(\d)\s*;\s*(\d)/g, '$1-$2').trim()
   const marker = text.match(WEEK_MARKER)
   if (!marker) return { matched: false, weekNumbers: [], recurrence: null, warning: null }
   const expression = text.slice(marker.index + marker[0].length).split(';')[0].trim()

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { parseNtuTimetableImage } from '../app/utils/timetable-import/ntu-timetable-image-parser'
-import { explicitTimeRange } from '../app/utils/timetable-import/ntu-grid-parser'
-import { parseNtuExam } from '../app/utils/timetable-import/ntu-registered-table-parser'
+import { explicitTimeRange, parseNtuGrid } from '../app/utils/timetable-import/ntu-grid-parser'
+import { matchAllowedCode, parseNtuExam } from '../app/utils/timetable-import/ntu-registered-table-parser'
 import { reviewIssues } from '../app/utils/timetable-import/timetable-review'
 import { findTimetableConflicts } from '../app/utils/timetable-import/timetable-conflicts'
 import { createTimetableImportSchema } from '../shared/schemas/timetable'
@@ -38,12 +38,14 @@ describe('full NTU WISH mobile screenshot import', () => {
   it('creates nine separate sessions using explicit printed time ranges', () => {
     const sessions = result.modules.flatMap(module => module.sessions.map(session => ({ code: module.code, ...session })))
     expect(sessions).toHaveLength(9)
+    expect(Object.fromEntries(result.modules.map(module => [module.code, module.sessions.length]))).toEqual({ AD1102: 1, HE5091: 2, AB0403: 1, AB1201: 1, AB1088: 2, AB1501: 2 })
     expect(sessions).toEqual(expect.arrayContaining([
       expect.objectContaining({ code: 'HE5091', dayOfWeek: 'MONDAY', startMinutes: 510, endMinutes: 620, venue: 'LT2A' }),
+      expect.objectContaining({ code: 'HE5091', classType: 'TUTORIAL', groupLabel: 'NBS3', dayOfWeek: 'TUESDAY', startMinutes: 630, endMinutes: 680, venue: 'LHS-TR+51' }),
       expect.objectContaining({ code: 'AB0403', dayOfWeek: 'TUESDAY', startMinutes: 510, endMinutes: 620, groupLabel: '5', venue: 'S4-SR2' }),
       expect.objectContaining({ code: 'AB1501', dayOfWeek: 'WEDNESDAY', startMinutes: 570, endMinutes: 620, deliveryMode: 'ONLINE' }),
       expect.objectContaining({ code: 'AB1201', dayOfWeek: 'TUESDAY', startMinutes: 810, endMinutes: 980, venue: 'ESR4' }),
-      expect.objectContaining({ code: 'AD1102', dayOfWeek: 'FRIDAY', startMinutes: 810, endMinutes: 980, venue: 'S4-SR20' })
+      expect.objectContaining({ code: 'AD1102', dayOfWeek: 'FRIDAY', startMinutes: 810, endMinutes: 980, groupLabel: '14', venue: 'S4-SR20' })
     ]))
     expect(byCode.HE5091.sessions.find(session => session.classType === 'TUTORIAL').weekNumbers).toEqual([2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13])
     expect(byCode.AB1088.sessions.map(session => session.weekNumbers)).toEqual([
@@ -53,6 +55,29 @@ describe('full NTU WISH mobile screenshot import', () => {
     expect(explicitTimeRange('AB1201 SEM 11 ESR4 1330to1620')).toEqual({ startMinutes: 810, endMinutes: 980 })
     expect(sessions.every(session => session.timeConfirmed)).toBe(true)
     expect(findTimetableConflicts(sessions)).toHaveLength(0)
+    expect(JSON.stringify(result.unmatchedTimetableText)).not.toMatch(/\\p0403|S4-SR2|LHS-TR\+51/i)
+  })
+
+  it('recovers OCR-confused codes only from one strong registered-module match', () => {
+    const registered = ['AD1102', 'HE5091', 'AB0403', 'AB1201', 'AB1088', 'AB1501']
+    expect(matchAllowedCode('\\p0403', registered)).toMatchObject({ code: 'AB0403', corrected: true })
+    expect(matchAllowedCode('A80403', registered)).toMatchObject({ code: 'AB0403', corrected: true })
+    expect(matchAllowedCode('ABO403', registered)).toMatchObject({ code: 'AB0403', corrected: true })
+    expect(matchAllowedCode('\\p0403', ['AB0403', 'CB0403'])).toBeNull()
+    expect(matchAllowedCode('LT0403', registered)).toBeNull()
+  })
+
+  it('does not attach a venue fragment from a neighbouring weekday column', () => {
+    const word = (text, x, y, width = 40) => ({ text, bbox: { x0: x, y0: y, x1: x + width, y1: y + 14 } })
+    const grid = parseNtuGrid([
+      word('MON', 100, 20), word('TUE', 300, 20), word('WED', 500, 20), word('THU', 700, 20),
+      word('0830', 10, 100), word('0930', 10, 180),
+      word('SEM 5', 280, 110, 60), word('0830to1020', 280, 130, 90), word('\\p0403', 280, 150, 60),
+      word('S4-SR2', 480, 125, 70)
+    ], 'NTU_TIMETABLE_IMAGE', [], { allowedCodes: ['AB0403'], region: { x0: 0, y0: 10, x1: 800, y1: 260 } })
+    expect(grid.modules[0].sessions).toHaveLength(1)
+    expect(grid.modules[0].sessions[0]).toMatchObject({ dayOfWeek: 'TUESDAY', venue: null, startMinutes: 510, endMinutes: 620 })
+    expect(grid.unmatchedTimetableText.map(item => item.text)).toContain('S4-SR2')
   })
 
   it('is schema-valid and has no structural issue beyond the truncated title review', () => {

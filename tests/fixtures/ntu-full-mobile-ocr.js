@@ -8,18 +8,18 @@ word('TIME\\DAY', 30, 242, 96)
 for (const [time, y] of [['0830', 310], ['0930', 390], ['1030', 470], ['1130', 550], ['1230', 630], ['1330', 710], ['1430', 790], ['1530', 870], ['1630', 950], ['1730', 1030]]) word(time, 36, y, 44)
 
 function session(column, y, lines) {
-  for (const [line, offset = 0] of lines) word(line, 215 + column * 155, y + offset)
+  for (const [line, offset = 0, horizontalOffset = 0] of lines) word(line, 215 + column * 155 + horizontalOffset, y + offset)
 }
 
 session(0, 310, [['HE5091'], ['LEC/STU;', 18], ['LT2A', 36], ['0830to1020;', 54]])
-session(1, 310, [['AB0403'], ['SEM 5', 18], ['S4-SR2', 36], ['0830to1020;', 54]])
+session(1, 310, [['SEM 5'], ['S4-SR2', 12, -18], ['0830to1020;', 28], ['\\p0403', 48]])
 session(2, 390, [['AB1501'], ['LEC/STU 1', 18], ['ONLINE', 36], ['0930to1020;', 54]])
-session(1, 470, [['HE5091'], ['TUT NBS3', 18], ['LHS-TR+51', 36], ['1030to1120;', 54], ['Wk2-13;', 72]])
+session(1, 470, [['TUT NBS3'], ['LHS-TR+51', 14, 20], ['1030to1120;', 30], ['Wk2-13;', 46], ['HE5091', 66]])
 session(3, 470, [['AB1501'], ['TUT 19', 18], ['TR+110', 36], ['1030to1220;', 54], ['Wk2-13;', 72]])
 session(1, 710, [['AB1201'], ['SEM 11', 18], ['ESR4', 36], ['1330to1620;', 54]])
 session(2, 790, [['AB1088'], ['SEM 6', 18], ['CR1', 36], ['1430to1620;', 54], ['Wk2-5,10,11;', 72]])
 session(3, 790, [['AB1088'], ['LEC/STU 1', 18], ['LT19', 36], ['1430to1720;', 54], ['Wk2,3,6-11;', 72]])
-session(4, 710, [['AD1102'], ['SEM 14', 18], ['S4-SR20', 36], ['1330to1620;', 54]])
+session(4, 710, [['SEM 14'], ['S4-SR20', 16, -16], ['1330to1620;', 34], ['AD1102', 62]])
 
 word('Academic', 150, 1260, 82); word('Year', 240, 1260, 38); word('2026,Semester', 288, 1260, 126); word('1', 420, 1260)
 word('Legend:', 1010, 1260, 68)

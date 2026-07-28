@@ -17,8 +17,7 @@ export function mapClassType(value) {
   if (/^SEM|SEMINAR/.test(text)) return 'SEMINAR'
   if (/^LAB|LABORATORY/.test(text)) return 'LABORATORY'
   if (text.includes('WORKSHOP')) return 'WORKSHOP'
-  if (text.includes('PROJECT')) return 'PROJECT'
+  if (/^(?:PRJ|PROJECT)/.test(text)) return 'PROJECT'
   if (text.includes('FIELD')) return 'FIELDWORK'
   return 'OTHER'
 }
-

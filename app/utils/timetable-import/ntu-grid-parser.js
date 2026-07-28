@@ -1,4 +1,5 @@
 import { candidateId } from './timetable-candidate-normaliser'
+import { hasPhysicalVenue } from './timetable-delivery'
 import { parseNtuSessionBlock } from './ntu-session-block-parser'
 import { matchAllowedCode } from './ntu-registered-table-parser'
 import { normalizeDay, parseTime } from './timetable-time'
@@ -89,6 +90,21 @@ function looksLikeRejectedCode(value) {
   return token.length >= 5 && token.length <= 10 && /[A-Z]/.test(token) && /\d/.test(token) && !/^(?:WK|WKI|WEEK|TR|LT|SR|SCL|LHN|EXAM|SWLAB|LEC|TUT|LAB|SEM|PRJ)/.test(token) && !/^\d{3,4}(?:TO|T0|O)?\d{3,4}$/.test(token)
 }
 
+function overlapsColumn(word, column) {
+  const width = Math.max(1, word.bbox.x1 - word.bbox.x0)
+  const overlap = Math.max(0, Math.min(word.bbox.x1, column.x1) - Math.max(word.bbox.x0, column.x0))
+  return overlap / width >= 0.5
+}
+
+function uniqueStarts(words, allowedCodes) {
+  const starts = words.map(word => ({ word, match: matchAllowedCode(word.text, allowedCodes) })).filter(item => item.match).sort((left, right) => left.word.y - right.word.y || left.word.x - right.word.x)
+  return starts.filter((start, index) => !starts.slice(0, index).some(previous => previous.match.code === start.match.code && Math.abs(previous.word.y - start.word.y) <= 16))
+}
+
+function sessionKey(session) {
+  return [session.classType, session.groupLabel, session.dayOfWeek, session.startMinutes, session.endMinutes, session.venue, session.recurrence, session.weekNumbers.join(',')].join('|')
+}
+
 function baseModule(code) {
   return { candidateId: candidateId('module'), code, title: null, academicUnits: null, indexNumber: null, courseType: null, registrationStatus: 'UNKNOWN', confidence: 0.45, selected: true, sessions: [], examCandidate: null, fieldProvenance: {}, corrections: [], publicEnrichment: null, publicEnrichmentConfirmed: true }
 }
@@ -130,13 +146,16 @@ export function parseNtuGrid(words = [], source = 'NTU_TIMETABLE_IMAGE', blocks 
   const rowHeight = inferredRowHeight(labels)
 
   for (const column of columns) {
-    const columnWords = positionedWords.filter(word => word.x >= column.x0 && word.x < column.x1 && word.y > column.header.bbox.y1 && word.y < region.y1)
-    const starts = columnWords.map(word => ({ word, match: matchAllowedCode(word.text, allowedCodes) })).filter(item => item.match).sort((left, right) => left.word.y - right.word.y)
-    const rejected = columnWords.filter(word => looksLikeRejectedCode(word.text) && !matchAllowedCode(word.text, allowedCodes))
-    for (const word of rejected) unmatchedTimetableText.push({ candidateId: candidateId('unmatched'), text: word.text, selected: false, attachToCandidateId: null, warnings: ['This code-like OCR text was not present in the registered-course table.'] })
+    const columnWords = positionedWords.filter(word => overlapsColumn(word, column) && word.y > column.header.bbox.y1 && word.y < region.y1)
+    const starts = uniqueStarts(columnWords, allowedCodes)
+    const consumed = new Set()
+    const blockExtent = Math.max(48, Math.min(120, (rowHeight || 38) * 2.4))
     for (const [index, start] of starts.entries()) {
-      const nextY = starts[index + 1]?.word.y ?? region.y1
-      const chunkWords = columnWords.filter(word => word.y >= start.word.y - 4 && word.y < nextY - 4)
+      const previousY = starts[index - 1]?.word.y
+      const nextY = starts[index + 1]?.word.y
+      const y0 = Math.max(column.header.bbox.y1, start.word.y - blockExtent, previousY === undefined ? -Infinity : (previousY + start.word.y) / 2)
+      const y1 = Math.min(region.y1, start.word.y + blockExtent, nextY === undefined ? Infinity : (start.word.y + nextY) / 2)
+      const chunkWords = columnWords.filter(word => word.y >= y0 && word.y < y1)
       const text = textFromWords(chunkWords)
       const explicit = explicitTimeRange(text)
       const geometryStart = minutesAtY(start.word.bbox.y0, labels, rowHeight)
@@ -150,14 +169,22 @@ export function parseNtuGrid(words = [], source = 'NTU_TIMETABLE_IMAGE', blocks 
       const startMinutes = explicit?.startMinutes ?? geometryStart
       const endMinutes = explicit?.endMinutes ?? (geometryValid ? geometryEnd : null)
       const timeAlternatives = []
-      const parsed = parseNtuSessionBlock(text, { dayOfWeek: column.day, startMinutes, endMinutes, timeConfirmed: startMinutes !== null && endMinutes !== null, timeAlternatives, defaultWeekly: true, confidence: explicit ? 0.9 : 0.62, warnings })
+      const parsed = parseNtuSessionBlock(text, { dayOfWeek: column.day, startMinutes, endMinutes, timeConfirmed: startMinutes !== null && endMinutes !== null, timeAlternatives, defaultWeekly: true, codeTokens: [start.word.text, start.match.code], confidence: explicit ? 0.9 : 0.62, warnings })
       if (!parsed) {
         unmatchedTimetableText.push({ candidateId: candidateId('unmatched'), text, selected: false, attachToCandidateId: null, warnings: ['A registered module code was seen, but the class details could not be reconstructed.'] })
+        chunkWords.forEach(word => consumed.add(word))
         continue
       }
-      modules.get(start.match.code).sessions.push(parsed)
+      const sessions = modules.get(start.match.code).sessions
+      if (!sessions.some(session => sessionKey(session) === sessionKey(parsed))) sessions.push(parsed)
+      chunkWords.forEach(word => consumed.add(word))
       if (start.match.corrected) corrections.push({ code: start.match.code, original: start.word.text, corrected: start.match.code, reason: 'Corrected using the registered-course table allowlist.' })
     }
+    const unassociated = columnWords.filter(word => !consumed.has(word) && !matchAllowedCode(word.text, allowedCodes) && (looksLikeRejectedCode(word.text) || hasPhysicalVenue(word.text)))
+    for (const word of unassociated) unmatchedTimetableText.push({
+      candidateId: candidateId('unmatched'), text: word.text, selected: false, attachToCandidateId: null,
+      warnings: [hasPhysicalVenue(word.text) ? 'This venue-like OCR fragment could not be associated with one class block safely.' : 'This code-like OCR text was not present in the registered-course table.']
+    })
   }
   const seenUnmatched = new Set()
   return {

@@ -21,6 +21,7 @@ describe('week expressions', () => {
     ['Wk1,12', [1, 12]],
     ['Wk6,10', [6, 10]],
     ['Wk2–4', [2, 3, 4]],
+    ['Wk2;13', [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]],
     ['Weeks 1, 3, 5', [1, 3, 5]]
   ])('expands %s', (value, expected) => expect(parseWeekExpression(value)).toMatchObject({ recurrence: 'CUSTOM', weekNumbers: expected, warning: null }))
 
@@ -36,6 +37,8 @@ describe('NTU timetable cell parsing', () => {
     expect(parseNtuSessionBlock('HE1901 TUT NBS1 S4-SR6; Wk2-13')).toMatchObject({ classType: 'TUTORIAL', groupLabel: 'NBS1', venue: 'S4-SR6', deliveryMode: 'IN_PERSON', recurrence: 'CUSTOM', weekNumbers: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13] })
     expect(parseNtuSessionBlock('AB1202 LAB 1 TBC; Wk13')).toMatchObject({ classType: 'LABORATORY', groupLabel: '1', venue: 'TBC', deliveryMode: 'TBC', weekNumbers: [13] })
     expect(parseNtuSessionBlock('AB1501 LEC/STU 1 ONLINE')).toMatchObject({ classType: 'LECTURE', groupLabel: '1', deliveryMode: 'ONLINE', recurrenceConfirmed: false })
+    expect(parseNtuSessionBlock('CC0001 PRJ 4 LT1')).toMatchObject({ classType: 'PROJECT', groupLabel: '4', venue: 'LT1' })
+    expect(parseNtuSessionBlock('DD0001 DES 2 TR+10')).toMatchObject({ classType: 'OTHER', groupLabel: '2', venue: 'TR+10' })
   })
 
   it('keeps repeated session blocks as multiple sessions for one module', () => {
@@ -45,4 +48,3 @@ describe('NTU timetable cell parsing', () => {
     expect(result.modules[0].sessions.map(session => session.venue)).toEqual(['LKC-LT', 'LT26', 'LT27'])
   })
 })
-
