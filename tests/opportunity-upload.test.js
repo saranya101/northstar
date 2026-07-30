@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { validateOpportunityFile, MAX_OPPORTUNITY_FILE_BYTES } from '../app/utils/opportunity-import/file-validation'
 import { sanitiseOpportunityCandidate, sanitiseOpportunityText } from '../app/utils/opportunity-import/text-sanitizer'
 import { extractOpportunityPdf } from '../app/utils/opportunity-import/pdf-extractor.client'
+import { extractCourseOutlineFile } from '../app/utils/course-outline-import/extract-file.client'
 import { extractOpportunityFromText } from '../server/services/opportunity-text-parser'
 import { parseOpportunityTextSchema } from '../shared/schemas/opportunities'
 
@@ -35,6 +36,81 @@ describe('opportunity browser upload', () => {
     expect(createExtractor).not.toHaveBeenCalled()
     expect(page.cleanup).toHaveBeenCalledOnce()
     expect(pdf.destroy).toHaveBeenCalledOnce()
+  })
+
+  it('keeps a local wipeable copy when PDF.js detaches its worker data', async () => {
+    const originalBuffer = Uint8Array.from([11, 22, 33, 44]).buffer
+    const localFile = { type: 'application/pdf', size: 4, arrayBuffer: async () => originalBuffer }
+    const page = { getTextContent: vi.fn().mockResolvedValue({ items: [textItem('A sufficiently long embedded PDF course outline for safe extraction', 10, 20)] }), cleanup: vi.fn() }
+    const pdf = pdfDocument(page)
+    let workerData
+    const result = await extractOpportunityPdf(localFile, {
+      loadPdf: async (data) => {
+        workerData = data
+        structuredClone(data.buffer, { transfer: [data.buffer] })
+        return pdf
+      }
+    })
+
+    expect(result.text).toContain('course outline')
+    expect(workerData.byteLength).toBe(0)
+    expect([...new Uint8Array(originalBuffer)]).toEqual([0, 0, 0, 0])
+    expect(pdf.destroy).toHaveBeenCalledOnce()
+  })
+
+  it('does not let document cleanup failure hide successful extraction', async () => {
+    const page = { getTextContent: vi.fn().mockResolvedValue({ items: [textItem('A sufficiently long embedded PDF opportunity description', 10, 20)] }), cleanup: vi.fn() }
+    const pdf = { ...pdfDocument(page), destroy: vi.fn().mockRejectedValue(new Error('cleanup failed')) }
+    await expect(extractOpportunityPdf(file(), { loadPdf: async () => pdf })).resolves.toMatchObject({
+      text: expect.stringContaining('opportunity description'), usedOcr: false
+    })
+  })
+
+  it('returns safe errors for malformed and empty PDFs', async () => {
+    const malformed = Object.assign(new Error('internal parser detail'), { name: 'InvalidPDFException' })
+    const loadingTask = { promise: Promise.reject(malformed), destroy: vi.fn().mockRejectedValue(new Error('cleanup failed')) }
+    await expect(extractOpportunityPdf(file(), { loadPdf: async () => loadingTask })).rejects.toThrow('This PDF could not be read. Try exporting it again or use a screenshot.')
+    expect(loadingTask.destroy).toHaveBeenCalledOnce()
+
+    const empty = { numPages: 0, destroy: vi.fn().mockResolvedValue() }
+    await expect(extractOpportunityPdf(file(), { loadPdf: async () => empty })).rejects.toThrow('The PDF contains no readable pages.')
+    expect(empty.destroy).toHaveBeenCalledOnce()
+  })
+
+  it('returns the established password error and preserves the primary extraction error', async () => {
+    const passwordError = Object.assign(new Error('password required'), { name: 'PasswordException' })
+    await expect(extractOpportunityPdf(file(), { loadPdf: async () => { throw passwordError } })).rejects.toThrow('Encrypted PDFs are not supported. Export an unlocked copy or use a screenshot.')
+
+    const page = { getTextContent: vi.fn().mockRejectedValue(new Error('page extraction failed')), cleanup: vi.fn(() => { throw new Error('page cleanup failed') }) }
+    const pdf = { ...pdfDocument(page), destroy: vi.fn().mockRejectedValue(new Error('document cleanup failed')) }
+    await expect(extractOpportunityPdf(file(), { loadPdf: async () => pdf })).rejects.toThrow('page extraction failed')
+  })
+
+  it('supports consecutive imports and retrying the same file after failure', async () => {
+    const page = () => ({ getTextContent: vi.fn().mockResolvedValue({ items: [textItem('A sufficiently long reusable PDF course outline description', 10, 20)] }), cleanup: vi.fn() })
+    const reusableFile = { type: 'application/pdf', size: 4, arrayBuffer: vi.fn().mockImplementation(async () => Uint8Array.from([1, 2, 3, 4]).buffer) }
+    const firstPdf = pdfDocument(page())
+    const secondPdf = pdfDocument(page())
+    await expect(extractOpportunityPdf(reusableFile, { loadPdf: async () => firstPdf })).resolves.toMatchObject({ usedOcr: false })
+    await expect(extractOpportunityPdf(reusableFile, { loadPdf: async () => secondPdf })).resolves.toMatchObject({ usedOcr: false })
+
+    const malformed = Object.assign(new Error('bad PDF'), { name: 'InvalidPDFException' })
+    let attempts = 0
+    const retryLoader = async () => {
+      attempts += 1
+      if (attempts === 1) throw malformed
+      return pdfDocument(page())
+    }
+    await expect(extractOpportunityPdf(reusableFile, { loadPdf: retryLoader })).rejects.toThrow('This PDF could not be read')
+    await expect(extractOpportunityPdf(reusableFile, { loadPdf: retryLoader })).resolves.toMatchObject({ text: expect.stringContaining('course outline') })
+    expect(reusableFile.arrayBuffer).toHaveBeenCalledTimes(4)
+  })
+
+  it('preserves the course-outline extraction contract after PDF cleanup', async () => {
+    const page = { getTextContent: vi.fn().mockResolvedValue({ items: [textItem('Quiz 20%\\nProject 40%\\nFinal Examination 40%', 10, 20)] }), cleanup: vi.fn() }
+    const result = await extractCourseOutlineFile(file(), { loadPdf: async () => pdfDocument(page) })
+    expect(result).toMatchObject({ sourceType: 'PDF', usedOcr: false })
+    expect(result.text).toContain('Final Examination 40%')
   })
 
   it('falls back to OCR only for a scanned PDF page and disposes resources', async () => {

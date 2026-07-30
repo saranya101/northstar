@@ -13,17 +13,28 @@ function textFromItems(items) {
 
 export async function extractOpportunityPdf(file, { onProgress = () => {}, signal, loadPdf, createExtractor = createOcrExtractor, createCanvas } = {}) {
   onProgress({ label: 'Reading PDF text', progress: 0 })
-  const bytes = new Uint8Array(await file.arrayBuffer())
+  const originalBytes = new Uint8Array(await file.arrayBuffer())
+  const pdfData = originalBytes.slice()
+  let loadingTask
   let pdfDocument
   let ocr
   const pageTexts = []
   try {
-    if (loadPdf) pdfDocument = await loadPdf(bytes)
-    else {
+    if (loadPdf) {
+      const loaded = await loadPdf(pdfData)
+      if (loaded?.promise) {
+        loadingTask = loaded
+        pdfDocument = await loaded.promise
+      } else {
+        pdfDocument = loaded
+      }
+    } else {
       const pdfjs = await import('pdfjs-dist/build/pdf.mjs')
       pdfjs.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).href
-      pdfDocument = await pdfjs.getDocument({ data: bytes }).promise
+      loadingTask = pdfjs.getDocument({ data: pdfData })
+      pdfDocument = await loadingTask.promise
     }
+    if (!pdfDocument || pdfDocument.numPages < 1) throw new Error('The PDF contains no readable pages.')
     if (pdfDocument.numPages > MAX_OPPORTUNITY_PDF_PAGES) throw new Error('The PDF must contain 10 pages or fewer.')
     for (let number = 1; number <= pdfDocument.numPages; number += 1) {
       if (signal?.aborted) throw new DOMException('Import cancelled.', 'AbortError')
@@ -44,17 +55,22 @@ export async function extractOpportunityPdf(file, { onProgress = () => {}, signa
         pageTexts.push(text)
       } finally {
         if (canvas) { canvas.width = 0; canvas.height = 0 }
-        page.cleanup()
+        try { page.cleanup() } catch {}
       }
       onProgress({ label: `Reading page ${number} of ${pdfDocument.numPages}`, progress: number / pdfDocument.numPages })
     }
     return { text: pageTexts.join('\n'), confidence: ocr ? 0.55 : 0.95, usedOcr: Boolean(ocr) }
   } catch (error) {
     if (error?.name === 'PasswordException') throw new Error('Encrypted PDFs are not supported. Export an unlocked copy or use a screenshot.')
+    if (['InvalidPDFException', 'MissingPDFException', 'UnexpectedResponseException', 'FormatError'].includes(error?.name)) throw new Error('This PDF could not be read. Try exporting it again or use a screenshot.')
     throw error
   } finally {
-    await ocr?.terminate()
-    await pdfDocument?.destroy()
-    bytes.fill(0)
+    try { await ocr?.terminate() } catch {}
+    if (pdfDocument) {
+      try { await pdfDocument.destroy() } catch {}
+    } else {
+      try { await loadingTask?.destroy() } catch {}
+    }
+    try { originalBytes.fill(0) } catch {}
   }
 }
