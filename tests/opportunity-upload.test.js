@@ -33,6 +33,7 @@ describe('opportunity browser upload', () => {
     const result = await extractOpportunityPdf(file(), { loadPdf: async () => pdf, createExtractor })
     expect(result.text).toContain('Software Engineering Internship')
     expect(result.usedOcr).toBe(false)
+    expect(result).not.toHaveProperty('layout')
     expect(createExtractor).not.toHaveBeenCalled()
     expect(page.cleanup).toHaveBeenCalledOnce()
     expect(pdf.destroy).toHaveBeenCalledOnce()
@@ -107,10 +108,13 @@ describe('opportunity browser upload', () => {
   })
 
   it('preserves the course-outline extraction contract after PDF cleanup', async () => {
-    const page = { getTextContent: vi.fn().mockResolvedValue({ items: [textItem('Quiz 20%\\nProject 40%\\nFinal Examination 40%', 10, 20)] }), cleanup: vi.fn() }
+    const layoutItem = { ...textItem('Quiz 20%\\nProject 40%\\nFinal Examination 40%', 10, 20), width: 220 }
+    const page = { getTextContent: vi.fn().mockResolvedValue({ items: [layoutItem] }), cleanup: vi.fn() }
     const result = await extractCourseOutlineFile(file(), { loadPdf: async () => pdfDocument(page) })
     expect(result).toMatchObject({ sourceType: 'PDF', usedOcr: false })
     expect(result.text).toContain('Final Examination 40%')
+    expect(result.text).toContain('[[COURSE_OUTLINE_LAYOUT_V1]]')
+    expect(result.layout[0]).toMatchObject({ pageNumber: 1, items: [{ text: layoutItem.str, x: 10, y: 20, width: 220 }] })
   })
 
   it('falls back to OCR only for a scanned PDF page and disposes resources', async () => {

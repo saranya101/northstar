@@ -11,7 +11,7 @@ function textFromItems(items) {
   return rows.sort((left, right) => right.y - left.y).map(row => row.items.sort((left, right) => left.x - right.x).map(item => item.text).join(' ')).join('\n')
 }
 
-export async function extractOpportunityPdf(file, { onProgress = () => {}, signal, loadPdf, createExtractor = createOcrExtractor, createCanvas } = {}) {
+export async function extractOpportunityPdf(file, { onProgress = () => {}, signal, loadPdf, createExtractor = createOcrExtractor, createCanvas, includeLayout = false } = {}) {
   onProgress({ label: 'Reading PDF text', progress: 0 })
   const originalBytes = new Uint8Array(await file.arrayBuffer())
   const pdfData = originalBytes.slice()
@@ -19,6 +19,7 @@ export async function extractOpportunityPdf(file, { onProgress = () => {}, signa
   let pdfDocument
   let ocr
   const pageTexts = []
+  const layout = []
   try {
     if (loadPdf) {
       const loaded = await loadPdf(pdfData)
@@ -42,7 +43,13 @@ export async function extractOpportunityPdf(file, { onProgress = () => {}, signa
       let canvas
       try {
         const content = await page.getTextContent()
-        const items = content.items.filter(item => 'str' in item).map(item => ({ text: item.str, x: item.transform[4], y: item.transform[5] }))
+        const items = content.items.filter(item => 'str' in item).map(item => ({
+          text: item.str,
+          x: item.transform[4],
+          y: item.transform[5],
+          width: Number.isFinite(item.width) ? item.width : null
+        }))
+        if (includeLayout) layout.push({ pageNumber: number, items })
         let text = textFromItems(items)
         if (text.replace(/\s/g, '').length < 40) {
           ocr ||= await createExtractor({ onProgress, signal })
@@ -59,7 +66,12 @@ export async function extractOpportunityPdf(file, { onProgress = () => {}, signa
       }
       onProgress({ label: `Reading page ${number} of ${pdfDocument.numPages}`, progress: number / pdfDocument.numPages })
     }
-    return { text: pageTexts.join('\n'), confidence: ocr ? 0.55 : 0.95, usedOcr: Boolean(ocr) }
+    return {
+      text: pageTexts.join('\n'),
+      confidence: ocr ? 0.55 : 0.95,
+      usedOcr: Boolean(ocr),
+      ...(includeLayout ? { layout } : {})
+    }
   } catch (error) {
     if (error?.name === 'PasswordException') throw new Error('Encrypted PDFs are not supported. Export an unlocked copy or use a screenshot.')
     if (['InvalidPDFException', 'MissingPDFException', 'UnexpectedResponseException', 'FormatError'].includes(error?.name)) throw new Error('This PDF could not be read. Try exporting it again or use a screenshot.')
