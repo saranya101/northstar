@@ -27,6 +27,57 @@ const fragmentedAssessmentPage = {
   ]
 }
 
+const ab1201SummaryPage = {
+  pageNumber: 2,
+  items: [
+    item('D) Assessment (includes both continuous and summative assessment)', 72, 574),
+    item('Component', 77, 547), item('ILO', 171, 547), item('NBS Learning Goal', 212, 547), item('Weightage', 311, 547), item('Team/', 375, 547), item('Assessment Rubrics', 443, 547),
+    item('1. Class', 77, 495), item('Participation', 87, 482), item('ILO1, ILO5', 162, 495), item('Oral communication', 205, 495), item('10%', 329, 495), item('Individual', 375, 495), item('Class Participation Rubric 1', 443, 495),
+    item('2. Group Project', 77, 456), item('Presentation', 77, 443), item('ILO1, ILO4, ILO5', 162, 456), item('Teamwork and Interpersonal skills', 212, 456), item('10%', 329, 456), item('Group', 375, 456), item('Rubric 2', 443, 456),
+    item('Oral communication', 212, 351), item('10%', 329, 328), item('Individual', 375, 328), item('Presentation Rubric 3', 443, 351),
+    item('3. Quiz', 77, 302), item('ILO1, ILO3, ILO5', 162, 302), item('Acquisition of knowledge', 212, 302), item('20%', 329, 302), item('Individual', 375, 302),
+    item('4. Final', 77, 263), item('Examination', 77, 250), item('ILO1, ILO2, ILO3, ILO5', 162, 263), item('Acquisition of knowledge', 212, 263), item('50%', 329, 263), item('Individual', 375, 263),
+    item('Total', 77, 211), item('100%', 162, 211), item('2', 303, 46)
+  ]
+}
+
+const ab1201SchedulePage = {
+  pageNumber: 6,
+  items: [
+    item('K) Planned Weekly Schedule', 72, 696),
+    item('Week', 78, 668), item('Topic', 127, 668), item('ILO', 302, 668), item('Readings/ Activities', 410, 668),
+    ...Array.from({ length: 13 }, (_, index) => {
+      const week = index + 1
+      const y = 650 - index * 28
+      const topic = week === 8 ? 'The Cost of Capital Common Quiz on Tue, 7pm - 8pm' : week === 13 ? 'Revision/Course Wrap Up' : `Finance topic ${week}`
+      return [item(String(week), 94, y), item(topic, 127, y), item(`ILO${Math.min(week, 8)}`, 302, y), item(`C${week}`, 410, y)]
+    }).flat(),
+    item('RECESS WEEK', 240, 438), item('FINAL EXAMINATION', 245, 270)
+  ]
+}
+
+const ab1201Outline = withLayout(`
+Academic Year 2026 - 2027 Semester 1
+Course Coordinator Nick Orlic
+Course Code AB1201
+Course Title Financial Management
+No of AUs 3
+D) Assessment (includes both continuous and summative assessment)
+Detail for Assessment Components
+1) Class Participation (individual, 10%)
+Participation is assessed throughout the semester and refers to Rubric 1.
+2) Group Project Presentation (Group - 10%; Individual Presentation - 10%)
+Group slides are assessed as group work while delivery is assessed as an individual presentation.
+3) Quiz (Individual, 20%)
+The quiz is held on Tuesday of Week 8 at 7pm to 8pm. It is closed book and conducted on NTULearn with LockDown Browser.
+5) Final examination (Individual, 50%)
+The final examination is conducted physically, with pen and paper. It is closed book.
+E) Formative Feedback
+Rubrics
+Presentation Rubric 50
+ILO4 Oral communication 10
+`, [ab1201SummaryPage, ab1201SchedulePage])
+
 const outline = `
 Module Code: SC1001
 Module Title: Systems in Context
@@ -116,6 +167,68 @@ describe('deterministic course outline parser', () => {
     expect(result.assessments.every(candidate => candidate.name.pageNumber === 2)).toBe(true)
     expect(result.assessments[0].name.sourceExcerpt).toContain('Class')
     expect(result.assessments).toHaveLength(5)
+    expect(result.assessments.every(candidate => candidate.examFormat.value !== 'Oral')).toBe(true)
+  })
+
+  it('prefers the main summary table and does not create assessments from details or rubrics', () => {
+    const result = parseCourseOutline(ab1201Outline)
+    expect(result.assessments).toHaveLength(5)
+    expect(result.assessments.every(candidate => !/rubric/i.test(candidate.name.value))).toBe(true)
+    expect(result.assessments.reduce((total, candidate) => total + candidate.weight.value, 0)).toBe(100)
+    expect(parseCourseOutline('Rubrics\nPresentation Rubric 50%\nILO4 Oral communication 10%').assessments).toEqual([])
+  })
+
+  it('keeps separately weighted group and individual components as editable rows', () => {
+    const result = parseCourseOutline(ab1201Outline)
+    expect(result.assessments.map(candidate => ({
+      name: candidate.name.value,
+      weight: candidate.weight.value,
+      type: candidate.type.value,
+      group: candidate.groupAssessment.value
+    }))).toEqual([
+      { name: 'Class Participation', weight: 10, type: 'CLASS_PARTICIPATION', group: false },
+      { name: 'Group Project Presentation — Group component', weight: 10, type: 'GROUP_ASSIGNMENT', group: true },
+      { name: 'Group Project Presentation — Individual presentation component', weight: 10, type: 'PRESENTATION', group: false },
+      { name: 'Quiz', weight: 20, type: 'QUIZ', group: false },
+      { name: 'Final Examination', weight: 50, type: 'FINAL_EXAMINATION', group: false }
+    ])
+  })
+
+  it('uses explicit exam evidence instead of learning-goal text', () => {
+    const result = parseCourseOutline(ab1201Outline)
+    const participation = result.assessments[0]
+    const presentation = result.assessments[2]
+    const quiz = result.assessments[3]
+    const examination = result.assessments[4]
+    expect(participation.examFormat.value).toBeNull()
+    expect(presentation.examFormat.value).toBeNull()
+    expect(quiz.examFormat.value).toBe('closed-book, Online')
+    expect(examination.examFormat.value).toBe('closed-book, Physical, Pen-and-paper')
+  })
+
+  it('extracts AB1201 module metadata and all thirteen teaching weeks', () => {
+    const result = parseCourseOutline(ab1201Outline)
+    const facts = Object.fromEntries(result.facts.map(fact => [fact.fieldName, fact.value]))
+    expect(facts).toMatchObject({
+      moduleCode: 'AB1201',
+      moduleTitle: 'Financial Management',
+      academicYear: '2026–2027',
+      semesterLabel: 'Semester 1',
+      lecturer: 'Nick Orlic',
+      academicUnits: '3'
+    })
+    expect(result.weeks.map(week => week.weekNumber)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13])
+    expect(result.weeks.some(week => /RECESS|FINAL EXAMINATION/i.test(week.topic || ''))).toBe(false)
+  })
+
+  it('retains week-based quiz timing without inventing a calendar date', () => {
+    const result = parseCourseOutline(ab1201Outline)
+    const quiz = result.assessments.find(candidate => candidate.type.value === 'QUIZ')
+    const weekEight = result.weeks.find(week => week.weekNumber === 8)
+    expect(quiz.instructions.value).toBe('Tuesday of Week 8; 7:00 PM–8:00 PM')
+    expect(quiz.officialDeadline.value).toBeNull()
+    expect(quiz.eventDate.value).toBeNull()
+    expect(weekEight.importantDate).toBe('Tue; 7:00 PM–8:00 PM')
   })
 
   it('carries inferred table columns across page boundaries', () => {
