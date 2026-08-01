@@ -6,11 +6,33 @@ const root = new URL('..', import.meta.url).pathname
 const read = path => readFileSync(join(root, path), 'utf8')
 
 describe('academic frontend workflow', () => {
-  it('adds accessible module navigation, assessment and course outline sections', () => {
+  it('adds accessible module navigation, assessment, documents and course outline sections', () => {
     const page = read('app/pages/app/modules/[id].vue')
     expect(page).toContain('aria-label="Module sections"')
     expect(page).toContain('<AcademicAssessmentsPanel')
+    expect(page).toContain('<AcademicDocumentsInboxPanel')
     expect(page).toContain('<AcademicCourseOutlinePanel')
+  })
+
+  it('provides a source-aware document inbox without claiming original-file retention', () => {
+    const panel = read('app/components/academic/DocumentsInboxPanel.vue')
+    expect(panel).toContain('Course Document Inbox')
+    expect(panel).toContain('Original files are processed locally and are not retained')
+    expect(panel).toContain('Duplicate upload')
+    expect(panel).toContain('Open review')
+    expect(panel).toContain('Archive')
+  })
+
+  it('shows side-by-side proposal evidence and requires explicit review', () => {
+    const review = read('app/pages/app/course-documents/[id].vue')
+    expect(review).toContain('Current value')
+    expect(review).toContain('Proposed value')
+    expect(review).toContain('Source evidence')
+    expect(review).toContain('Approve all non-conflicting')
+    expect(review).toContain("item.classification !== 'CONFLICT'")
+    expect(review).toContain("return 'Awaiting details'")
+    expect(review).toContain("return 'Needs review'")
+    expect(review).toContain('Reject')
   })
 
   it('states that extraction is review-first and the original is not retained', () => {

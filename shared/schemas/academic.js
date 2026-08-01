@@ -3,6 +3,8 @@ import { z } from 'zod'
 export const ASSESSMENT_TYPES = ['QUIZ', 'MIDTERM', 'FINAL_EXAMINATION', 'INDIVIDUAL_ASSIGNMENT', 'GROUP_ASSIGNMENT', 'PRESENTATION', 'CLASS_PARTICIPATION', 'ATTENDANCE', 'REFLECTION', 'CASE_ANALYSIS', 'REPORT', 'PROJECT', 'PRACTICAL', 'LABORATORY', 'ORAL_EXAMINATION', 'PEER_ASSESSMENT', 'OTHER']
 export const ASSESSMENT_STATUSES = ['NOT_STARTED', 'PLANNING', 'IN_PROGRESS', 'WAITING_ON_TEAMMATE', 'READY_FOR_REVIEW', 'SUBMITTED', 'GRADED', 'OVERDUE', 'CANCELLED']
 export const MILESTONE_STATUSES = ['NOT_STARTED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED']
+export const COURSE_DOCUMENT_TYPES = ['COURSE_OUTLINE', 'ASSESSMENT_BRIEF', 'PRE_CLASS_BRIEFING', 'WEEKLY_SCHEDULE', 'RUBRIC', 'ANNOUNCEMENT', 'SEMINAR_MATERIAL', 'OTHER']
+export const COURSE_DOCUMENT_MIME_TYPES = ['application/pdf', 'image/png', 'image/jpeg', 'image/webp', 'text/plain']
 
 const optionalText = maximum => z.preprocess(value => value === '' || value === null ? undefined : value, z.string().trim().max(maximum).optional())
 const nullableText = maximum => z.preprocess(value => value === '' || value === undefined ? null : value, z.string().trim().max(maximum).nullable().optional())
@@ -26,6 +28,28 @@ export const createCourseOutlineImportSchema = z.object({
   sourceLabel: z.string().trim().min(1).max(255),
   extractedText: z.string().trim().min(20).max(100_000),
   extractionConfidence: nullableNumber(0, 1)
+}).strict()
+
+export const createCourseDocumentSchema = z.object({
+  documentType: z.enum(COURSE_DOCUMENT_TYPES),
+  displayTitle: z.string().trim().min(1).max(255),
+  originalFileName: optionalText(255),
+  mimeType: z.enum(COURSE_DOCUMENT_MIME_TYPES),
+  fileSize: z.coerce.number().int().min(1).max(10 * 1024 * 1024),
+  sha256Hash: z.string().regex(/^[a-f0-9]{64}$/i, 'A valid SHA-256 hash is required.'),
+  sourceType: z.enum(['PDF', 'IMAGE', 'TEXT']),
+  sourceDate: nullableDate,
+  extractedText: z.string().trim().min(20).max(100_000),
+  extractionConfidence: nullableNumber(0, 1)
+}).strict()
+
+export const reviewCourseDocumentSchema = z.object({
+  expectedUpdatedAt: z.iso.datetime({ offset: true }),
+  decisions: z.array(z.object({
+    id: z.string().min(1),
+    action: z.enum(['APPROVE', 'REJECT']),
+    proposedValue: z.json().optional()
+  }).strict()).min(1).max(250)
 }).strict()
 
 const candidateFields = {

@@ -77,7 +77,7 @@ function sessionTime(session) { const render = value => `${String(Math.floor(val
         </dl>
       </header>
 
-      <nav class="module-subnav" aria-label="Module sections"><a href="#overview">Overview</a><a href="#assessments">Assessments</a><a href="#course-outline">Course outline</a><a href="#instructors">Instructors</a><a href="#sessions">Sessions</a></nav>
+      <nav class="module-subnav" aria-label="Module sections"><a href="#overview">Overview</a><a href="#assessments">Assessments</a><a href="#documents">Documents</a><a href="#course-outline">Course outline</a><a href="#instructors">Instructors</a><a href="#sessions">Sessions</a></nav>
 
       <section id="overview" class="dossier-section">
         <div class="dossier-section__heading"><div><p>Shared record</p><h2>Academic details</h2></div></div>
@@ -91,6 +91,7 @@ function sessionTime(session) { const render = value => `${String(Math.floor(val
       </section>
 
       <AcademicAssessmentsPanel :enrolment-id="route.params.id" />
+      <AcademicDocumentsInboxPanel :enrolment-id="route.params.id" />
       <AcademicCourseOutlinePanel :enrolment-id="route.params.id" />
 
       <section id="sessions" class="dossier-section">
