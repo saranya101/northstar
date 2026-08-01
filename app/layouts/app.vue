@@ -13,10 +13,13 @@ const navigation = [
   { label: 'Overview', to: '/app', icon: 'i-lucide-layout-dashboard' },
   { label: 'Modules', to: '/app/modules', icon: 'i-lucide-library-big' },
   { label: 'Timetable', to: '/app/timetable', icon: 'i-lucide-calendar-days' },
+  { label: 'Planner', to: '/app/planner', icon: 'i-lucide-calendar-range' },
+  { label: 'Calendar', to: '/app/calendar', icon: 'i-lucide-calendar-days' },
   { label: 'Focus', to: '/app/focus', icon: 'i-lucide-timer' },
   { label: 'Opportunities', to: '/app/opportunities', icon: 'i-lucide-briefcase-business' },
   { label: 'Settings', to: '/app/settings', icon: 'i-lucide-settings-2' }
 ]
+const isNavigationActive = destination => route.path === destination || (destination !== '/app' && route.path.startsWith(`${destination}/`))
 const termLabel = computed(() => {
   const term = onboarding.value?.semester?.academicTerm
   if (term) return `${term.academicYear} · ${term.name}`
@@ -54,7 +57,7 @@ onMounted(() => { void bootstrapApp() })
       <NuxtLink to="/app" class="app-shell__brand"><span aria-hidden="true">N</span><strong>Northstar</strong></NuxtLink>
       <p class="app-shell__term">{{ termLabel }}</p>
       <nav class="app-shell__nav">
-        <NuxtLink v-for="item in navigation" :key="item.to" :to="item.to" :aria-label="item.label">
+        <NuxtLink v-for="item in navigation" :key="item.to" :to="item.to" :aria-label="item.label" :aria-current="isNavigationActive(item.to) ? 'page' : undefined" :class="{ 'router-link-exact-active': isNavigationActive(item.to) }">
           <UIcon :name="item.icon" aria-hidden="true" />
           <span>{{ item.label }}</span>
         </NuxtLink>
@@ -75,7 +78,7 @@ onMounted(() => { void bootstrapApp() })
       <template #body>
         <p class="app-shell__term">{{ termLabel }}</p>
         <nav class="app-shell__nav">
-          <NuxtLink v-for="item in navigation" :key="item.to" :to="item.to" @click="mobileOpen = false">
+          <NuxtLink v-for="item in navigation" :key="item.to" :to="item.to" :aria-label="item.label" :aria-current="isNavigationActive(item.to) ? 'page' : undefined" :class="{ 'router-link-exact-active': isNavigationActive(item.to) }" @click="mobileOpen = false">
             <UIcon :name="item.icon" aria-hidden="true" /><span>{{ item.label }}</span>
           </NuxtLink>
         </nav>
