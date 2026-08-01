@@ -27,6 +27,8 @@ model User {
   courseOutlineImports CourseOutlineImport[]
   courseDocumentEvidence CourseDocumentEvidence[]
   assessments          Assessment[]
+  recurringCoursework  RecurringCoursework[]
+  recurringCourseworkOccurrences RecurringCourseworkOccurrence[]
   createdOpportunities Opportunity[]         @relation("OpportunityCreator")
   userOpportunities    UserOpportunity[]
 
@@ -632,6 +634,7 @@ model UserModuleEnrolment {
   assessments          Assessment[]
   weeklyTopics         ModuleWeeklyTopic[]
   privateFacts         UserModuleFact[]
+  recurringCoursework  RecurringCoursework[]
 
   @@unique([userId, offeringId])
   @@index([userId])
@@ -730,6 +733,38 @@ enum AssessmentMilestoneStatus {
   IN_PROGRESS
   COMPLETED
   CANCELLED
+}
+
+enum RecurringCourseworkType {
+  LAMS
+  ONLINE_ASSIGNMENT
+  QUIZ
+  READING
+  TUTORIAL_PREPARATION
+  SEMINAR_PREPARATION
+  PARTICIPATION
+  OTHER
+}
+
+enum RecurringCourseworkFrequency {
+  WEEKLY
+  FORTNIGHTLY
+  CUSTOM
+}
+
+enum RecurringCourseworkStatus {
+  ACTIVE
+  COMPLETED
+  ARCHIVED
+}
+
+enum RecurringCourseworkOccurrenceStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  SUBMITTED
+  VERIFIED
+  MISSED
+  EXCUSED
 }
 
 model CourseOutlineImport {
@@ -966,10 +1001,71 @@ model Assessment {
   provenance            AssessmentProvenance[]
   deliverables          AssessmentDeliverable[]
   milestones            AssessmentMilestone[]
+  recurringCoursework   RecurringCoursework[]
 
   @@index([userId, userModuleEnrolmentId])
   @@index([userModuleEnrolmentId, officialDeadline])
   @@index([sourceImportId])
+}
+
+model RecurringCoursework {
+  id                    String                       @id @default(cuid())
+  userId                String
+  userModuleEnrolmentId String
+  assessmentId          String?
+  title                 String
+  type                  RecurringCourseworkType
+  description           String?
+  frequency             RecurringCourseworkFrequency
+  totalExpected         Int
+  firstTeachingWeek     Int?
+  lastTeachingWeek      Int?
+  recessWeeks           Int[]                        @default([])
+  includeRecessWeeks    Boolean                      @default(false)
+  graded                Boolean                      @default(false)
+  totalAssessmentWeight Decimal?                     @db.Decimal(5, 2)
+  completeBeforeClass   Boolean                      @default(false)
+  timingNote            String?
+  status                RecurringCourseworkStatus    @default(ACTIVE)
+  createdAt             DateTime                     @default(now())
+  updatedAt             DateTime                     @updatedAt
+  user                  User                         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userModuleEnrolment   UserModuleEnrolment          @relation(fields: [userModuleEnrolmentId], references: [id], onDelete: Cascade)
+  assessment            Assessment?                  @relation(fields: [assessmentId], references: [id], onDelete: SetNull)
+  occurrences           RecurringCourseworkOccurrence[]
+
+  @@index([userId, userModuleEnrolmentId, status])
+  @@index([assessmentId])
+}
+
+model RecurringCourseworkOccurrence {
+  id                       String                              @id @default(cuid())
+  userId                   String
+  recurringCourseworkId    String
+  sequenceNumber           Int
+  teachingWeek             Int?
+  officialDueAt            DateTime?
+  timingNote               String?
+  status                   RecurringCourseworkOccurrenceStatus @default(NOT_STARTED)
+  workCompleted            Boolean                             @default(false)
+  finalConfirmationClicked Boolean                             @default(false)
+  gradeCentreChecked       Boolean                             @default(false)
+  markCaptured             Boolean                             @default(false)
+  startedAt                DateTime?
+  submittedAt              DateTime?
+  verifiedAt               DateTime?
+  score                    Decimal?                            @db.Decimal(10, 2)
+  maximumScore             Decimal?                            @db.Decimal(10, 2)
+  submissionReference      String?
+  privateNotes             String?
+  createdAt                DateTime                            @default(now())
+  updatedAt                DateTime                            @updatedAt
+  user                     User                                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  recurringCoursework      RecurringCoursework                 @relation(fields: [recurringCourseworkId], references: [id], onDelete: Cascade)
+
+  @@unique([recurringCourseworkId, sequenceNumber])
+  @@index([userId, status])
+  @@index([officialDueAt])
 }
 
 model AssessmentProvenance {
