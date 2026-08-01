@@ -1,5 +1,5 @@
 <script setup>
-import { RECURRING_COURSEWORK_FREQUENCIES, RECURRING_COURSEWORK_TYPES } from '#shared/schemas/recurring-coursework'
+import { normalizeOptionalNumber, normalizeRecessWeeksInput, RECURRING_COURSEWORK_FREQUENCIES, RECURRING_COURSEWORK_TYPES } from '#shared/schemas/recurring-coursework'
 
 const props = defineProps({ enrolmentId: { type: String, required: true } })
 const { records, loading, saving, error, fieldErrors, load, create, archive, generate } = useRecurringCoursework()
@@ -23,8 +23,17 @@ const formatDate = value => value ? new Intl.DateTimeFormat('en-SG', { dateStyle
 const assessmentItems = computed(() => [{ label: 'No related assessment', value: null }, ...assessments.value.map(item => ({ label: `${item.name} (${item.weight ?? 'TBA'}%)`, value: item.id }))])
 function reset() { Object.assign(form, { title: '', type: 'LAMS', description: '', frequency: 'WEEKLY', totalExpected: 13, firstTeachingWeek: 1, lastTeachingWeek: 13, graded: false, totalAssessmentWeight: null, completeBeforeClass: false, timingNote: '', assessmentId: null, includeRecessWeeks: false }); recessText.value = '' }
 async function add() {
-  const recessWeeks = recessText.value.split(',').map(value => Number(value.trim())).filter(Number.isInteger)
-  const result = await create(props.enrolmentId, { ...form, description: form.description || null, timingNote: form.timingNote || null, assessmentId: form.assessmentId || null, totalAssessmentWeight: form.graded ? form.totalAssessmentWeight : null, recessWeeks })
+  const result = await create(props.enrolmentId, {
+    ...form,
+    totalExpected: normalizeOptionalNumber(form.totalExpected),
+    firstTeachingWeek: normalizeOptionalNumber(form.firstTeachingWeek),
+    lastTeachingWeek: normalizeOptionalNumber(form.lastTeachingWeek),
+    description: form.description || null,
+    timingNote: form.timingNote || null,
+    assessmentId: form.assessmentId || null,
+    totalAssessmentWeight: form.graded ? normalizeOptionalNumber(form.totalAssessmentWeight) : undefined,
+    recessWeeks: normalizeRecessWeeksInput(recessText.value)
+  })
   if (result) { open.value = false; reset() }
 }
 </script>
@@ -54,10 +63,10 @@ async function add() {
       <template #body><form id="recurring-coursework-form" class="module-form" @submit.prevent="add">
         <div class="module-field"><label for="recurring-title">Title</label><UInput id="recurring-title" v-model="form.title" required maxlength="200" /><small>{{ fieldErrors.title }}</small></div>
         <div class="module-form__grid"><div class="module-field"><label for="recurring-type">Type</label><USelect id="recurring-type" v-model="form.type" :items="typeItems" value-key="value" label-key="label" /></div><div class="module-field"><label for="recurring-frequency">Frequency</label><USelect id="recurring-frequency" v-model="form.frequency" :items="frequencyItems" value-key="value" label-key="label" /></div></div>
-        <div class="module-form__grid"><div class="module-field"><label for="recurring-total">Total expected</label><UInput id="recurring-total" v-model.number="form.totalExpected" type="number" min="1" max="100" /></div><div class="module-field"><label for="recurring-assessment">Related assessment <em>optional</em></label><USelect id="recurring-assessment" v-model="form.assessmentId" :items="assessmentItems" value-key="value" label-key="label" /></div></div>
-        <div class="module-form__grid"><div class="module-field"><label for="recurring-first-week">First teaching week</label><UInput id="recurring-first-week" v-model.number="form.firstTeachingWeek" type="number" min="1" max="60" /></div><div class="module-field"><label for="recurring-last-week">Last teaching week</label><UInput id="recurring-last-week" v-model.number="form.lastTeachingWeek" type="number" min="1" max="60" /></div></div>
-        <div class="module-field"><label for="recurring-recess">Recess weeks <em>optional, comma separated</em></label><UInput id="recurring-recess" v-model="recessText" placeholder="7" /><label class="coursework-check"><input v-model="form.includeRecessWeeks" type="checkbox"> Explicitly include declared recess weeks</label></div>
-        <div class="module-form__grid"><label class="coursework-check"><input v-model="form.graded" type="checkbox"> Graded requirement</label><div v-if="form.graded" class="module-field"><label for="recurring-weight">Total assessment weight % <em>optional</em></label><UInput id="recurring-weight" v-model.number="form.totalAssessmentWeight" type="number" min="0" max="100" step=".1" /><small>Missing weight remains TBA.</small></div></div>
+        <div class="module-form__grid"><div class="module-field"><label for="recurring-total">Total expected</label><UInput id="recurring-total" v-model.number="form.totalExpected" type="number" min="1" max="100" /><small>{{ fieldErrors.totalExpected }}</small></div><div class="module-field"><label for="recurring-assessment">Related assessment <em>optional</em></label><USelect id="recurring-assessment" v-model="form.assessmentId" :items="assessmentItems" value-key="value" label-key="label" /><small>{{ fieldErrors.assessmentId }}</small></div></div>
+        <div class="module-form__grid"><div class="module-field"><label for="recurring-first-week">First teaching week</label><UInput id="recurring-first-week" v-model.number="form.firstTeachingWeek" type="number" min="1" max="60" /><small>{{ fieldErrors.firstTeachingWeek }}</small></div><div class="module-field"><label for="recurring-last-week">Last teaching week</label><UInput id="recurring-last-week" v-model.number="form.lastTeachingWeek" type="number" min="1" max="60" /><small>{{ fieldErrors.lastTeachingWeek }}</small></div></div>
+        <div class="module-field"><label for="recurring-recess">Recess weeks <em>optional, comma separated</em></label><UInput id="recurring-recess" v-model="recessText" placeholder="7" /><small>{{ fieldErrors.recessWeeks }}</small><label class="coursework-check"><input v-model="form.includeRecessWeeks" type="checkbox"> Explicitly include declared recess weeks</label></div>
+        <div class="module-form__grid"><label class="coursework-check"><input v-model="form.graded" type="checkbox"> Graded requirement</label><div v-if="form.graded" class="module-field"><label for="recurring-weight">Total assessment weight % <em>optional</em></label><UInput id="recurring-weight" v-model.number="form.totalAssessmentWeight" type="number" min="0" max="100" step=".1" /><small>{{ fieldErrors.totalAssessmentWeight || 'Missing weight remains TBA.' }}</small></div></div>
         <label class="coursework-check"><input v-model="form.completeBeforeClass" type="checkbox"> Complete before class</label>
         <div class="module-field"><label for="recurring-timing">Timing note <em>optional</em></label><UInput id="recurring-timing" v-model="form.timingNote" maxlength="500" placeholder="Before seminar · Tuesday, 7:00 PM" /></div>
         <div class="module-field"><label for="recurring-description">Description <em>optional</em></label><UTextarea id="recurring-description" v-model="form.description" :rows="4" maxlength="5000" /></div>

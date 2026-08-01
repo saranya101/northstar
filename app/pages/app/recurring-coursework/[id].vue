@@ -1,5 +1,5 @@
 <script setup>
-import { RECURRING_COURSEWORK_FREQUENCIES, RECURRING_COURSEWORK_TYPES } from '#shared/schemas/recurring-coursework'
+import { normalizeRecessWeeksInput, RECURRING_COURSEWORK_FREQUENCIES, RECURRING_COURSEWORK_TYPES } from '#shared/schemas/recurring-coursework'
 
 definePageMeta({ layout: 'app', middleware: ['auth', 'onboarded'] })
 const route = useRoute()
@@ -33,7 +33,7 @@ const assessments = computed(() => assessmentRecords.value[requirement.value?.us
 const assessmentItems = computed(() => [{ label: 'No related assessment', value: null }, ...assessments.value.map(item => ({ label: `${item.name} (${item.weight ?? 'TBA'}%)`, value: item.id }))])
 const formatDate = value => value ? new Intl.DateTimeFormat('en-SG', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : 'No official deadline'
 async function saveRequirement() {
-  const recessWeeks = editRecessWeeks.value.split(',').map(value => Number(value.trim())).filter(Number.isInteger)
+  const recessWeeks = normalizeRecessWeeksInput(editRecessWeeks.value)
   await update(requirement.value.id, { expectedUpdatedAt: requirement.value.updatedAt, ...edit, description: edit.description || null, timingNote: edit.timingNote || null, assessmentId: edit.assessmentId || null, totalAssessmentWeight: edit.graded ? edit.totalAssessmentWeight : null, recessWeeks })
 }
 async function setStatus(item, status) { await updateOccurrence(requirement.value.id, item.id, { expectedUpdatedAt: item.updatedAt, status }) }

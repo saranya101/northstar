@@ -6,8 +6,20 @@ export const RECURRING_COURSEWORK_STATUSES = ['ACTIVE', 'COMPLETED', 'ARCHIVED']
 export const RECURRING_OCCURRENCE_STATUSES = ['NOT_STARTED', 'IN_PROGRESS', 'SUBMITTED', 'MISSED', 'EXCUSED']
 
 const nullableText = maximum => z.preprocess(value => value === '' || value === undefined ? null : value, z.string().trim().max(maximum).nullable().optional())
-const nullableNumber = (minimum, maximum) => z.preprocess(value => value === '' || value === null || value === undefined ? null : value, z.coerce.number().min(minimum).max(maximum).nullable().optional())
-const nullableInteger = (minimum, maximum) => z.preprocess(value => value === '' || value === null || value === undefined ? null : value, z.coerce.number().int().min(minimum).max(maximum).nullable().optional())
+
+export function normalizeOptionalNumber(value) {
+  if (value === null || value === undefined || (typeof value === 'string' && value.trim() === '')) return undefined
+  return typeof value === 'string' ? Number(value) : value
+}
+
+export function normalizeRecessWeeksInput(value) {
+  const values = Array.isArray(value) ? value : typeof value === 'string' ? value.split(',') : [value]
+  return values.map(normalizeOptionalNumber).filter(value => value !== undefined)
+}
+
+const requiredNumber = (minimum, maximum) => z.preprocess(normalizeOptionalNumber, z.number().min(minimum).max(maximum))
+const optionalNumber = (minimum, maximum) => z.preprocess(normalizeOptionalNumber, z.number().min(minimum).max(maximum).optional())
+const optionalInteger = (minimum, maximum) => z.preprocess(normalizeOptionalNumber, z.number().int().min(minimum).max(maximum).optional())
 const patchNullableText = maximum => z.preprocess(value => value === '' ? null : value, z.string().trim().max(maximum).nullable()).optional()
 const patchNullableNumber = (minimum, maximum) => z.preprocess(value => value === '' || value === null ? null : value, z.coerce.number().min(minimum).max(maximum).nullable()).optional()
 const patchNullableInteger = (minimum, maximum) => z.preprocess(value => value === '' || value === null ? null : value, z.coerce.number().int().min(minimum).max(maximum).nullable()).optional()
@@ -18,13 +30,13 @@ const requirementShape = {
   type: z.enum(RECURRING_COURSEWORK_TYPES),
   description: nullableText(5000),
   frequency: z.enum(RECURRING_COURSEWORK_FREQUENCIES),
-  totalExpected: z.coerce.number().int().min(1).max(100),
-  firstTeachingWeek: nullableInteger(1, 60),
-  lastTeachingWeek: nullableInteger(1, 60),
-  recessWeeks: z.array(z.coerce.number().int().min(1).max(60)).max(10).default([]),
+  totalExpected: requiredNumber(1, 100).pipe(z.int()),
+  firstTeachingWeek: optionalInteger(1, 60),
+  lastTeachingWeek: optionalInteger(1, 60),
+  recessWeeks: z.preprocess(normalizeRecessWeeksInput, z.array(z.number().int().min(1).max(60)).max(10)).default([]),
   includeRecessWeeks: z.boolean().default(false),
   graded: z.boolean().default(false),
-  totalAssessmentWeight: nullableNumber(0, 100),
+  totalAssessmentWeight: optionalNumber(0, 100),
   completeBeforeClass: z.boolean().default(false),
   timingNote: nullableText(500),
   assessmentId: nullableText(100)

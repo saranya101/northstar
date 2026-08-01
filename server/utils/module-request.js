@@ -1,8 +1,11 @@
 import { createError, getQuery, readBody, setResponseStatus } from 'h3'
 import { requireAuth } from './require-auth'
 
-function fieldErrors(issues) {
-  return Object.fromEntries(issues.map(issue => [issue.path.at(-1) || '_form', issue.message]))
+export function moduleFieldErrors(issues) {
+  return Object.fromEntries(issues.map(issue => {
+    const field = issue.path.findLast(part => typeof part === 'string')
+    return [field || '_form', issue.message]
+  }))
 }
 
 async function parse(schema, value) {
@@ -11,7 +14,7 @@ async function parse(schema, value) {
     throw createError({
       statusCode: 400,
       statusMessage: 'Please correct the highlighted fields.',
-      data: { fieldErrors: fieldErrors(result.error.issues) }
+      data: { fieldErrors: moduleFieldErrors(result.error.issues) }
     })
   }
   return result.data

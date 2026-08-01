@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 vi.mock('../server/utils/prisma', () => ({ prisma: {} }))
+vi.mock('../server/utils/require-auth', () => ({ requireAuth: vi.fn() }))
 import { buildMissingOccurrences, hasUnverifiedSubmission, planTeachingWeeks, recurringCourseworkProgress } from '../shared/academic/recurring-coursework'
-import { createRecurringCourseworkSchema, updateRecurringOccurrenceSchema, updateRecurringCourseworkSchema } from '../shared/schemas/recurring-coursework'
+import { createRecurringCourseworkSchema, normalizeOptionalNumber, normalizeRecessWeeksInput, updateRecurringOccurrenceSchema, updateRecurringCourseworkSchema } from '../shared/schemas/recurring-coursework'
+import { moduleFieldErrors } from '../server/utils/module-request'
 import {
   archiveRecurringCoursework,
   createRecurringCoursework,
@@ -62,6 +64,43 @@ describe('recurring coursework validation', () => {
     expect(createRecurringCourseworkSchema.safeParse({ ...valid, firstTeachingWeek: 9 }).success).toBe(false)
     expect(createRecurringCourseworkSchema.safeParse({ ...valid, totalAssessmentWeight: 10 }).success).toBe(false)
     expect(updateRecurringOccurrenceSchema.safeParse({ expectedUpdatedAt: now.toISOString(), score: 11, maximumScore: 10 }).success).toBe(false)
+  })
+
+  it('normalizes browser numeric strings without turning blank optional values into zero', () => {
+    const input = {
+      title: 'LAMS Attempts', type: 'LAMS', frequency: 'WEEKLY', totalExpected: '13',
+      firstTeachingWeek: '1', lastTeachingWeek: '13', totalAssessmentWeight: '',
+      recessWeeks: '', includeRecessWeeks: false, graded: true
+    }
+    expect(createRecurringCourseworkSchema.parse(input)).toMatchObject({
+      totalExpected: 13, firstTeachingWeek: 1, lastTeachingWeek: 13,
+      recessWeeks: [], graded: true
+    })
+    expect(createRecurringCourseworkSchema.parse(input).totalAssessmentWeight).toBeUndefined()
+    expect(createRecurringCourseworkSchema.parse({ ...input, totalAssessmentWeight: null }).totalAssessmentWeight).toBeUndefined()
+    expect(normalizeOptionalNumber('')).toBeUndefined()
+    expect(normalizeOptionalNumber(null)).toBeUndefined()
+    expect(createRecurringCourseworkSchema.safeParse({ ...input, totalAssessmentWeight: 'not-a-number' }).success).toBe(false)
+  })
+
+  it('permits blank optional weeks and includes an explicit recess week', () => {
+    const fixed = createRecurringCourseworkSchema.parse({ ...valid, frequency: 'CUSTOM', firstTeachingWeek: '', lastTeachingWeek: '', recessWeeks: [] })
+    expect(fixed.firstTeachingWeek).toBeUndefined()
+    expect(fixed.lastTeachingWeek).toBeUndefined()
+    expect(normalizeRecessWeeksInput('')).toEqual([])
+    expect(createRecurringCourseworkSchema.parse({ ...valid, recessWeeks: '7', includeRecessWeeks: true })).toMatchObject({ recessWeeks: [7], includeRecessWeeks: true })
+  })
+
+  it('rejects required zero and invalid recess tokens against their actual fields', () => {
+    const zero = createRecurringCourseworkSchema.safeParse({ ...valid, totalExpected: '0' })
+    expect(zero.success).toBe(false)
+    expect(moduleFieldErrors(zero.error.issues)).toHaveProperty('totalExpected')
+    const recess = createRecurringCourseworkSchema.safeParse({ ...valid, recessWeeks: ',7' })
+    expect(recess.success).toBe(true)
+    const invalidRecess = createRecurringCourseworkSchema.safeParse({ ...valid, recessWeeks: 'nope' })
+    expect(invalidRecess.success).toBe(false)
+    expect(moduleFieldErrors(invalidRecess.error.issues)).toHaveProperty('recessWeeks')
+    expect(moduleFieldErrors(invalidRecess.error.issues)).not.toHaveProperty('_form')
   })
 
   it('requires stale-write protection and explicit incomplete-removal confirmation', () => {
