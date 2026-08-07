@@ -2,6 +2,7 @@
 definePageMeta({ layout: 'app', middleware: ['auth', 'onboarded'] })
 const route = useRoute()
 const { details, loading, saving, error, loadOne, update, remove, createDeliverable, updateDeliverable, deleteDeliverable, createMilestone, updateMilestone, deleteMilestone } = useAssessments()
+const { tasks: linkedTasks, load: loadTasks } = useTasks()
 const assessment = computed(() => details.value[route.params.id])
 const form = reactive({})
 const deliverableTitle = ref('')
@@ -9,11 +10,13 @@ const milestone = reactive({ title: '', dueDate: '', status: 'NOT_STARTED', esti
 const deleteOpen = ref(false)
 const statuses = ['NOT_STARTED','PLANNING','IN_PROGRESS','WAITING_ON_TEAMMATE','READY_FOR_REVIEW','SUBMITTED','GRADED','OVERDUE','CANCELLED']
 useSeoMeta({ title: () => assessment.value ? `${assessment.value.name} · Northstar` : 'Assessment · Northstar' })
-watch(assessment, value => { if (value) Object.assign(form, value, { officialDeadline: inputDate(value.officialDeadline), internalDeadline: inputDate(value.internalDeadline), eventDate: inputDate(value.eventDate) }) }, { immediate: true })
+watch(assessment, value => { if (value) { Object.assign(form, value, { officialDeadline: inputDate(value.officialDeadline), internalDeadline: inputDate(value.internalDeadline), eventDate: inputDate(value.eventDate) }); void loadTasks({ assessmentId: value.id, view: 'ALL' }) } }, { immediate: true })
 onMounted(() => void loadOne(route.params.id))
 function inputDate(value) { if (!value) return ''; const d = new Date(value); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0,16) }
 function iso(value) { return value ? new Date(value).toISOString() : null }
 const label = value => value?.replaceAll('_',' ').toLowerCase().replace(/\b\w/g, letter => letter.toUpperCase())
+const taskForMilestone = id => linkedTasks.value.find(task => task.assessmentMilestoneId === id)
+const assessmentTaskRoute = extra => ({ path: '/app/tasks', query: { create: '1', title: extra?.title || '', moduleEnrolmentId: assessment.value.userModuleEnrolmentId, assessmentId: assessment.value.id, assessmentMilestoneId: extra?.id, dueAt: extra?.dueDate, estimatedMinutes: extra?.estimatedEffortMinutes } })
 async function save() {
   await update(route.params.id, {
     name: form.name, type: form.type, weight: form.weight, officialDeadline: iso(form.officialDeadline), internalDeadline: iso(form.internalDeadline), eventDate: iso(form.eventDate),
@@ -39,7 +42,7 @@ async function confirmDelete() { if (await remove(route.params.id)) await naviga
     <p v-else-if="!assessment" class="module-alert" role="alert">{{ error || 'Assessment unavailable.' }}</p>
     <template v-else>
       <NuxtLink :to="`/app/modules/${assessment.userModuleEnrolmentId}#assessments`" class="dossier-back"><UIcon name="i-lucide-arrow-left" /> Back to module</NuxtLink>
-      <header class="review-header"><div><p>{{ label(assessment.type) }}</p><h1>{{ assessment.name }}</h1><span>{{ assessment.weight ?? 'Unknown' }}% · {{ label(assessment.status) }}</span></div><UBadge color="neutral" variant="outline">{{ assessment.percentageScore === null ? 'Not graded' : `${assessment.percentageScore}%` }}</UBadge></header>
+      <header class="review-header"><div><p>{{ label(assessment.type) }}</p><h1>{{ assessment.name }}</h1><span>{{ assessment.weight ?? 'Unknown' }}% · {{ label(assessment.status) }}</span></div><div class="academic-actions"><UButton :to="assessmentTaskRoute({ title: '' })" color="neutral" variant="outline">Create task</UButton><UBadge color="neutral" variant="outline">{{ assessment.percentageScore === null ? 'Not graded' : `${assessment.percentageScore}%` }}</UBadge></div></header>
       <section class="dossier-section"><div class="dossier-section__heading"><div><p>Confirmed record</p><h2>Assessment summary</h2></div></div>
         <form class="module-form" @submit.prevent="save">
           <div class="module-form__grid"><div class="module-field"><label for="workspace-name">Name</label><UInput id="workspace-name" v-model="form.name" required /></div><div class="module-field"><label for="workspace-status">Status</label><USelect id="workspace-status" v-model="form.status" :items="statuses" /></div></div>
@@ -59,7 +62,7 @@ async function confirmDelete() { if (await remove(route.params.id)) await naviga
         </section>
         <section class="dossier-section"><div class="dossier-section__heading"><div><p>Assessment-specific plan</p><h2>Milestones</h2></div></div>
           <form class="milestone-form" @submit.prevent="addMilestone"><div class="module-field"><label for="new-milestone">Title</label><UInput id="new-milestone" v-model="milestone.title" required /></div><div class="module-field"><label for="milestone-date">Due date</label><input id="milestone-date" v-model="milestone.dueDate" type="datetime-local"></div><UButton type="submit" :loading="saving">Add milestone</UButton></form>
-          <ul class="workspace-list"><li v-for="item in assessment.milestones" :key="item.id"><div><strong>{{ item.title }}</strong><small>{{ item.dueDate ? new Date(item.dueDate).toLocaleString('en-SG') : 'No date' }}</small></div><USelect :model-value="item.status" :items="['NOT_STARTED','IN_PROGRESS','COMPLETED','CANCELLED']" aria-label="Milestone status" @update:model-value="value => setMilestone(item, value)" /><button aria-label="Delete milestone" @click="removeMilestone(item.id)"><UIcon name="i-lucide-trash-2" /></button></li></ul>
+          <ul class="workspace-list"><li v-for="item in assessment.milestones" :key="item.id"><div><strong>{{ item.title }}</strong><small>{{ item.dueDate ? new Date(item.dueDate).toLocaleString('en-SG') : 'No date' }}</small></div><UButton :to="taskForMilestone(item.id) ? `/app/tasks?view=ALL` : assessmentTaskRoute(item)" size="xs" color="neutral" variant="ghost">{{ taskForMilestone(item.id) ? 'Open task' : 'Create task' }}</UButton><USelect :model-value="item.status" :items="['NOT_STARTED','IN_PROGRESS','COMPLETED','CANCELLED']" aria-label="Milestone status" @update:model-value="value => setMilestone(item, value)" /><button aria-label="Delete milestone" @click="removeMilestone(item.id)"><UIcon name="i-lucide-trash-2" /></button></li></ul>
         </section>
       </div>
 

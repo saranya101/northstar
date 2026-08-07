@@ -1,0 +1,2 @@
+import { getRouterParam } from 'h3'; import { deleteTask } from '../../services/tasks'; import { handleModuleError, requireModuleUser } from '../../utils/module-request'
+export default defineEventHandler(async event => { try { const user = await requireModuleUser(event); return await deleteTask(user.id, getRouterParam(event, 'id')) } catch (error) { return handleModuleError(event, error, 'Deleting a task') } })

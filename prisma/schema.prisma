@@ -29,6 +29,7 @@ model User {
   assessments          Assessment[]
   recurringCoursework  RecurringCoursework[]
   recurringCourseworkOccurrences RecurringCourseworkOccurrence[]
+  tasks                Task[]
   createdOpportunities Opportunity[]         @relation("OpportunityCreator")
   userOpportunities    UserOpportunity[]
 
@@ -635,6 +636,7 @@ model UserModuleEnrolment {
   weeklyTopics         ModuleWeeklyTopic[]
   privateFacts         UserModuleFact[]
   recurringCoursework  RecurringCoursework[]
+  tasks                Task[]
 
   @@unique([userId, offeringId])
   @@index([userId])
@@ -1002,6 +1004,7 @@ model Assessment {
   deliverables          AssessmentDeliverable[]
   milestones            AssessmentMilestone[]
   recurringCoursework   RecurringCoursework[]
+  tasks                 Task[]
 
   @@index([userId, userModuleEnrolmentId])
   @@index([userModuleEnrolmentId, officialDeadline])
@@ -1033,6 +1036,7 @@ model RecurringCoursework {
   userModuleEnrolment   UserModuleEnrolment          @relation(fields: [userModuleEnrolmentId], references: [id], onDelete: Cascade)
   assessment            Assessment?                  @relation(fields: [assessmentId], references: [id], onDelete: SetNull)
   occurrences           RecurringCourseworkOccurrence[]
+  tasks                 Task[]
 
   @@index([userId, userModuleEnrolmentId, status])
   @@index([assessmentId])
@@ -1062,6 +1066,7 @@ model RecurringCourseworkOccurrence {
   updatedAt                DateTime                            @updatedAt
   user                     User                                @relation(fields: [userId], references: [id], onDelete: Cascade)
   recurringCoursework      RecurringCoursework                 @relation(fields: [recurringCourseworkId], references: [id], onDelete: Cascade)
+  tasks                    Task[]
 
   @@unique([recurringCourseworkId, sequenceNumber])
   @@index([userId, status])
@@ -1117,9 +1122,77 @@ model AssessmentMilestone {
   createdAt              DateTime                  @default(now())
   updatedAt              DateTime                  @updatedAt
   assessment             Assessment                @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  tasks                  Task[]
 
   @@index([assessmentId, sortOrder])
   @@index([dueDate])
+}
+
+enum TaskType {
+  STUDY
+  REVISION
+  ASSIGNMENT
+  READING
+  PRACTICE
+  ADMIN
+  GROUP_WORK
+  OTHER
+}
+
+enum TaskStatus {
+  BACKLOG
+  PLANNED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+model Task {
+  id                              String                        @id @default(cuid())
+  userId                          String
+  moduleEnrolmentId               String?
+  assessmentId                    String?
+  recurringCourseworkId           String?
+  recurringCourseworkOccurrenceId String?
+  assessmentMilestoneId           String?
+  parentTaskId                    String?
+  title                           String
+  description                     String?
+  type                            TaskType                      @default(STUDY)
+  status                          TaskStatus                    @default(BACKLOG)
+  priority                        TaskPriority                  @default(MEDIUM)
+  dueAt                           DateTime?
+  timingNote                      String?
+  estimatedMinutes                Int?
+  actualMinutes                   Int?
+  sortOrder                       Int                           @default(0)
+  startedAt                       DateTime?
+  completedAt                     DateTime?
+  createdAt                       DateTime                      @default(now())
+  updatedAt                       DateTime                      @updatedAt
+  user                            User                          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  moduleEnrolment                 UserModuleEnrolment?          @relation(fields: [moduleEnrolmentId], references: [id], onDelete: SetNull)
+  assessment                      Assessment?                   @relation(fields: [assessmentId], references: [id], onDelete: SetNull)
+  recurringCoursework             RecurringCoursework?          @relation(fields: [recurringCourseworkId], references: [id], onDelete: SetNull)
+  recurringCourseworkOccurrence   RecurringCourseworkOccurrence? @relation(fields: [recurringCourseworkOccurrenceId], references: [id], onDelete: SetNull)
+  assessmentMilestone             AssessmentMilestone?          @relation(fields: [assessmentMilestoneId], references: [id], onDelete: SetNull)
+  parentTask                      Task?                          @relation("TaskSubtasks", fields: [parentTaskId], references: [id], onDelete: Cascade)
+  subtasks                        Task[]                         @relation("TaskSubtasks")
+
+  @@unique([userId, recurringCourseworkOccurrenceId])
+  @@unique([userId, assessmentMilestoneId])
+  @@index([userId, status, dueAt])
+  @@index([moduleEnrolmentId])
+  @@index([assessmentId])
+  @@index([recurringCourseworkId])
+  @@index([parentTaskId, sortOrder])
 }
 
 model TimetableImport {

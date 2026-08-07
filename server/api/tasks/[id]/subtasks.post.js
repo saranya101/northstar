@@ -1,0 +1,2 @@
+import { getRouterParam } from 'h3'; import { createSubtaskSchema } from '#shared/schemas/tasks'; import { createSubtask } from '../../../services/tasks'; import { handleModuleError, readModuleBody, requireModuleUser } from '../../../utils/module-request'
+export default defineEventHandler(async event => { try { const user = await requireModuleUser(event); return await createSubtask(user.id, getRouterParam(event, 'id'), await readModuleBody(event, createSubtaskSchema)) } catch (error) { return handleModuleError(event, error, 'Creating a subtask') } })

@@ -4,6 +4,7 @@ import { normalizeRecessWeeksInput, RECURRING_COURSEWORK_FREQUENCIES, RECURRING_
 definePageMeta({ layout: 'app', middleware: ['auth', 'onboarded'] })
 const route = useRoute()
 const { details, loading, saving, error, loadOne, update, generate, updateOccurrence, verifyOccurrence } = useRecurringCoursework()
+const { tasks: linkedTasks, load: loadTasks } = useTasks()
 const { records: assessmentRecords, load: loadAssessments } = useAssessments()
 const requirement = computed(() => details.value[route.params.id])
 const edit = reactive({ title: '', type: 'LAMS', description: '', frequency: 'WEEKLY', totalExpected: 1, firstTeachingWeek: null, lastTeachingWeek: null, graded: false, totalAssessmentWeight: null, completeBeforeClass: false, timingNote: '', assessmentId: null, includeRecessWeeks: false, status: 'ACTIVE', removeIncompleteOccurrences: false })
@@ -18,6 +19,7 @@ watch(requirement, value => {
   Object.assign(edit, { title: value.title, type: value.type, description: value.description || '', frequency: value.frequency, totalExpected: value.totalExpected, firstTeachingWeek: value.firstTeachingWeek, lastTeachingWeek: value.lastTeachingWeek, graded: value.graded, totalAssessmentWeight: value.totalAssessmentWeight, completeBeforeClass: value.completeBeforeClass, timingNote: value.timingNote || '', assessmentId: value.assessmentId, includeRecessWeeks: value.includeRecessWeeks, status: value.status, removeIncompleteOccurrences: false })
   editRecessWeeks.value = value.recessWeeks.join(', ')
   void loadAssessments(value.userModuleEnrolmentId)
+  void loadTasks({ recurringCourseworkId: value.id, view: 'ALL' })
   for (const item of value.occurrences) verification[item.id] = {
     workCompleted: item.workCompleted, finalConfirmationClicked: item.finalConfirmationClicked, gradeCentreChecked: item.gradeCentreChecked,
     markCaptured: item.markCaptured, submissionReference: item.submissionReference || '', score: item.score, maximumScore: item.maximumScore
@@ -32,6 +34,8 @@ const frequencyItems = RECURRING_COURSEWORK_FREQUENCIES.map(value => ({ label: l
 const assessments = computed(() => assessmentRecords.value[requirement.value?.userModuleEnrolmentId]?.assessments || [])
 const assessmentItems = computed(() => [{ label: 'No related assessment', value: null }, ...assessments.value.map(item => ({ label: `${item.name} (${item.weight ?? 'TBA'}%)`, value: item.id }))])
 const formatDate = value => value ? new Intl.DateTimeFormat('en-SG', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : 'No official deadline'
+const taskForOccurrence = id => linkedTasks.value.find(task => task.recurringCourseworkOccurrenceId === id)
+const occurrenceTaskRoute = item => ({ path: '/app/tasks', query: { create: '1', title: `${requirement.value.title} ${item.teachingWeek ? `Week ${item.teachingWeek}` : `Occurrence ${item.sequenceNumber}`}`, moduleEnrolmentId: requirement.value.userModuleEnrolmentId, assessmentId: requirement.value.assessmentId, recurringCourseworkId: requirement.value.id, recurringCourseworkOccurrenceId: item.id, timingNote: item.timingNote || requirement.value.timingNote, dueAt: item.officialDueAt } })
 async function saveRequirement() {
   const recessWeeks = normalizeRecessWeeksInput(editRecessWeeks.value)
   await update(requirement.value.id, { expectedUpdatedAt: requirement.value.updatedAt, ...edit, description: edit.description || null, timingNote: edit.timingNote || null, assessmentId: edit.assessmentId || null, totalAssessmentWeight: edit.graded ? edit.totalAssessmentWeight : null, recessWeeks })
@@ -65,7 +69,7 @@ async function saveVerification(item) {
         <article v-for="item in requirement.occurrences" :key="item.id" class="occurrence-card">
           <div class="occurrence-heading"><div><strong>{{ item.teachingWeek ? `Week ${item.teachingWeek}` : `Occurrence ${item.sequenceNumber}` }}</strong><span>{{ item.timingNote || requirement.timingNote || (requirement.completeBeforeClass ? 'Before class' : formatDate(item.officialDueAt)) }}</span></div><UBadge :color="item.status === 'VERIFIED' ? 'success' : item.status === 'MISSED' ? 'error' : 'neutral'">{{ label(item.status) }}</UBadge></div>
           <p v-if="item.unverifiedSubmission" class="tracker-warning"><UIcon name="i-lucide-triangle-alert" /> {{ item.finalConfirmationClicked ? 'Final confirmation recorded; Grade Centre verification is still outstanding.' : 'Submitted, but final confirmation has not been verified.' }}</p>
-          <div class="occurrence-actions"><UButton size="sm" color="neutral" variant="outline" @click="setStatus(item, 'IN_PROGRESS')">Mark started</UButton><UButton size="sm" @click="setStatus(item, 'SUBMITTED')">Mark completed/submitted</UButton><UButton size="sm" color="neutral" variant="ghost" @click="setStatus(item, 'MISSED')">Mark missed</UButton><UButton size="sm" color="neutral" variant="ghost" @click="setStatus(item, 'EXCUSED')">Mark excused</UButton></div>
+          <div class="occurrence-actions"><UButton :to="taskForOccurrence(item.id) ? '/app/tasks?view=ALL' : occurrenceTaskRoute(item)" size="sm" color="neutral" variant="outline">{{ taskForOccurrence(item.id) ? 'Open task' : 'Create task' }}</UButton><UButton size="sm" color="neutral" variant="outline" @click="setStatus(item, 'IN_PROGRESS')">Mark started</UButton><UButton size="sm" @click="setStatus(item, 'SUBMITTED')">Mark completed/submitted</UButton><UButton size="sm" color="neutral" variant="ghost" @click="setStatus(item, 'MISSED')">Mark missed</UButton><UButton size="sm" color="neutral" variant="ghost" @click="setStatus(item, 'EXCUSED')">Mark excused</UButton></div>
           <details><summary>Deadline, timing and private notes</summary><form class="verification-form" @submit.prevent="saveOccurrence(item)">
             <div class="module-field"><label :for="`due-${item.id}`">Official due date and time <em>optional</em></label><input :id="`due-${item.id}`" v-model="occurrenceEdits[item.id].officialDueAt" type="datetime-local"></div>
             <div class="module-field"><label :for="`timing-${item.id}`">Timing note <em>optional</em></label><UInput :id="`timing-${item.id}`" v-model="occurrenceEdits[item.id].timingNote" maxlength="500" placeholder="Before seminar" /></div>
