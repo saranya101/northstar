@@ -42,6 +42,12 @@ describe('focus timer calculations', () => {
     })
   })
 
+  it('preserves optional task context through focus completion', () => {
+    const record = createStudySessionRecord(focusTimer({ taskId: 'task-1' }), START + 60_000, SESSION_COMPLETION_STATES.FINISHED_EARLY)
+    expect(record.taskId).toBe('task-1')
+    expect(createStudySessionRecord(focusTimer(), START + 60_000, SESSION_COMPLETION_STATES.FINISHED_EARLY).taskId).toBeNull()
+  })
+
   it('calculates pause and resume without counting paused time', () => {
     const paused = pauseTimer(focusTimer(), START + 60_000)
     expect(timerSnapshot(paused, START + 10 * 60_000).elapsedSeconds).toBe(60)

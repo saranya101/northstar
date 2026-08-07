@@ -27,12 +27,19 @@ const {
   summary,
   weekAssessments,
 } = useWeeklyPlanner()
+const route = useRoute()
 
 const editorOpen = ref(false)
 const editorMode = ref('create')
 const selectedBlock = ref(null)
 const defaultDate = ref('')
 const conflicts = ref([])
+const taskDraftOpened = ref(false)
+const taskPrefill = computed(() => {
+  const minutes = Math.min(240, Math.max(1, Number(route.query.estimatedMinutes) || 60))
+  const end = 9 * 60 + minutes
+  return { enrolmentId: String(route.query.moduleEnrolmentId || ''), title: String(route.query.title || '').slice(0, 160), goal: String(route.query.title || '').slice(0, 240), endTime: `${String(Math.floor(end / 60)).padStart(2, '0')}:${String(end % 60).padStart(2, '0')}` }
+})
 const dateRange = new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
 const assessmentDate = new Intl.DateTimeFormat(undefined, { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })
 
@@ -45,6 +52,7 @@ function closeEditor() { editorOpen.value = false; selectedBlock.value = null; c
 function submit({ input, acknowledgeConflicts }) { const result = save(input, acknowledgeConflicts); conflicts.value = result.conflicts || []; if (result.ok) closeEditor() }
 function confirmDelete(id) { if (window.confirm('Delete this local study block? This cannot be undone.')) { remove(id); closeEditor() } }
 function typeLabel(value) { return String(value || 'Assessment').toLowerCase().replaceAll('_', ' ').replace(/\b\w/g, letter => letter.toUpperCase()) }
+watch(initialized, ready => { if (ready && route.query.taskId && !taskDraftOpened.value) { taskDraftOpened.value = true; openCreate() } }, { immediate: true })
 </script>
 
 <template>
@@ -89,7 +97,7 @@ function typeLabel(value) { return String(value || 'Assessment').toLowerCase().r
 
       <PlannerWeeklyCalendar :days="calendarDays" :today="localDateKey(new Date())" @add="openCreate" @edit="openEdit" @move="openMove" @delete="confirmDelete" @status="setStatus" />
 
-      <PlannerStudyBlockModal v-model:open="editorOpen" :block="selectedBlock" :mode="editorMode" :default-date="defaultDate" :modules="modules" :assessments="assessmentOptions" :conflicts="conflicts" :field-errors="fieldErrors" @save="submit" @clear-conflicts="conflicts = []" @delete="confirmDelete" />
+      <PlannerStudyBlockModal v-model:open="editorOpen" :block="selectedBlock" :mode="editorMode" :default-date="defaultDate" :modules="modules" :assessments="assessmentOptions" :conflicts="conflicts" :field-errors="fieldErrors" :prefill="taskPrefill" @save="submit" @clear-conflicts="conflicts = []" @delete="confirmDelete" />
     </template>
   </main>
 </template>

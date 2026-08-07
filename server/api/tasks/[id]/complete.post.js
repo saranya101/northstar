@@ -1,0 +1,2 @@
+import { getRouterParam } from 'h3'; import { completeTaskSchema } from '#shared/schemas/tasks'; import { setTaskCompleted } from '../../../services/tasks'; import { handleModuleError, readModuleBody, requireModuleUser } from '../../../utils/module-request'
+export default defineEventHandler(async event => { try { const user = await requireModuleUser(event); return await setTaskCompleted(user.id, getRouterParam(event, 'id'), (await readModuleBody(event, completeTaskSchema)).completed) } catch (error) { return handleModuleError(event, error, 'Completing a task') } })

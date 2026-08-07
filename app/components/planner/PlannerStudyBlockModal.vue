@@ -10,6 +10,7 @@ const props = defineProps({
   assessments: { type: Array, default: () => [] },
   conflicts: { type: Array, default: () => [] },
   fieldErrors: { type: Object, default: () => ({}) },
+  prefill: { type: Object, default: () => ({}) },
 })
 const emit = defineEmits(['update:open', 'save', 'clear-conflicts', 'delete'])
 const form = reactive({ id: null, enrolmentId: '', title: '', date: '', startTime: '09:00', endTime: '10:00', goal: '', status: 'PLANNED', assessmentId: '' })
@@ -36,12 +37,12 @@ function hydrate() {
     assessmentId: source.assessmentId || '',
   } : {
     id: null,
-    enrolmentId: '',
-    title: '',
+    enrolmentId: props.prefill.enrolmentId || '',
+    title: props.prefill.title || '',
     date: props.defaultDate || localDateKey(new Date()),
     startTime: '09:00',
-    endTime: '10:00',
-    goal: '',
+    endTime: props.prefill.endTime || '10:00',
+    goal: props.prefill.goal || '',
     status: 'PLANNED',
     assessmentId: '',
   })

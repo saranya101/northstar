@@ -1,0 +1,2 @@
+import { getRouterParam } from 'h3'; import { updateTaskSchema } from '#shared/schemas/tasks'; import { updateTask } from '../../services/tasks'; import { handleModuleError, readModuleBody, requireModuleUser } from '../../utils/module-request'
+export default defineEventHandler(async event => { try { const user = await requireModuleUser(event); return await updateTask(user.id, getRouterParam(event, 'id'), await readModuleBody(event, updateTaskSchema)) } catch (error) { return handleModuleError(event, error, 'Updating a task') } })

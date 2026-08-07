@@ -62,6 +62,7 @@ function normalizeModule(item) {
 }
 
 export function useFocusTimer() {
+  const route = useRoute()
   const { user } = useCurrentSession()
   const {
     state: modulesState,
@@ -82,6 +83,7 @@ export function useFocusTimer() {
   const historyModuleKey = ref(ALL_MODULES_FILTER)
   const notificationPermission = ref('default')
   const initialized = ref(false)
+  const taskContextId = ref(null)
 
   let storage = null
   let intervalId = null
@@ -156,6 +158,7 @@ export function useFocusTimer() {
     statusMessage.value = ''
     error.value = ''
     initialized.value = false
+    taskContextId.value = null
   }
 
   function syncFromStoredState(state) {
@@ -266,6 +269,7 @@ export function useFocusTimer() {
       ownerId.value = String(userId)
       const state = storage.load(ownerId.value)
       syncFromStoredState(state)
+      applyTaskRouteContext()
       initialized.value = true
 
       if (state.activeTimer) {
@@ -279,6 +283,7 @@ export function useFocusTimer() {
 
       try {
         await loadModules()
+        applyTaskRouteContext()
       } catch {
         // General study remains available when the module request fails.
       }
@@ -294,6 +299,14 @@ export function useFocusTimer() {
       const selected = moduleOptions.value.find(item => item.key === patch.selectedModuleKey)
       if (selected) preferences.value.selectedModule = selected
     }
+  }
+
+  function applyTaskRouteContext() {
+    taskContextId.value = route.query.taskId ? String(route.query.taskId).slice(0, 200) : null
+    const goal = route.query.goal ? String(route.query.goal).slice(0, 240) : ''
+    const moduleId = route.query.module ? String(route.query.module) : ''
+    const selected = moduleOptions.value.find(item => item.enrolmentId === moduleId)
+    patchPreferences({ ...(goal ? { goal } : {}), ...(selected ? { selectedModuleKey: selected.key, selectedModule: selected } : {}) })
   }
 
   function startFocusSession() {
@@ -327,6 +340,7 @@ export function useFocusTimer() {
       focusDurationSeconds: validation.focusDurationSeconds,
       breakDurationSeconds: validation.breakDurationSeconds,
       module: selectedModuleSnapshot(),
+      taskId: taskContextId.value,
       goal: preferences.value.goal,
       autoStartBreak: preferences.value.autoStartBreak,
     })
@@ -498,6 +512,7 @@ export function useFocusTimer() {
     notificationPermission,
     error,
     initialized,
+    taskContextId,
     hasRecordedFocusTime,
     patchPreferences,
     startFocusSession,

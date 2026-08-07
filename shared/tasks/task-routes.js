@@ -1,0 +1,3 @@
+const query = value => Object.fromEntries(Object.entries(value).filter(([, item]) => item !== null && item !== undefined && item !== '').map(([key, item]) => [key, String(item).slice(0, 240)]))
+export const plannerRouteForTask = task => ({ path: '/app/planner', query: query({ taskId: task.id, moduleEnrolmentId: task.moduleEnrolmentId, moduleCode: task.moduleEnrolment?.offering?.module?.code || task.moduleCode, title: task.title, estimatedMinutes: task.estimatedMinutes }) })
+export const focusRouteForTask = task => ({ path: '/app/focus', query: query({ taskId: task.id, module: task.moduleEnrolmentId, moduleCode: task.moduleEnrolment?.offering?.module?.code || task.moduleCode, goal: task.title }) })
