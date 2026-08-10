@@ -13,7 +13,7 @@ const { state: moduleState, load: loadModules } = useModules()
 const { records: assessmentRecords, load: loadAssessments } = useAssessments()
 const { tasks, loading, saving, error, fieldErrors, load, create, update, complete, remove, createSubtask } = useTasks()
 const view = ref(['TODAY','OVERDUE','UPCOMING','BACKLOG','COMPLETED','ALL'].includes(String(route.query.view)) ? String(route.query.view) : 'TODAY')
-const filters = reactive({ moduleEnrolmentId: '', type: '', priority: '', status: '' })
+const filters = reactive({ moduleEnrolmentId: String(route.query.moduleEnrolmentId || ''), type: '', priority: '', status: '' })
 const editorOpen = ref(false)
 const editingId = ref(null)
 const localSessions = ref([])
@@ -42,8 +42,8 @@ watch(query, refresh, { deep: true })
 onMounted(async () => { await loadModules(); await refresh(); if (user.value?.id) localSessions.value = createFocusStorage(window.localStorage).load(user.value.id).sessions; if (route.query.create) openCreate({ title: String(route.query.title || ''), moduleEnrolmentId: String(route.query.moduleEnrolmentId || ''), assessmentId: String(route.query.assessmentId || ''), recurringCourseworkId: String(route.query.recurringCourseworkId || ''), recurringCourseworkOccurrenceId: String(route.query.recurringCourseworkOccurrenceId || ''), assessmentMilestoneId: String(route.query.assessmentMilestoneId || ''), timingNote: String(route.query.timingNote || ''), dueAt: route.query.dueAt ? inputDate(route.query.dueAt) : '', estimatedMinutes: route.query.estimatedMinutes ? Number(route.query.estimatedMinutes) : null }) })
 </script>
 
-<template><main class="app-page tasks-page">
-  <header class="app-page__header"><div><p class="app-page__eyebrow">Execution layer</p><h1>Tasks</h1><span>Concrete actions connected to your modules and academic requirements.</span></div><UButton icon="i-lucide-plus" @click="openCreate()">Add task</UButton></header>
+<template><main class="app-page v2-page tasks-page">
+  <header class="v2-page-heading"><div><p>Tasks</p><h1>Academic execution queue</h1></div><UButton icon="i-lucide-plus" @click="openCreate()">Add task</UButton></header>
   <nav class="task-views" aria-label="Task views"><button v-for="item in views" :key="item" :class="{ active: view === item }" @click="view = item">{{ label(item) }}</button></nav>
   <section class="task-filters" aria-label="Task filters"><select v-model="filters.moduleEnrolmentId"><option value="">All modules</option><option v-for="module in modules" :key="module.enrolmentId || module.id" :value="module.enrolmentId || module.id">{{ module.code || module.module?.code }}</option></select><select v-model="filters.type"><option value="">All types</option><option v-for="item in TASK_TYPES" :key="item">{{ item }}</option></select><select v-model="filters.priority"><option value="">All priorities</option><option v-for="item in TASK_PRIORITIES" :key="item">{{ item }}</option></select><select v-model="filters.status"><option value="">All statuses</option><option v-for="item in TASK_STATUSES" :key="item">{{ item }}</option></select></section>
   <p v-if="error" class="module-alert" role="alert">{{ error }}</p><p v-if="loading" role="status">Loading tasks…</p><p v-else-if="!tasks.length" class="dossier-empty">No tasks in this view.</p>

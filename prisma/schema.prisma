@@ -24,8 +24,7 @@ model User {
   semesters            UserSemester[]
   moduleEnrolments     UserModuleEnrolment[]
   timetableImports     TimetableImport[]
-  courseOutlineImports CourseOutlineImport[]
-  courseDocumentEvidence CourseDocumentEvidence[]
+  academicIntakes      AcademicIntake[]
   assessments          Assessment[]
   recurringCoursework  RecurringCoursework[]
   recurringCourseworkOccurrences RecurringCourseworkOccurrence[]
@@ -559,7 +558,6 @@ model ModuleOffering {
   sectionLabel          String                 @default("DEFAULT")
   gradingType           String?
   syllabusUrl           String?
-  courseOutlineFileUrl  String?
   assessmentInformation String?
   notes                 String?
   createdAt             DateTime               @default(now())
@@ -631,7 +629,7 @@ model UserModuleEnrolment {
   userSemester       UserSemester             @relation(fields: [userSemesterId], references: [id], onDelete: Cascade)
   offering           ModuleOffering           @relation(fields: [offeringId], references: [id])
   classSessions      ClassSession[]
-  courseOutlineImports CourseOutlineImport[]
+  academicIntakes      AcademicIntake[]
   assessments          Assessment[]
   weeklyTopics         ModuleWeeklyTopic[]
   privateFacts         UserModuleFact[]
@@ -645,57 +643,54 @@ model UserModuleEnrolment {
   @@index([offeringId])
 }
 
-enum CourseOutlineImportSource {
-  PDF
-  IMAGE
-  TEXT
-  MANUAL
-}
-
-enum CourseOutlineImportStatus {
-  PROCESSING
-  REVIEW_REQUIRED
-  CONFIRMED
-  FAILED
-  CANCELLED
-  ARCHIVED
-}
-
-enum CourseDocumentType {
-  COURSE_OUTLINE
-  ASSESSMENT_BRIEF
-  PRE_CLASS_BRIEFING
-  WEEKLY_SCHEDULE
-  RUBRIC
+enum AcademicIntakeCategory {
+  ASSESSMENT_UPDATE
+  NEW_ASSESSMENT
+  COURSEWORK
+  DEADLINE
+  CLASS_UPDATE
+  TASK
+  STUDY_PLAN
+  GRADE_RESULT
+  LECTURER_INSTRUCTION
+  EXAM_INFORMATION
   ANNOUNCEMENT
-  SEMINAR_MATERIAL
-  OTHER
+  GENERAL_NOTE
 }
 
-enum CourseDocumentChangeType {
-  ADD
-  FILL_MISSING
-  UPDATE
-  CONFLICT
-  DUPLICATE
-  NO_CHANGE
+enum AcademicIntakeStatus {
+  PENDING_REVIEW
+  APPLIED
+  DISMISSED
+  NEEDS_CLARIFICATION
+  FAILED
 }
 
-enum CourseDocumentProposalStatus {
-  PENDING
-  APPROVED
-  REJECTED
+enum AcademicProposalAction {
+  CREATE_TASK
+  UPDATE_TASK
+  CREATE_ASSESSMENT
+  UPDATE_ASSESSMENT
+  CREATE_COURSEWORK
+  UPDATE_COURSEWORK
+  RECORD_GRADE
+  CREATE_STUDY_PLAN
+  ADD_NOTE
 }
 
-enum CourseDocumentTargetType {
-  MODULE_FACT
+enum AcademicProposalTarget {
+  TASK
   ASSESSMENT
-  WEEKLY_TOPIC
+  RECURRING_COURSEWORK
+  STUDY_PLAN
+  MODULE_NOTE
 }
 
-enum CourseOutlineCandidateStatus {
-  SELECTED
-  REJECTED
+enum AcademicProposalStatus {
+  PENDING
+  APPLIED
+  DISMISSED
+  CONFLICT
 }
 
 enum AssessmentType {
@@ -769,90 +764,41 @@ enum RecurringCourseworkOccurrenceStatus {
   EXCUSED
 }
 
-model CourseOutlineImport {
-  id                    String                    @id @default(cuid())
+model AcademicIntake {
+  id                    String                 @id @default(cuid())
   userId                String
-  userModuleEnrolmentId String
-  originalFileName      String?
-  mimeType              String?
-  sourceType            CourseOutlineImportSource
-  sourceLabel           String
-  documentType          CourseDocumentType        @default(COURSE_OUTLINE)
-  displayTitle          String?
-  fileSize              Int?
-  sha256Hash            String?
-  sourceDate            DateTime?
-  storageProvider       String?
-  storageKey            String?
-  duplicateCount        Int                       @default(0)
-  duplicateLastSeenAt   DateTime?
-  rawExtractedText      String
-  status                CourseOutlineImportStatus @default(REVIEW_REQUIRED)
-  parserVersion         String
-  extractionConfidence  Decimal?                  @db.Decimal(3, 2)
-  safeErrorMessage      String?
-  academicYear          String?
-  semesterLabel         String?
-  historical            Boolean                  @default(false)
-  userConfirmedCurrent  Boolean                  @default(false)
-  warnings              String[]                 @default([])
-  confirmedAt           DateTime?
-  createdAt             DateTime                  @default(now())
-  updatedAt             DateTime                  @updatedAt
-  user                  User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userModuleEnrolment   UserModuleEnrolment       @relation(fields: [userModuleEnrolmentId], references: [id], onDelete: Cascade)
-  candidates            CourseOutlineAssessmentCandidate[]
-  facts                 CourseOutlineFact[]
-  weeks                 CourseOutlineWeek[]
-  assessments           Assessment[]
-  proposals             CourseDocumentProposal[]
-  evidence              CourseDocumentEvidence[]
-  assessmentProvenance  AssessmentProvenance[]
+  moduleEnrolmentId     String?
+  rawText               String
+  detectedCategory      AcademicIntakeCategory
+  status                AcademicIntakeStatus   @default(PENDING_REVIEW)
+  clarificationReason   String?
+  interpreterKey        String                 @default("deterministic-v1")
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  user                  User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  moduleEnrolment       UserModuleEnrolment?   @relation(fields: [moduleEnrolmentId], references: [id], onDelete: SetNull)
+  proposals             AcademicProposal[]
 
-  @@index([userId, createdAt])
-  @@index([userModuleEnrolmentId, status])
-  @@unique([userId, userModuleEnrolmentId, sha256Hash])
+  @@index([userId, status, createdAt])
+  @@index([moduleEnrolmentId, createdAt])
 }
 
-model CourseDocumentProposal {
-  id             String                       @id @default(cuid())
-  importId       String
-  targetType     CourseDocumentTargetType
-  targetId       String?
-  fieldName      String
-  currentValue   Json?
-  proposedValue  Json?
-  classification CourseDocumentChangeType
-  status         CourseDocumentProposalStatus @default(PENDING)
-  confidence     Decimal?                     @db.Decimal(3, 2)
-  pageNumber     Int?
-  sourceExcerpt  String?
-  sourceOrder    Int
-  createdAt      DateTime                     @default(now())
-  updatedAt      DateTime                     @updatedAt
-  document       CourseOutlineImport          @relation(fields: [importId], references: [id], onDelete: Cascade)
+model AcademicProposal {
+  id                    String                   @id @default(cuid())
+  intakeId              String
+  actionType            AcademicProposalAction
+  targetType            AcademicProposalTarget
+  targetId              String?
+  payload               Json
+  status                AcademicProposalStatus   @default(PENDING)
+  conflictReason        String?
+  appliedAt             DateTime?
+  createdAt             DateTime                 @default(now())
+  updatedAt             DateTime                 @updatedAt
+  intake                AcademicIntake           @relation(fields: [intakeId], references: [id], onDelete: Cascade)
 
-  @@index([importId, sourceOrder])
+  @@index([intakeId, status])
   @@index([targetType, targetId])
-}
-
-model CourseDocumentEvidence {
-  id            String                   @id @default(cuid())
-  userId        String
-  importId      String
-  targetType    CourseDocumentTargetType
-  targetId      String
-  fieldName     String
-  pageNumber    Int?
-  sourceExcerpt String?
-  confidence    Decimal?                 @db.Decimal(3, 2)
-  confirmedAt   DateTime
-  createdAt     DateTime                 @default(now())
-  user          User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  document      CourseOutlineImport      @relation(fields: [importId], references: [id], onDelete: Restrict)
-
-  @@unique([importId, targetType, targetId, fieldName])
-  @@index([userId, targetType, targetId])
 }
 
 model ModuleWeeklyTopic {
@@ -884,94 +830,10 @@ model UserModuleFact {
   @@index([userModuleEnrolmentId])
 }
 
-model CourseOutlineAssessmentCandidate {
-  id                    String                       @id @default(cuid())
-  importId              String
-  sourceOrder           Int
-  status                CourseOutlineCandidateStatus @default(SELECTED)
-  name                  String?
-  type                  AssessmentType?
-  weight                Decimal?                     @db.Decimal(5, 2)
-  officialDeadline      DateTime?
-  eventDate             DateTime?
-  submissionPlatform    String?
-  submissionUrl         String?
-  instructions          String?
-  groupAssessment       Boolean?
-  examFormat            String?
-  durationMinutes       Int?
-  openBook              Boolean?
-  deliverables          String[]                     @default([])
-  rubricHeadings        String[]                     @default([])
-  warnings              String[]                     @default([])
-  createdAt             DateTime                     @default(now())
-  updatedAt             DateTime                     @updatedAt
-  courseOutlineImport   CourseOutlineImport          @relation(fields: [importId], references: [id], onDelete: Cascade)
-  provenance            CourseOutlineCandidateProvenance[]
-
-  @@index([importId, sourceOrder])
-}
-
-model CourseOutlineCandidateProvenance {
-  id           String   @id @default(cuid())
-  candidateId  String
-  fieldName    String
-  pageNumber   Int?
-  sectionHeading String?
-  sourceExcerpt String?
-  confidence   Decimal? @db.Decimal(3, 2)
-  createdAt    DateTime @default(now())
-  candidate    CourseOutlineAssessmentCandidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
-
-  @@unique([candidateId, fieldName])
-  @@index([candidateId])
-}
-
-model CourseOutlineFact {
-  id             String   @id @default(cuid())
-  importId       String
-  fieldName      String
-  value          String
-  sourceOrder    Int
-  selected       Boolean  @default(true)
-  pageNumber     Int?
-  sectionHeading String?
-  sourceExcerpt String?
-  confidence     Decimal? @db.Decimal(3, 2)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  courseOutlineImport CourseOutlineImport @relation(fields: [importId], references: [id], onDelete: Cascade)
-
-  @@unique([importId, fieldName])
-  @@index([importId, sourceOrder])
-}
-
-model CourseOutlineWeek {
-  id             String   @id @default(cuid())
-  importId       String
-  weekNumber     Int?
-  topic          String?
-  reading        String?
-  activity       String?
-  importantDate String?
-  sourceOrder    Int
-  selected       Boolean  @default(true)
-  pageNumber     Int?
-  sourceExcerpt  String?
-  confidence     Decimal? @db.Decimal(3, 2)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  courseOutlineImport CourseOutlineImport @relation(fields: [importId], references: [id], onDelete: Cascade)
-
-  @@index([importId, sourceOrder])
-}
-
 model Assessment {
   id                    String           @id @default(cuid())
   userId                String
   userModuleEnrolmentId String
-  sourceImportId        String?
-  sourceCandidateId     String?          @unique
   name                  String
   normalizedName        String
   type                  AssessmentType
@@ -999,8 +861,6 @@ model Assessment {
   updatedAt             DateTime         @updatedAt
   user                  User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   userModuleEnrolment   UserModuleEnrolment @relation(fields: [userModuleEnrolmentId], references: [id], onDelete: Cascade)
-  sourceImport          CourseOutlineImport? @relation(fields: [sourceImportId], references: [id], onDelete: Restrict)
-  provenance            AssessmentProvenance[]
   deliverables          AssessmentDeliverable[]
   milestones            AssessmentMilestone[]
   recurringCoursework   RecurringCoursework[]
@@ -1008,7 +868,6 @@ model Assessment {
 
   @@index([userId, userModuleEnrolmentId])
   @@index([userModuleEnrolmentId, officialDeadline])
-  @@index([sourceImportId])
 }
 
 model RecurringCoursework {
@@ -1071,28 +930,6 @@ model RecurringCourseworkOccurrence {
   @@unique([recurringCourseworkId, sequenceNumber])
   @@index([userId, status])
   @@index([officialDueAt])
-}
-
-model AssessmentProvenance {
-  id               String   @id @default(cuid())
-  assessmentId     String
-  sourceImportId   String
-  fieldName        String
-  originalFileName String?
-  sourceLabel      String
-  sourceType       CourseOutlineImportSource
-  pageNumber       Int?
-  sectionHeading   String?
-  sourceExcerpt    String?
-  confidence       Decimal? @db.Decimal(3, 2)
-  userConfirmed    Boolean  @default(true)
-  confirmedAt      DateTime
-  createdAt        DateTime @default(now())
-  assessment       Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
-  sourceImport     CourseOutlineImport       @relation(fields: [sourceImportId], references: [id], onDelete: Restrict)
-
-  @@unique([assessmentId, sourceImportId, fieldName])
-  @@index([sourceImportId])
 }
 
 model AssessmentDeliverable {

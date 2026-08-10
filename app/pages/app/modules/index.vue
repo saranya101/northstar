@@ -19,10 +19,10 @@ function moduleCreated(module) {
 </script>
 
 <template>
-  <main class="app-page modules-page">
-    <header class="app-page__header">
-      <div><p class="app-page__eyebrow">Academic structure</p><h1>{{ hasModules ? 'Your semester modules' : 'Set up your semester' }}</h1><span>{{ hasModules ? 'Review your active modules, enrolment details and class-session coverage.' : 'Upload your STARS timetable or registered-courses summary. Northstar will detect your modules and class sessions for review.' }}</span></div>
-      <UButton to="/app/timetable/import" icon="i-lucide-upload" size="lg">Import NTU timetable</UButton>
+  <main class="app-page v2-page modules-page">
+    <header class="v2-page-heading">
+      <div><p>Modules</p><h1>{{ hasModules ? 'Semester status by module' : 'Set up your semester' }}</h1></div>
+      <div class="header-actions"><UButton to="/app/timetable/import" color="neutral" variant="outline" icon="i-lucide-clipboard-paste">Paste timetable</UButton><UButton icon="i-lucide-plus" @click="addOpen = true">Add module</UButton></div>
     </header>
 
     <p v-if="successMessage" class="module-success" role="status" aria-live="polite">{{ successMessage }}</p>
@@ -35,8 +35,8 @@ function moduleCreated(module) {
       <span class="module-empty__icon" aria-hidden="true"><UIcon name="i-lucide-library-big" /></span>
       <p>Set up your active semester</p>
       <h2>Set up your semester</h2>
-      <span>Upload your STARS timetable or registered-courses summary. Northstar will detect your modules and class sessions for review.</span>
-      <div class="header-actions"><UButton to="/app/timetable/import" size="lg" icon="i-lucide-upload">Import NTU timetable</UButton><UButton color="neutral" variant="outline" @click="addOpen = true">Add manually</UButton></div>
+      <span>Paste timetable text or add a module manually.</span>
+      <div class="header-actions"><UButton to="/app/timetable/import" icon="i-lucide-clipboard-paste">Paste timetable</UButton><UButton color="neutral" variant="outline" @click="addOpen = true">Add manually</UButton></div>
     </section>
 
     <section v-else aria-labelledby="current-modules-title">

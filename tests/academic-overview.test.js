@@ -39,7 +39,6 @@ function enrolment(code, overrides = {}) {
     offering: { module: { code, title: `${code} MODULE`, academicUnits: 3 } },
     assessments: [],
     _count: { classSessions: 1 },
-    courseOutlineImports: [],
     ...overrides
   }
 }
@@ -127,17 +126,6 @@ describe('academic overview attention and dates', () => {
     expect(result.modules[0].to).toBe('/app/modules/enrol-AB1501')
   })
 
-  it('includes existing course-outline imports that still require review', () => {
-    const result = buildAcademicOverview(semester([
-      enrolment('AB0403', { courseOutlineImports: [{ id: 'import-1', originalFileName: 'outline.pdf', sourceLabel: 'Outline', createdAt: now }] })
-    ]), now)
-
-    expect(result.attention).toContainEqual(expect.objectContaining({
-      kind: 'REVIEW_REQUIRED_IMPORT',
-      to: '/app/course-outline-imports/import-1',
-      description: 'outline.pdf'
-    }))
-  })
 })
 
 describe('academic overview grade position', () => {
@@ -181,8 +169,7 @@ describe('academic overview ownership and query boundaries', () => {
         moduleEnrolments: expect.objectContaining({
           where: { userId: 'user-1', status: 'ACTIVE' },
           select: expect.objectContaining({
-            assessments: expect.objectContaining({ where: { userId: 'user-1', status: { not: 'CANCELLED' } } }),
-            courseOutlineImports: expect.objectContaining({ where: { userId: 'user-1', status: 'REVIEW_REQUIRED' } })
+            assessments: expect.objectContaining({ where: { userId: 'user-1', status: { not: 'CANCELLED' } } })
           })
         })
       })
@@ -191,25 +178,20 @@ describe('academic overview ownership and query boundaries', () => {
 })
 
 describe('academic overview page contract', () => {
-  it('renders the required sections, empty states and module dossier links', () => {
+  it('renders the Today command centre and truthful empty states', () => {
     const page = pageSource()
-    expect(page).toContain('Semester command centre')
-    expect(page).toContain('Needs attention')
-    expect(page).toContain('Upcoming assessments')
-    expect(page).toContain('Grade position')
-    expect(page).toContain('Module readiness')
-    expect(page).toContain('No confirmed assessment dates yet')
-    expect(page).toContain(':to="module.to"')
+    expect(page).toContain('Next action')
+    expect(page).toContain('Today’s classes')
+    expect(page).toContain('No upcoming dated assessments.')
+    expect(page).toContain('No study blocks planned today.')
   })
 
   it('refreshes through one overview composable without top-level data awaits', () => {
     const page = pageSource()
     const setup = page.match(/<script setup[^>]*>([\s\S]*?)<\/script>/)?.[1] || ''
-    expect(page).toContain('useAcademicOverview()')
-    expect(page).toContain('onActivated')
+    expect(page).toContain('useToday()')
     expect(setup).not.toMatch(/^await\s+/m)
-    expect(page).not.toContain('useModules()')
-    expect(page).not.toContain('useTimetable()')
+    expect(page).not.toContain('useAcademicOverview()')
     expect(page).not.toContain('/api/opportunities')
   })
 })

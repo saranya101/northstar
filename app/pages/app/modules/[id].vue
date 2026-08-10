@@ -58,7 +58,7 @@ function sessionTime(session) { const render = value => `${String(Math.floor(val
 </script>
 
 <template>
-  <main class="app-page dossier-page">
+  <main class="app-page v2-page dossier-page">
     <div v-if="!dossier && (loading || !error)" class="dossier-skeleton" aria-label="Loading module dossier">
       <div class="app-skeleton app-skeleton--dossier"><span /><span /><span /><span /></div>
       <div class="app-skeleton app-skeleton--panel"><span /><span /><span /></div>
@@ -77,7 +77,7 @@ function sessionTime(session) { const render = value => `${String(Math.floor(val
         </dl>
       </header>
 
-      <nav class="module-subnav" aria-label="Module sections"><a href="#overview">Overview</a><a href="#assessments">Assessments</a><a href="#coursework">Coursework</a><a href="#documents">Documents</a><a href="#course-outline">Course outline</a><a href="#instructors">Instructors</a><a href="#sessions">Sessions</a></nav>
+      <nav class="module-subnav" aria-label="Module sections"><a href="#overview">Overview</a><a href="#assessments">Assessments</a><a href="#coursework">Coursework</a><NuxtLink :to="`/app/tasks?moduleEnrolmentId=${route.params.id}`">Tasks</NuxtLink><a href="#sessions">Schedule</a><a href="#assessments">Grades</a><NuxtLink :to="{ path: '/app/inbox', query: { moduleEnrolmentId: route.params.id } }">Paste update</NuxtLink></nav>
 
       <section id="overview" class="dossier-section">
         <div class="dossier-section__heading"><div><p>Shared record</p><h2>Academic details</h2></div></div>
@@ -92,8 +92,6 @@ function sessionTime(session) { const render = value => `${String(Math.floor(val
 
       <AcademicAssessmentsPanel :enrolment-id="route.params.id" />
       <AcademicRecurringCourseworkPanel :enrolment-id="route.params.id" />
-      <AcademicDocumentsInboxPanel :enrolment-id="route.params.id" />
-      <AcademicCourseOutlinePanel :enrolment-id="route.params.id" />
 
       <section id="sessions" class="dossier-section">
         <div class="dossier-section__heading"><div><p>Recurring schedule</p><h2>Class sessions</h2></div><UButton icon="i-lucide-plus" color="neutral" variant="outline" @click="newSession">Add session</UButton></div>
@@ -127,11 +125,6 @@ function sessionTime(session) { const render = value => `${String(Math.floor(val
           <div class="module-field"><label for="personal-notes">Personal notes <em>private</em></label><UTextarea id="personal-notes" v-model="settings.personalNotes" :rows="6" maxlength="5000" /><small>{{ fieldErrors.personalNotes }}</small></div>
           <div class="module-form__actions"><UButton type="submit" :loading="saving">Save personal settings</UButton></div>
         </form>
-      </section>
-
-      <section class="upcoming-grid" aria-labelledby="upcoming-title">
-        <h2 id="upcoming-title">Upcoming areas</h2>
-        <article><UIcon name="i-lucide-brain" /><h3>Topic mastery</h3><p>Topic-level progress will appear once course content is connected.</p></article>
       </section>
 
       <section class="dossier-danger">

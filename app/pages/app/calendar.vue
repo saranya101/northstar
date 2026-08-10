@@ -1,5 +1,6 @@
 <script setup>
 import '~/assets/css/academic-calendar.css'
+import '~/assets/css/calendar-v2.css'
 import {
   CALENDAR_EVENT_CATEGORIES,
   buildMonthGrid,
@@ -94,12 +95,11 @@ function unresolvedTiming(item) {
 </script>
 
 <template>
-  <main class="app-page academic-calendar-page">
-    <header class="app-page__header">
+  <main class="app-page v2-page academic-calendar-page">
+    <header class="v2-page-heading">
       <div>
-        <p class="app-page__eyebrow">{{ data.activeSemester?.label || 'Active semester' }}</p>
-        <h1>Academic calendar</h1>
-        <span>Confirmed dates only, with safe ICS exports for your calendar app.</span>
+        <p>{{ data.activeSemester?.label || 'Active semester' }}</p>
+        <h1>Calendar and agenda</h1>
       </div>
     </header>
 
@@ -137,28 +137,12 @@ function unresolvedTiming(item) {
     </p>
 
     <template v-else>
-      <section class="calendar-summary" aria-label="Selected month summary">
-        <article>
-          <span>Assessments</span>
-          <strong>{{ monthAssessmentCount }}</strong>
-          <small>confirmed dates</small>
-        </article>
-        <article>
-          <span>Examinations</span>
-          <strong>{{ monthExamCount }}</strong>
-          <small>confirmed dates</small>
-        </article>
-        <article>
-          <span>Class sessions</span>
-          <strong>{{ monthClassCount }}</strong>
-          <small>mapped from timetable</small>
-        </article>
-        <article>
-          <span>Awaiting dates</span>
-          <strong>{{ filteredUnresolved.length }}</strong>
-          <small>not placed on calendar</small>
-        </article>
-      </section>
+      <dl class="v2-inline-stats calendar-summary" aria-label="Selected month summary">
+        <div><dt>Assessments</dt><dd>{{ monthAssessmentCount }}</dd></div>
+        <div><dt>Examinations</dt><dd>{{ monthExamCount }}</dd></div>
+        <div><dt>Class sessions</dt><dd>{{ monthClassCount }}</dd></div>
+        <div><dt>Awaiting dates</dt><dd>{{ filteredUnresolved.length }}</dd></div>
+      </dl>
 
       <p v-if="hasExamDates && !hasCourseworkDates" class="calendar-context-note">
         Exams are confirmed; no coursework dates have been recorded yet.
@@ -194,11 +178,14 @@ function unresolvedTiming(item) {
           </div>
         </section>
 
-        <CalendarMonth
-          v-else-if="view === 'MONTH'"
-          :days="monthDays"
-          @select-event="openEvent"
-        />
+        <div v-else-if="view === 'MONTH'" class="calendar-v2-layout">
+          <CalendarMonth :days="monthDays" @select-event="openEvent" />
+          <aside class="v2-panel calendar-v2-agenda" aria-label="Month agenda">
+            <div class="v2-section-heading"><div><p>Selected month</p><h2>Agenda</h2></div><span>{{ monthEvents.length }} events</span></div>
+            <CalendarAgenda v-if="agendaGroups.length" :groups="agendaGroups" @select-event="openEvent" />
+            <div v-else class="v2-empty"><strong>No dated events.</strong><span>Try another month or adjust the filters.</span></div>
+          </aside>
+        </div>
 
         <CalendarAgenda
           v-else
