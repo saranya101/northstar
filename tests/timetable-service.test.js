@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('../server/utils/prisma', () => ({ prisma: {} }))
-import { confirmTimetableImport, deleteClassSession, getTimetableImport, sourceSemesterStatus, updateClassSession } from '../server/services/timetable'
+import { confirmTimetableImport, createTimetableImport, deleteClassSession, getTimetableImport, sourceSemesterStatus, updateClassSession } from '../server/services/timetable'
+import { parseTimetableText } from '../app/utils/timetable-import/timetable-text-parser'
 
 describe('source semester validation', () => {
   it('detects matches, mismatches and unknown uploads deterministically', () => {
@@ -9,6 +10,25 @@ describe('source semester validation', () => {
     expect(sourceSemesterStatus(source, { academicYear: '2025/2026', semesterNumber: 2, name: 'Semester 2' })).toBe('MATCH')
     expect(sourceSemesterStatus(source, { academicYear: '2026/2027', semesterNumber: 1, name: 'Semester 1' })).toBe('MISMATCH')
     expect(sourceSemesterStatus(null, { academicYear: '2026/2027', semesterNumber: 1 })).toBe('UNKNOWN')
+  })
+
+  it('stores MATCH when natural pasted semester text matches the active semester', async () => {
+    const parsed = parseTimetableText('Academic Year: 2026/2027\nSemester: Semester 1\nAB1201 3 CORE 00123 REGISTERED')
+    const create = vi.fn(async ({ data }) => ({ id: 'import-1', status: data.status, source: data.source, parserVersion: data.parserVersion, candidatePayload: data.candidatePayload, warnings: data.warnings, detectedModuleCount: data.detectedModuleCount, detectedSessionCount: data.detectedSessionCount, createdAt: new Date(), updatedAt: new Date(), confirmedAt: null }))
+    const database = {
+      userAcademicProfile: { findUnique: vi.fn().mockResolvedValue({ universityId: 'u1' }) },
+      userSemester: { findFirst: vi.fn().mockResolvedValue({ id: 'semester-1', academicTermId: 'term-1', academicTerm: { universityId: 'u1', academicYear: '2026/2027', semesterNumber: 1, name: 'Semester 1' } }) },
+      timetableImport: { create }
+    }
+    const result = await createTimetableImport('user-1', parsed, database)
+    expect(result.sourceSemester).toEqual(parsed.sourceSemester)
+    expect(result.semesterMatchStatus).toBe('MATCH')
+    expect(create.mock.calls[0][0].data.candidatePayload.semesterMatchStatus).toBe('MATCH')
+  })
+
+  it('matches a normalised source year against an abbreviated active academic year', () => {
+    const source = { academicYearLabel: '2026/2027', semesterNumber: 1 }
+    expect(sourceSemesterStatus(source, { academicYear: '2026/27', name: 'Semester 1' })).toBe('MATCH')
   })
 })
 

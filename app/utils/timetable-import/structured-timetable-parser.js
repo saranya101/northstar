@@ -1,6 +1,7 @@
 import { candidateId, mapRegistrationStatus } from './timetable-candidate-normaliser'
 import { normalizeDay, parseTime } from './timetable-time'
 import { parseWeekExpression } from './week-expression'
+import { parseAcademicSemesterText } from '#shared/utils/academic-semester'
 
 const RECORD_TYPES = new Set(['SEMESTER', 'MODULE', 'SESSION', 'EXAM'])
 const MODULE_CODE = /^(?=[A-Z0-9]*[A-Z])(?=[A-Z0-9]*\d)[A-Z0-9]{2,20}$/
@@ -33,13 +34,12 @@ function validDate(value) {
 }
 
 function sourceSemester(fields, warnings) {
-  const match = String(fields.academicYear || '').match(/^(\d{4})\/(\d{4})$/)
-  const semesterNumber = Number(fields.semester)
-  if (!match || Number(match[2]) !== Number(match[1]) + 1 || !Number.isInteger(semesterNumber) || semesterNumber < 1 || semesterNumber > 4) {
+  const parsed = parseAcademicSemesterText(`Academic Year ${fields.academicYear || ''}\nSemester ${fields.semester || ''}`)
+  if (!parsed) {
     warnings.push('Structured semester metadata is invalid or incomplete.')
     return null
   }
-  return { academicYearStart: Number(match[1]), academicYearLabel: `${match[1]}/${match[2]}`, semesterNumber, displayLabel: `${match[1]}/${match[2]} Semester ${semesterNumber}` }
+  return parsed
 }
 
 function moduleCandidate(fields, warnings) {

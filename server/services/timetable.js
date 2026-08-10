@@ -2,6 +2,7 @@ import { createError } from 'h3'
 import { prisma } from '../utils/prisma'
 import { requireModuleContext } from './modules'
 import { timetableStructureIssues } from '#shared/utils/timetable-structure'
+import { normalizeAcademicYearLabel } from '#shared/utils/academic-semester'
 
 const SESSION_INCLUDE = { userModuleEnrolment: { include: { offering: { include: { module: true, academicTerm: true } } } } }
 
@@ -27,7 +28,8 @@ function selectedCounts(modules) {
 export function sourceSemesterStatus(sourceSemester, academicTerm) {
   if (!sourceSemester) return 'UNKNOWN'
   const semesterNumber = academicTerm?.semesterNumber ?? Number(String(academicTerm?.name || '').match(/\d+/)?.[0])
-  return academicTerm?.academicYear === sourceSemester.academicYearLabel && semesterNumber === sourceSemester.semesterNumber ? 'MATCH' : 'MISMATCH'
+  const academicYearLabel = normalizeAcademicYearLabel(academicTerm?.academicYear)
+  return academicYearLabel === sourceSemester.academicYearLabel && semesterNumber === sourceSemester.semesterNumber ? 'MATCH' : 'MISMATCH'
 }
 
 function targetSemester(activeSemester) {
