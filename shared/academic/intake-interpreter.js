@@ -1,4 +1,4 @@
-import { academicProposalResultSchema } from '#shared/schemas/academic-intake'
+import { academicProposalResultSchema } from '../schemas/academic-intake.js'
 
 const MODULE_CODE = /\b[A-Z]{2,6}\d{3,6}[A-Z]?\b/g
 const weekReference = text => Number(/\bweek\s+(\d{1,2})\b/i.exec(text)?.[1]) || null
