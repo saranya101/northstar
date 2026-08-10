@@ -218,5 +218,14 @@ describe('import confirmation concurrency', () => {
     expect(transaction.classSession.create).toHaveBeenCalledTimes(9)
     expect(transaction.userModuleEnrolment.create.mock.calls.every(([call]) => call.data.userSemesterId === 'semester-1')).toBe(true)
     expect(transaction.moduleOffering.upsert.mock.calls.every(([call]) => call.create.academicTermId === 'term-1')).toBe(true)
+    expect(transaction.classSession.create.mock.calls.map(([call]) => {
+      const { userModuleEnrolmentId, ...session } = call.data
+      return session
+    })).toEqual(modules.flatMap(module => module.sessions.map(session => ({
+      classType: session.classType, groupLabel: session.groupLabel, dayOfWeek: session.dayOfWeek,
+      startMinutes: session.startMinutes, endMinutes: session.endMinutes, venue: session.venue,
+      deliveryMode: session.deliveryMode, recurrence: session.recurrence, weekNumbers: session.weekNumbers,
+      source: 'IMPORTED', confidence: session.confidence
+    }))))
   })
 })

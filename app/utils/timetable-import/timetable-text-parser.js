@@ -2,6 +2,7 @@ import { sanitiseIdentityText } from './identity-sanitiser'
 import { candidateId, mapClassType, mapRegistrationStatus } from './timetable-candidate-normaliser'
 import { normalizeDay, parseTimeRange } from './timetable-time'
 import { parseNtuSessionBlock } from './ntu-session-block-parser'
+import { isStructuredTimetableText, parseStructuredTimetable } from './structured-timetable-parser'
 
 export const MODULE_CODE_PATTERN = /\b(?=[A-Z0-9]{4,12}\b)(?=[A-Z0-9]*[A-Z])(?=[A-Z0-9]*\d)[A-Z]{1,6}\d{2,6}[A-Z]?\b/g
 const DAY_PATTERN = /\b(MON(?:DAY)?|TUE(?:S|SDAY)?|WED(?:NESDAY)?|THU(?:R|RS|RSDAY)?|FRI(?:DAY)?|SAT(?:URDAY)?|SUN(?:DAY)?)\b/i
@@ -13,6 +14,7 @@ export function findModuleCodes(text) {
 
 export function parseTimetableText(rawText, source = 'PASTED_TEXT') {
   const text = sanitiseIdentityText(rawText)
+  if (isStructuredTimetableText(text)) return parseStructuredTimetable(text, source)
   const modules = new Map()
   const warnings = []
   let currentCode = null

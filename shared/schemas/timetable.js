@@ -105,7 +105,7 @@ export const timetableModuleCandidateSchema = z.object({
   selected: z.boolean().default(true),
   sessions: z.array(timetableSessionCandidateSchema).max(100).default([]),
   examCandidate: examCandidateSchema.nullable().default(null),
-  fieldProvenance: z.record(z.string(), z.enum(['REGISTERED_COURSE_TABLE', 'TIMETABLE_GRID', 'NTU_PUBLIC', 'USER_CORRECTION'])).default({}),
+  fieldProvenance: z.record(z.string(), z.enum(['REGISTERED_COURSE_TABLE', 'TIMETABLE_GRID', 'STRUCTURED_TEXT', 'NTU_PUBLIC', 'USER_CORRECTION'])).default({}),
   corrections: z.array(correctionSchema).max(20).default([]),
   publicEnrichment: publicEnrichmentSchema.nullable().optional().default(null),
   publicEnrichmentConfirmed: z.boolean().default(true),
