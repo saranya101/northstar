@@ -87,6 +87,11 @@ export function serializeEnrolment(enrolment) {
     courseType: enrolment.courseType,
     registrationStatus: enrolment.registrationStatus,
     sessionCount: enrolment._count?.classSessions ?? enrolment.classSessions?.length ?? 0,
+    nextClass: enrolment.classSessions?.[0] ? { ...enrolment.classSessions[0] } : null,
+    nextAssessment: enrolment.assessments?.find(item => (item.officialDeadline || item.eventDate) && new Date(item.officialDeadline || item.eventDate) >= new Date()) ? (() => { const item = enrolment.assessments.find(value => (value.officialDeadline || value.eventDate) && new Date(value.officialDeadline || value.eventDate) >= new Date()); return { id: item.id, name: item.name, weight: decimalValue(item.weight), date: dateValue(item.officialDeadline || item.eventDate) } })() : null,
+    openTaskCount: enrolment.tasks?.length || 0,
+    courseworkAttentionCount: enrolment.recurringCoursework?.reduce((count, item) => count + item.occurrences.length, 0) || 0,
+    knownGradedWeight: enrolment.assessments?.filter(item => item.status === 'GRADED').reduce((sum, item) => sum + (decimalValue(item.weight) || 0), 0) || 0,
     instructors: offering.instructorAssignments.map(instructorSummary),
     sourceStatus: offering.module.sourceStatus,
     lastVerifiedAt: dateValue(offering.module.lastVerifiedAt),
@@ -120,7 +125,14 @@ export async function listModules(userId, status = 'ACTIVE', database = prisma) 
   const { academicProfile, activeSemester } = await requireModuleContext(userId, database)
   const enrolments = await database.userModuleEnrolment.findMany({
     where: { userId, userSemesterId: activeSemester.id, status },
-    include: { offering: { include: offeringInclude }, _count: { select: { classSessions: true } } },
+    include: {
+      offering: { include: offeringInclude },
+      classSessions: { orderBy: [{ dayOfWeek: 'asc' }, { startMinutes: 'asc' }], take: 1 },
+      assessments: { where: { status: { not: 'CANCELLED' } }, orderBy: [{ officialDeadline: 'asc' }, { eventDate: 'asc' }] },
+      tasks: { where: { parentTaskId: null, status: { notIn: ['COMPLETED', 'CANCELLED'] } }, select: { id: true } },
+      recurringCoursework: { where: { status: 'ACTIVE' }, select: { occurrences: { where: { status: { in: ['NOT_STARTED', 'IN_PROGRESS', 'SUBMITTED', 'MISSED'] } }, select: { id: true } } } },
+      _count: { select: { classSessions: true } }
+    },
     orderBy: [{ offering: { module: { code: 'asc' } } }, { createdAt: 'asc' }]
   })
   const activeCount = status === 'ACTIVE'
@@ -337,7 +349,6 @@ export async function getModuleDossier(userId, enrolmentId, database = prisma) {
       sectionLabel: offering.sectionLabel,
       gradingType: offering.gradingType,
       syllabusUrl: offering.syllabusUrl,
-      courseOutlineFileUrl: offering.courseOutlineFileUrl,
       assessmentInformation: offering.assessmentInformation,
       notes: offering.notes
     },

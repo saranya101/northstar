@@ -28,6 +28,7 @@ const {
   weekAssessments,
 } = useWeeklyPlanner()
 const route = useRoute()
+const { tasks: openTasks, load: loadOpenTasks } = useTasks()
 
 const editorOpen = ref(false)
 const editorMode = ref('create')
@@ -53,12 +54,13 @@ function submit({ input, acknowledgeConflicts }) { const result = save(input, ac
 function confirmDelete(id) { if (window.confirm('Delete this local study block? This cannot be undone.')) { remove(id); closeEditor() } }
 function typeLabel(value) { return String(value || 'Assessment').toLowerCase().replaceAll('_', ' ').replace(/\b\w/g, letter => letter.toUpperCase()) }
 watch(initialized, ready => { if (ready && route.query.taskId && !taskDraftOpened.value) { taskDraftOpened.value = true; openCreate() } }, { immediate: true })
+onMounted(() => { void loadOpenTasks({ view: 'BACKLOG' }) })
 </script>
 
 <template>
-  <main class="app-page planner-page">
-    <header class="app-page__header planner-header">
-      <div><p class="app-page__eyebrow">Weekly planner</p><h1>Plan study around your real timetable</h1><span>Class sessions remain fixed. Your study blocks are private to this browser and account.</span></div>
+  <main class="app-page v2-page planner-page">
+    <header class="v2-page-heading planner-header">
+      <div><p>Planner</p><h1>Weekly study plan</h1></div>
       <div class="planner-header__actions"><span><UIcon name="i-lucide-clock-3" /> {{ localTimezone }}</span><UButton color="neutral" variant="outline" icon="i-lucide-refresh-cw" :loading="loading" @click="refresh">Refresh</UButton><UButton icon="i-lucide-plus" @click="openCreate()">Add study block</UButton></div>
     </header>
 
@@ -94,6 +96,8 @@ watch(initialized, ready => { if (ready && route.query.taskId && !taskDraftOpene
           <NuxtLink v-for="assessment in weekAssessments" :key="assessment.id" :to="`/app/assessments/${assessment.id}`"><span><strong>{{ assessment.moduleCode }} · {{ assessment.name }}</strong><small>{{ typeLabel(assessment.type) }}<template v-if="assessment.weight !== null"> · {{ assessment.weight }}%</template></small></span><time :datetime="assessment.date">{{ assessmentDate.format(new Date(assessment.date)) }}</time><UIcon name="i-lucide-chevron-right" /></NuxtLink>
         </template>
       </section>
+
+      <section class="v2-panel planner-open-tasks" aria-labelledby="planner-open-tasks-title"><div class="v2-section-heading"><div><p>Unscheduled work</p><h2 id="planner-open-tasks-title">Open backlog</h2></div><NuxtLink to="/app/tasks?view=BACKLOG">All tasks</NuxtLink></div><div v-if="openTasks.length" class="v2-dense-list"><NuxtLink v-for="task in openTasks.slice(0, 6)" :key="task.id" :to="{ path: '/app/planner', query: { taskId: task.id, title: task.title, moduleEnrolmentId: task.moduleEnrolmentId, estimatedMinutes: task.estimatedMinutes || 60 } }"><div><strong>{{ task.moduleEnrolment?.offering?.module?.code || 'General' }} · {{ task.title }}</strong><span>{{ task.timingNote || 'Not scheduled' }}</span></div><small>{{ task.estimatedMinutes ? `${task.estimatedMinutes} min` : 'No estimate' }}</small></NuxtLink></div><div v-else class="v2-empty"><strong>No backlog tasks.</strong><span>New tasks can be planned directly from the task queue.</span></div></section>
 
       <PlannerWeeklyCalendar :days="calendarDays" :today="localDateKey(new Date())" @add="openCreate" @edit="openEdit" @move="openMove" @delete="confirmDelete" @status="setStatus" />
 

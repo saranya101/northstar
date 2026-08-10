@@ -171,21 +171,15 @@ npm run test:run
 
 Production applies reviewed migrations with `npm run db:deploy`; never use `prisma db push`.
 
-## Timetable import and recurring sessions
+## Text-first intake and recurring sessions
 
-Northstar does not log into STARS. Students upload a document or screenshot they choose to provide.
-
-The preferred input is the NTU Check/Print Courses Registered summary because its rows are more reliable than a visual timetable grid. PDF and image extraction runs in the browser: `pdfjs-dist` first reads embedded PDF text, pages without usable text are rendered for OCR, and `tesseract.js` performs OCR in a worker. Both libraries are dynamically imported only from the import workflow. Original bytes and raw OCR text are never sent to the API or persisted. Likely name, matriculation, student-ID and programme header lines are removed before parsing.
-
-Every import follows upload, extraction, review, correction, and explicit confirmation. Only strict, normalised module and session candidates cross the API boundary. An owned `TimetableImport` draft records those candidates and an optimistic `updatedAt` token prevents a stale review tab from confirming old data. Confirmation runs in one retryable serializable transaction, preserves existing private enrolment fields, reuses university modules and current-term offerings, creates `USER_ENTERED` catalogue data only when necessary, skips exact duplicate sessions, and never overwrites official module data.
-
-NTU timetable screenshots are parsed as two geometric sources rather than one OCR string. The lower registered-course table is authoritative for module code, title, AU, index, status, exams, totals, and source semester; those codes become an allowlist for sessions reconstructed from the upper weekday grid. OCR variants and table/title crops remain browser-only. Identity text above the grid is outside both parse regions, raw OCR is never included in an API payload, and rejected code-like grid text is retained only as editable review data. A source-semester mismatch remains reviewable but is blocked again by the server at confirmation; students must select or create the matching semester through the existing semester flow.
+Northstar V2 accepts pasted academic and timetable text. Academic Inbox stores the original text, produces validated reviewable proposals, and performs no academic mutation until an owner explicitly approves a proposal. Timetable intake similarly creates an owned review draft from pasted text; confirmation remains transactional and idempotent.
 
 `ClassSession` belongs to one `UserModuleEnrolment` and stores day, minute-based start/end times, class type, group, venue, delivery mode, source confidence, and provenance (`IMPORTED`, `MANUAL`, or `OFFICIAL`). Delivery is explicit (`IN_PERSON`, `ONLINE`, `HYBRID`, `TBC`, or `UNKNOWN`) and appears as both an icon and text. Recurrence can be `WEEKLY`, `ODD_WEEKS`, `EVEN_WEEKS`, or `CUSTOM`; custom recurrence stores explicit teaching-week numbers from 1 through 20. Malformed or ambiguous week text is held for confirmation rather than silently becoming weekly. Conflict detection uses intersecting half-open time intervals and recurrence-week overlap, so adjacent sessions are not conflicts.
 
 Review separates imported values, public NTU suggestions, and unresolved decisions. Public enrichment is optional and best-effort: it makes bounded single-course requests to allowlisted NTU class-schedule and course-content pages, uses a descriptive user agent, limits concurrency, retries transient failures once, and caches results for six hours. Field-level source URL, source type, retrieval time, academic year, semester, confidence, and verification status are stored with accepted metadata. Conflicting public values require the student to choose which value to keep, and enrichment never overwrites imported index-specific sessions.
 
-Supported uploads are PDF, PNG, JPEG, and WebP, with a 10 MB file limit and a 10-page PDF limit. Encrypted PDFs are rejected. Registered-course text, screenshots, pasted text, and manual session entry are supported. Weekly timetable-grid OCR remains beta: it infers relative day columns and start rows from OCR bounding boxes, never assumes a fixed screenshot size or one-hour duration, and deliberately leaves uncertain end times for review. OCR quality, merged table columns, unusual module-code formats, venues, groups, and grid block heights may require manual correction. No imported information is represented as officially verified.
+Pasted registered-course text and manual session entry are supported. Ambiguous fields remain reviewable and no imported information is represented as officially verified.
 
 Authenticated timetable routes:
 
@@ -202,7 +196,7 @@ PATCH  /api/sessions/:id                      Edit an owned session
 DELETE /api/sessions/:id                      Delete an owned session
 ```
 
-Run `npm run test:run` for parser, validation, privacy, ownership, transaction, conflict, navigation, and composable-context coverage. Run `npm run build` to verify client-only extraction chunks remain out of the initial application bundle.
+Run `npm run test:run` for parser, validation, ownership, transaction, conflict, navigation, and composable-context coverage. Run `npm run build` to verify the production bundle.
 
 ## Planned architecture
 

@@ -16,8 +16,6 @@ export default defineNuxtConfig({
     optimizeDeps: {
       include: [
         'better-auth/vue',
-        'pdfjs-dist/build/pdf.mjs',
-        'tesseract.js',
         'zod',
       ],
     },

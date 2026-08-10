@@ -1,10 +1,13 @@
 <script setup>
+import { createPlannerStorage } from '~/utils/planner-storage.client'
+import { createFocusStorage } from '~/utils/focus-storage.client'
 definePageMeta({ layout: 'app', middleware: ['auth', 'onboarded'] })
 useSeoMeta({ title: 'Settings · Northstar' })
 const { state, saving, error, fieldErrors, save } = useOnboarding()
 const { state: modules, load: loadModules } = useModules()
 const { user } = useCurrentSession()
 const savedMessage = ref('')
+const resetError = ref('')
 const currentTerms = computed(() => state.value?.universities?.find(item => item.id === state.value?.academicProfile?.universityId)?.academicTerms || [])
 watch(user, (currentUser) => {
   if (currentUser) void loadModules().catch(() => {})
@@ -13,6 +16,14 @@ watch(user, (currentUser) => {
 async function saveSetting(path, payload) {
   savedMessage.value = ''
   if (await save(path, payload)) savedMessage.value = 'Changes saved.'
+}
+function resetLocalStudyData() {
+  resetError.value = ''
+  if (!user.value?.id) { resetError.value = 'Sign in again before clearing local study data.'; return }
+  if (!globalThis.confirm('Clear Planner blocks and Focus timer/history stored in this browser?')) return
+  createPlannerStorage().removeUserData(user.value.id)
+  createFocusStorage().removeUserData(user.value.id)
+  savedMessage.value = 'Planner and Focus data were cleared from this browser.'
 }
 </script>
 
@@ -30,6 +41,7 @@ async function saveSetting(path, payload) {
     <section class="settings-card"><OnboardingAcademicStep :academic-profile="state?.academicProfile" :universities="state?.universities" :saving="saving" :server-error="error" :field-errors="fieldErrors" heading-level="h2" submit-label="Save academic profile" :show-back="false" @submit="saveSetting('academic', $event)" /></section>
     <section class="settings-card"><OnboardingSemesterStep :semester="state?.semester" :terms="currentTerms" :saving="saving" :server-error="error" :field-errors="fieldErrors" heading-level="h2" submit-label="Save GPA goals" :show-back="false" @submit="saveSetting('semester', $event)" /></section>
     <section class="settings-card"><OnboardingStudyPreferencesStep :preference="state?.studyPreference" :saving="saving" :server-error="error" :field-errors="fieldErrors" heading-level="h2" submit-label="Save preferences" :show-back="false" @submit="saveSetting('preferences', $event)" /></section>
+    <section class="settings-card settings-modules"><div><p>Browser-local data</p><h2>Planner and Focus</h2><span>This does not affect server data. Clearing cannot be undone.</span><small v-if="resetError" role="alert">{{ resetError }}</small></div><UButton color="error" variant="soft" @click="resetLocalStudyData">Clear local study data</UButton></section>
     </template>
   </main>
 </template>

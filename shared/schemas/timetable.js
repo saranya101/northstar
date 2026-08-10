@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-export const TIMETABLE_IMPORT_SOURCES = ['NTU_REGISTERED_COURSES_PDF', 'NTU_REGISTERED_COURSES_IMAGE', 'NTU_TIMETABLE_IMAGE', 'PASTED_TEXT', 'UNKNOWN']
+export const TIMETABLE_IMPORT_SOURCES = ['PASTED_TEXT', 'UNKNOWN']
 export const DAYS_OF_WEEK = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY']
 export const CLASS_SESSION_TYPES = ['LECTURE', 'TUTORIAL', 'SEMINAR', 'LABORATORY', 'WORKSHOP', 'PROJECT', 'FIELDWORK', 'OTHER']
 export const SESSION_RECURRENCES = ['WEEKLY', 'ODD_WEEKS', 'EVEN_WEEKS', 'CUSTOM']
@@ -31,7 +31,7 @@ const examCandidateSchema = z.object({
   confidence: confidenceSchema
 }).strict().superRefine((value, context) => { if (value.startMinutes !== null && value.endMinutes !== null && value.endMinutes <= value.startMinutes) context.addIssue({ code: 'custom', path: ['endMinutes'], message: 'Exam end time must be after its start time.' }) })
 const timeAlternativeSchema = z.object({
-  source: z.enum(['EXPLICIT_TEXT', 'GRID_GEOMETRY', 'OCR_VARIANT']),
+  source: z.enum(['EXPLICIT_TEXT']),
   startMinutes: startMinuteSchema.nullable(),
   endMinutes: endMinuteSchema.nullable(),
   confidence: confidenceSchema.nullable().default(null),

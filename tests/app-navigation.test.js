@@ -5,23 +5,22 @@ const layout = readFileSync(new URL('../app/layouts/app.vue', import.meta.url), 
 const itemPattern = /\{ label: '([^']+)', to: '([^']+)', icon: '([^']+)' \}/g
 const items = [...layout.matchAll(itemPattern)].map(([, label, to, icon]) => ({ label, to, icon }))
 
-describe('authenticated application navigation', () => {
-  it('shows planner, calendar and focus exactly once with the correct routes', () => {
-    expect(items.filter(item => item.label === 'Planner')).toEqual([{ label: 'Planner', to: '/app/planner', icon: 'i-lucide-calendar-range' }])
-    expect(items.filter(item => item.label === 'Calendar')).toEqual([{ label: 'Calendar', to: '/app/calendar', icon: 'i-lucide-calendar-days' }])
-    expect(items.filter(item => item.label === 'Focus')).toEqual([{ label: 'Focus', to: '/app/focus', icon: 'i-lucide-timer' }])
+describe('authenticated V2 navigation', () => {
+  it('uses the required primary academic order exactly once', () => {
+    expect(items.slice(0, 7).map(item => item.label)).toEqual(['Today', 'Modules', 'Tasks', 'Planner', 'Calendar', 'Focus', 'Inbox'])
+    for (const label of ['Today', 'Modules', 'Tasks', 'Planner', 'Calendar', 'Focus', 'Inbox', 'Timetable', 'Opportunities']) expect(items.filter(item => item.label === label)).toHaveLength(1)
   })
 
-  it('keeps the required navigation order without a global coursework item', () => {
-    expect(items.map(item => item.label)).toEqual([
-      'Overview', 'Modules', 'Timetable', 'Planner', 'Calendar', 'Focus', 'Opportunities', 'Settings'
-    ])
-    expect(items.some(item => item.label === 'Coursework')).toBe(false)
+  it('keeps secondary routes out of primary navigation and no document links', () => {
+    expect(items.find(item => item.label === 'Timetable')?.to).toBe('/app/timetable')
+    expect(items.find(item => item.label === 'Opportunities')?.to).toBe('/app/opportunities')
+    expect(layout).not.toMatch(/Coursework|Documents|PDF|OCR/)
   })
 
-  it('preserves accessible labels, mobile navigation and nested-route activation', () => {
-    expect(layout.match(/:aria-label="item.label"/g)).toHaveLength(2)
-    expect(layout.match(/isNavigationActive\(item\.to\)/g)).toHaveLength(4)
+  it('preserves accessible mobile and nested-route semantics', () => {
+    expect(layout).toContain('aria-label="Application navigation"')
+    expect(layout).toContain('aria-label="Open navigation"')
+    expect(layout).toContain(':aria-current="isActive(item.to) ? \'page\' : undefined"')
     expect(layout).toContain("destination !== '/app'")
     expect(layout).toContain('@click="mobileOpen = false"')
   })

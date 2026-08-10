@@ -67,12 +67,11 @@ function confirmClearHistory() {
 </script>
 
 <template>
-  <main class="app-page focus-page">
-    <header class="app-page__header focus-page__header">
+  <main class="app-page v2-page focus-page">
+    <header class="v2-page-heading focus-page__header">
       <div>
-        <p class="app-page__eyebrow">Focus</p>
-        <h1>Study with a reliable timer</h1>
-        <p>Track focused time locally without turning study into a game.</p>
+        <p>Focus</p>
+        <h1>Timer and recent study</h1>
       </div>
       <span class="focus-local-label">
         <UIcon name="i-lucide-hard-drive" aria-hidden="true" />

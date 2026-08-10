@@ -66,8 +66,7 @@ async function confirmDelete() { if (await remove(route.params.id)) await naviga
         </section>
       </div>
 
-      <section class="dossier-section"><div class="dossier-section__heading"><div><p>Source trail</p><h2>Provenance</h2></div></div><p v-if="!assessment.provenance.length" class="dossier-empty">This assessment was entered manually.</p><dl v-else class="provenance-list"><div v-for="item in assessment.provenance" :key="item.id"><dt>{{ label(item.fieldName) }}</dt><dd>{{ item.sourceLabel }}<small>{{ item.originalFileName || item.sourceType }}<template v-if="item.pageNumber"> · page {{ item.pageNumber }}</template> · {{ Math.round((item.confidence || 0) * 100) }}% confidence</small><blockquote v-if="item.sourceExcerpt">{{ item.sourceExcerpt }}</blockquote></dd></div></dl></section>
-      <section class="dossier-danger"><div><h2>Delete assessment</h2><p>This removes its deliverables and milestones. Referenced course-outline provenance remains protected on other assessments.</p></div><UButton color="error" variant="soft" @click="deleteOpen = true">Delete assessment</UButton></section>
+      <section class="dossier-danger"><div><h2>Delete assessment</h2><p>This also removes its deliverables and milestones.</p></div><UButton color="error" variant="soft" @click="deleteOpen = true">Delete assessment</UButton></section>
       <UModal v-model:open="deleteOpen" title="Delete assessment?" description="This cannot be undone."><template #footer><UButton color="neutral" variant="outline" @click="deleteOpen = false">Cancel</UButton><UButton color="error" :loading="saving" @click="confirmDelete">Delete</UButton></template></UModal>
     </template>
   </main>

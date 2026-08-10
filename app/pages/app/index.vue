@@ -1,191 +1,39 @@
 <script setup>
+import { summarizeFocusSessions } from '#shared/focus/history'
+
 definePageMeta({ layout: 'app', middleware: ['auth', 'onboarded'] })
-useSeoMeta({ title: 'Academic overview · Northstar', description: 'Your active semester, assessment readiness and grade position.' })
-
+useSeoMeta({ title: 'Today · Northstar', description: 'Your daily academic command centre.' })
 const { user } = useCurrentSession()
-const { state: overview, loading, error, load } = useAcademicOverview()
-
-const hasModules = computed(() => Boolean(overview.value?.modules?.length))
-const attentionItems = computed(() => overview.value?.attention || [])
-const attentionPreviewLimit = 6
-const attentionExpanded = ref(false)
-const visibleAttentionItems = computed(() => attentionExpanded.value ? attentionItems.value : attentionItems.value.slice(0, attentionPreviewLimit))
-const canToggleAttention = computed(() => attentionItems.value.length > attentionPreviewLimit)
-const upcomingAssessments = computed(() => overview.value?.upcomingAssessments || [])
-const modules = computed(() => overview.value?.modules || [])
-
-const readiness = {
-  READY: { label: 'Ready', color: 'success' },
-  MISSING_DATES: { label: 'Missing dates', color: 'warning' },
-  INCOMPLETE_ASSESSMENT_STRUCTURE: { label: 'Incomplete assessment structure', color: 'warning' },
-  NO_ASSESSMENTS: { label: 'No assessments', color: 'neutral' }
-}
-
-const attentionIcons = {
-  MISSING_DATE: 'i-lucide-calendar-x-2',
-  MISSING_WEIGHT: 'i-lucide-scale',
-  NO_ASSESSMENTS: 'i-lucide-clipboard-list',
-  INCOMPLETE_ASSESSMENT_STRUCTURE: 'i-lucide-circle-alert',
-  NO_TARGET_GRADE: 'i-lucide-goal',
-  REVIEW_REQUIRED_IMPORT: 'i-lucide-file-search'
-}
-
-const typeLabel = value => value.replaceAll('_', ' ').toLowerCase().replace(/\b\w/g, letter => letter.toUpperCase())
-const numberLabel = value => Number.isInteger(Number(value)) ? String(Number(value)) : Number(value).toFixed(2).replace(/0+$/, '').replace(/\.$/, '')
-const percentage = value => `${numberLabel(value)}%`
-const targetGrade = module => module.targetGrade || 'Not set'
-const requiredAverage = module => module.grade.requiredAverage === null ? 'Not calculable' : percentage(module.grade.requiredAverage)
-const formatDateTime = value => new Intl.DateTimeFormat('en-SG', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Singapore' }).format(new Date(value))
-function daysLabel(value) {
-  if (value === 0) return 'Today'
-  if (value === 1) return '1 day remaining'
-  return `${value} days remaining`
-}
-
-async function refresh() { await load(true) }
-
-watch(attentionItems, items => {
-  if (items.length <= attentionPreviewLimit) attentionExpanded.value = false
-})
-
-watch(user, currentUser => {
-  if (currentUser) void load(true)
-}, { immediate: true })
-
-onActivated(() => {
-  if (user.value) void load(true)
-})
+const { data, plannedBlocks, focusState, loading, error, load } = useToday()
+const command = ref('')
+const now = new Date()
+const greeting = computed(() => `${now.getHours() < 12 ? 'Good morning' : now.getHours() < 18 ? 'Good afternoon' : 'Good evening'}${user.value?.name ? `, ${user.value.name.split(' ')[0]}` : ''}`)
+const dateLabel = new Intl.DateTimeFormat('en-SG', { weekday: 'long', day: 'numeric', month: 'long' }).format(now)
+const time = minutes => `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`
+const focusMinutes = computed(() => Math.round(summarizeFocusSessions(focusState.value.sessions || [], now).todayFocusedSeconds / 60))
+const recentFocus = computed(() => { const item = [...(focusState.value.sessions || [])].sort((a, b) => String(b.endedAt).localeCompare(String(a.endedAt)))[0]; return item ? { ...item, focusedSeconds: item.actualFocusedSeconds } : null })
+const activeFocus = computed(() => focusState.value.activeTimer || null)
+const classState = item => { const minutes = now.getHours() * 60 + now.getMinutes(); return minutes >= item.startMinutes && minutes < item.endMinutes ? 'Now' : minutes < item.startMinutes ? 'Next' : 'Completed' }
+const openInbox = () => navigateTo({ path: '/app/inbox', query: command.value.trim() ? { text: command.value.trim() } : {} })
+const actionRoute = (kind) => { const action = data.value?.recommendation; if (!action) return '/app/tasks'; if (kind === 'focus') return { path: '/app/focus', query: { taskId: action.kind === 'TASK' ? action.id : undefined, module: action.moduleCode, goal: action.title } }; if (kind === 'plan') return { path: '/app/planner', query: { taskId: action.id, title: action.title, estimatedMinutes: action.estimatedMinutes || 60 } }; return action.to }
+watch(user, value => { if (value) void load() }, { immediate: true })
 </script>
 
 <template>
-  <main class="app-page academic-overview-page">
-    <header class="app-page__header academic-overview-header">
-      <div>
-        <p class="app-page__eyebrow">Academic overview</p>
-        <h1>Semester command centre</h1>
-        <span>Your semester at a glance, built from confirmed academic records.</span>
+  <main class="app-page v2-page today-page">
+    <header class="today-heading"><div><p>{{ dateLabel }}</p><h1>{{ greeting }}</h1></div><span>{{ data?.semester || 'Your academic day' }}</span></header>
+    <form class="northstar-command" @submit.prevent="openInbox"><UIcon name="i-lucide-sparkles" /><input v-model="command" aria-label="Ask Northstar or paste an academic update" placeholder="Ask Northstar or paste an academic update…"><UButton type="submit" size="sm">Review text</UButton></form>
+    <p v-if="error" class="module-alert" role="alert">{{ error }}</p><p v-if="loading && !data" role="status">Loading today’s academic state…</p>
+    <template v-else-if="data">
+      <section class="next-action" aria-labelledby="next-action-title"><div class="v2-section-heading"><div><p>Next action</p><h2 id="next-action-title">{{ data.recommendation?.title || 'Nothing urgent right now' }}</h2></div><UBadge v-if="data.recommendation" color="primary">{{ data.recommendation.moduleCode || 'General' }}</UBadge></div><p v-if="data.recommendation">{{ [data.recommendation.estimatedMinutes ? `${data.recommendation.estimatedMinutes} min` : null, data.recommendation.timingNote].filter(Boolean).join(' · ') || 'Open the source for details.' }}</p><p v-else>Your confirmed academic records do not contain an overdue or due-today action.</p><div class="v2-inline-actions"><UButton v-if="data.recommendation" :to="actionRoute('focus')" icon="i-lucide-timer">Start Focus</UButton><UButton v-if="data.recommendation" :to="actionRoute('plan')" color="neutral" variant="outline">Plan</UButton><UButton :to="data.recommendation ? actionRoute('open') : '/app/tasks?view=BACKLOG'" color="neutral" variant="ghost">{{ data.recommendation ? 'Open' : 'View backlog' }}</UButton></div></section>
+      <div class="today-grid">
+        <section class="v2-panel"><div class="v2-section-heading"><div><p>Schedule</p><h2>Today’s classes</h2></div><NuxtLink to="/app/timetable">Timetable</NuxtLink></div><div v-if="data.classes.length" class="v2-dense-list"><div v-for="item in data.classes" :key="item.id"><time>{{ time(item.startMinutes) }}</time><div><strong>{{ item.moduleCode }} · {{ item.classType.toLowerCase() }}</strong><span>{{ item.moduleTitle }}</span></div><small>{{ classState(item) }} · {{ item.venue || 'Venue TBC' }}</small></div></div><div v-else class="v2-empty"><strong>No classes found for today.</strong><span>Only confirmed timetable sessions are shown.</span></div></section>
+        <section class="v2-panel"><div class="v2-section-heading"><div><p>Execution</p><h2>Tasks</h2></div><NuxtLink to="/app/tasks">All tasks</NuxtLink></div><div v-if="data.tasks.length" class="v2-dense-list"><NuxtLink v-for="item in data.tasks.slice(0,6)" :key="item.id" :to="`/app/tasks?view=ALL`"><span class="status-dot" :class="`is-${item.status.toLowerCase()}`" /><div><strong>{{ item.moduleCode || 'General' }} · {{ item.title }}</strong><span>{{ item.timingNote || (item.dueAt ? new Date(item.dueAt).toLocaleString() : 'Backlog') }}</span></div><small>{{ item.status.replaceAll('_',' ').toLowerCase() }}</small></NuxtLink></div><div v-else class="v2-empty"><strong>No open tasks.</strong><NuxtLink to="/app/tasks?create=1">Create a task</NuxtLink></div></section>
+        <section class="v2-panel"><div class="v2-section-heading"><div><p>Coming up</p><h2>Assessments</h2></div><NuxtLink to="/app/calendar">Calendar</NuxtLink></div><div v-if="data.assessments.length" class="v2-dense-list"><NuxtLink v-for="item in data.assessments.slice(0,5)" :key="item.id" :to="`/app/assessments/${item.id}`"><div><strong>{{ item.moduleCode }} · {{ item.name }}</strong><span>{{ item.weight === null ? 'Weight not recorded' : `${item.weight}%` }}</span></div><time>{{ new Date(item.date).toLocaleDateString() }}</time></NuxtLink></div><div v-else class="v2-empty"><strong>No upcoming dated assessments.</strong><span>Week references remain undated until confirmed.</span></div></section>
+        <section class="v2-panel"><div class="v2-section-heading"><div><p>Requirements</p><h2>Coursework</h2></div><NuxtLink to="/app/modules">Modules</NuxtLink></div><div v-if="data.coursework.length" class="v2-dense-list"><NuxtLink v-for="item in data.coursework.slice(0,5)" :key="item.id" :to="`/app/recurring-coursework/${item.requirementId}`"><div><strong>{{ item.moduleCode }} · {{ item.title }}</strong><span>{{ item.timingNote || 'No timing note' }}</span></div><small>{{ item.status.replaceAll('_',' ').toLowerCase() }}</small></NuxtLink></div><div v-else class="v2-empty"><strong>No coursework needs attention.</strong><span>Submitted, missed, and upcoming occurrences appear here.</span></div></section>
+        <section class="v2-panel"><div class="v2-section-heading"><div><p>Local plan</p><h2>Today’s plan</h2></div><NuxtLink to="/app/planner">Planner</NuxtLink></div><div v-if="plannedBlocks.length" class="v2-dense-list"><div v-for="block in plannedBlocks" :key="block.id"><time>{{ time(block.startMinutes) }}</time><div><strong>{{ block.moduleCode || 'General' }} · {{ block.title }}</strong><span>{{ block.goal || 'Study block' }}</span></div><small>{{ block.status.toLowerCase() }}</small></div></div><div v-else class="v2-empty"><strong>No study blocks planned today.</strong><NuxtLink to="/app/planner">Plan study time</NuxtLink></div></section>
+        <section class="v2-panel"><div class="v2-section-heading"><div><p>Local focus</p><h2>Focus</h2></div><NuxtLink to="/app/focus">Open timer</NuxtLink></div><dl class="v2-inline-stats"><div><dt>Focused today</dt><dd>{{ focusMinutes }} min</dd></div><div><dt>Active session</dt><dd>{{ activeFocus ? `${activeFocus.moduleCode || 'General'} · ${activeFocus.goal || 'Focus'}` : 'None' }}</dd></div><div><dt>Recent session</dt><dd>{{ recentFocus ? `${Math.round((recentFocus.focusedSeconds || 0)/60)} min` : 'None' }}</dd></div></dl><p class="v2-local-note"><UIcon name="i-lucide-hard-drive" /> Stored only in this browser.</p></section>
       </div>
-      <UButton icon="i-lucide-refresh-cw" color="neutral" variant="outline" size="md" aria-label="Refresh academic overview" :loading="loading" @click="refresh">Refresh</UButton>
-    </header>
-
-    <div v-if="loading && !overview" class="academic-overview-skeleton" aria-label="Loading academic overview">
-      <div class="app-skeleton academic-overview-skeleton__summary"><span v-for="item in 6" :key="item" /></div>
-      <div class="app-skeleton academic-overview-skeleton__panel"><span v-for="item in 4" :key="item" /></div>
-      <div class="app-skeleton academic-overview-skeleton__panel"><span v-for="item in 4" :key="item" /></div>
-    </div>
-
-    <section v-else-if="error && !overview" class="module-empty" aria-labelledby="overview-error-title">
-      <span class="module-empty__icon"><UIcon name="i-lucide-triangle-alert" /></span>
-      <p>Unable to load</p>
-      <h2 id="overview-error-title">Academic overview unavailable</h2>
-      <span>{{ error }}</span>
-      <UButton icon="i-lucide-refresh-cw" :loading="loading" @click="refresh">Try again</UButton>
-    </section>
-
-    <template v-else-if="overview">
-      <section class="academic-summary" aria-labelledby="semester-summary-title">
-        <div class="academic-summary__semester">
-          <div><p>Active semester</p><h2 id="semester-summary-title">{{ overview.activeSemester.label }}</h2></div>
-          <NuxtLink to="/app/modules">Manage modules <UIcon name="i-lucide-arrow-right" /></NuxtLink>
-        </div>
-        <dl class="academic-summary__grid">
-          <div><dt>Active modules</dt><dd>{{ overview.summary.activeModuleCount }}</dd></div>
-          <div><dt>Academic units</dt><dd>{{ numberLabel(overview.summary.totalAcademicUnits) }}</dd></div>
-          <div><dt>Confirmed assessments</dt><dd>{{ overview.summary.totalConfirmedAssessments }}</dd></div>
-          <div><dt>Complete structures</dt><dd>{{ overview.summary.completeAssessmentStructureCount }}</dd></div>
-          <div><dt>Missing information</dt><dd>{{ overview.summary.missingAssessmentInformationCount }}</dd></div>
-        </dl>
-      </section>
-
-      <section v-if="!hasModules" class="module-empty academic-overview-empty" aria-labelledby="overview-empty-title">
-        <span class="module-empty__icon"><UIcon name="i-lucide-book-open" /></span>
-        <p>No active modules</p>
-        <h2 id="overview-empty-title">Build your active semester</h2>
-        <span>Import your timetable or add modules manually before Northstar can calculate assessment readiness.</span>
-        <div class="academic-overview-empty__actions"><UButton to="/app/timetable/import">Import timetable</UButton><UButton to="/app/modules" color="neutral" variant="outline">Manage modules</UButton></div>
-      </section>
-
-      <template v-else>
-        <section class="academic-panel academic-panel--attention overview-attention" aria-labelledby="needs-attention-title">
-          <div class="academic-section-heading">
-            <div><p>Action queue</p><h2 id="needs-attention-title">Needs attention</h2></div>
-            <span class="academic-count-badge">{{ attentionItems.length }} item{{ attentionItems.length === 1 ? '' : 's' }}</span>
-          </div>
-          <div v-if="attentionItems.length" id="needs-attention-list" class="attention-list">
-            <NuxtLink v-for="item in visibleAttentionItems" :key="item.id" :to="item.to" class="attention-item">
-              <span class="attention-item__icon"><UIcon :name="attentionIcons[item.kind] || 'i-lucide-circle-alert'" /></span>
-              <div><strong>{{ item.title }}</strong><p>{{ item.description }}</p></div>
-              <UIcon name="i-lucide-chevron-right" />
-            </NuxtLink>
-          </div>
-          <div v-if="canToggleAttention" class="attention-list__footer">
-            <button type="button" aria-controls="needs-attention-list" :aria-expanded="attentionExpanded" @click="attentionExpanded = !attentionExpanded">
-              {{ attentionExpanded ? 'Show fewer' : `Show all ${attentionItems.length}` }}
-              <UIcon :name="attentionExpanded ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'" />
-            </button>
-          </div>
-          <div v-else-if="!attentionItems.length" class="academic-empty-state academic-empty-state--compact"><UIcon name="i-lucide-circle-check-big" /><div><strong>No academic records need attention</strong><p>All active modules have complete assessment structures, confirmed dates and target grades.</p></div></div>
-        </section>
-
-        <section class="academic-panel academic-panel--upcoming" aria-labelledby="upcoming-assessments-title">
-          <div class="academic-section-heading">
-            <div><p>Confirmed calendar dates only</p><h2 id="upcoming-assessments-title">Upcoming assessments</h2></div>
-            <span>{{ upcomingAssessments.length }} upcoming</span>
-          </div>
-          <div v-if="upcomingAssessments.length" class="upcoming-assessment-list">
-            <NuxtLink v-for="assessment in upcomingAssessments" :key="assessment.id" :to="assessment.to" class="upcoming-assessment-card">
-              <div class="upcoming-assessment-card__main"><span>{{ assessment.moduleCode }}</span><strong>{{ assessment.name }}</strong><small>{{ typeLabel(assessment.type) }}</small></div>
-              <div class="upcoming-assessment-card__date"><strong>{{ formatDateTime(assessment.date) }}</strong><small>{{ daysLabel(assessment.daysRemaining) }}</small></div>
-              <UBadge color="neutral" variant="outline">{{ assessment.weight === null ? 'Weight TBA' : percentage(assessment.weight) }}</UBadge>
-              <UIcon name="i-lucide-chevron-right" />
-            </NuxtLink>
-          </div>
-          <div v-else class="academic-empty-state academic-empty-state--compact"><UIcon name="i-lucide-calendar-clock" /><div><strong>No confirmed assessment dates yet</strong><p>Your assessments may already be saved, but dates are still awaiting official confirmation. Teaching-week references are not converted into dates.</p></div></div>
-        </section>
-
-        <section class="academic-panel academic-panel--quiet academic-panel--grade" aria-labelledby="grade-position-title">
-          <div class="academic-section-heading">
-            <div><p>Deterministic calculations</p><h2 id="grade-position-title">Grade position</h2></div>
-            <span>No predicted letter grades</span>
-          </div>
-          <div class="grade-position-grid">
-            <NuxtLink v-for="module in modules" :key="module.enrolmentId" :to="`${module.to}#assessments`" class="grade-position-card">
-              <div class="grade-position-card__heading"><div><span>{{ module.code }}</span><strong>{{ module.title }}</strong></div><UIcon name="i-lucide-chevron-right" /></div>
-              <dl>
-                <div><dt>Target grade</dt><dd>{{ targetGrade(module) }}</dd></div>
-                <div><dt>Confirmed weight</dt><dd>{{ percentage(module.grade.confirmedWeight) }}</dd></div>
-                <div><dt>Graded weight</dt><dd>{{ percentage(module.grade.gradedWeight) }}</dd></div>
-                <div><dt>Current weighted score</dt><dd>{{ percentage(module.grade.currentWeightedScore) }}</dd></div>
-                <div><dt>Remaining weight</dt><dd>{{ percentage(module.grade.remainingWeight) }}</dd></div>
-                <div class="grade-position-card__required" :class="{ 'is-calculable': module.grade.requiredAverage !== null }"><dt>Required remaining average</dt><dd>{{ requiredAverage(module) }}</dd></div>
-              </dl>
-            </NuxtLink>
-          </div>
-        </section>
-
-        <section class="academic-panel academic-panel--quiet academic-panel--readiness" aria-labelledby="module-readiness-title">
-          <div class="academic-section-heading">
-            <div><p>Active teaching load</p><h2 id="module-readiness-title">Module readiness</h2></div>
-            <NuxtLink to="/app/modules">View all modules <UIcon name="i-lucide-arrow-right" /></NuxtLink>
-          </div>
-          <div class="module-readiness-grid">
-            <article v-for="module in modules" :key="module.enrolmentId" class="module-readiness-card">
-              <span class="module-readiness-card__colour" :class="`module-colour--${module.colour.toLowerCase()}`" aria-hidden="true" />
-              <div class="module-readiness-card__body">
-                <div class="module-readiness-card__heading"><div><span>{{ module.code }}</span><h3>{{ module.title }}</h3></div><UBadge :color="readiness[module.readiness].color" variant="soft">{{ readiness[module.readiness].label }}</UBadge></div>
-                <dl>
-                  <div><dt>Assessments</dt><dd>{{ module.assessmentCount }}</dd></div>
-                  <div><dt>Confirmed weight</dt><dd>{{ percentage(module.confirmedWeight) }}</dd></div>
-                  <div><dt>Known deadlines</dt><dd>{{ module.knownDeadlineCount }}</dd></div>
-                  <div><dt>Sessions</dt><dd>{{ module.sessionCount }}</dd></div>
-                  <div><dt>Target grade</dt><dd>{{ targetGrade(module) }}</dd></div>
-                </dl>
-                <NuxtLink :to="module.to" class="module-readiness-card__action">Open module <UIcon name="i-lucide-arrow-right" /></NuxtLink>
-              </div>
-            </article>
-          </div>
-        </section>
-      </template>
     </template>
   </main>
 </template>

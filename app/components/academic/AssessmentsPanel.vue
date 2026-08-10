@@ -25,7 +25,7 @@ function resetScenarios() { scenarios.value = {} }
 
 <template>
   <section id="assessments" class="dossier-section academic-panel" aria-labelledby="assessment-title">
-    <div class="dossier-section__heading"><div><p>Private academic record</p><h2 id="assessment-title">Assessments</h2></div><div class="academic-actions"><UButton color="neutral" variant="outline" @click="open = true">Add manually</UButton><UButton href="#course-outline">Import outline</UButton></div></div>
+    <div class="dossier-section__heading"><div><p>Private academic record</p><h2 id="assessment-title">Assessments</h2></div><div class="academic-actions"><UButton color="neutral" variant="outline" @click="open = true">Add manually</UButton><UButton :to="`/app/inbox?moduleEnrolmentId=${enrolmentId}`">Paste update</UButton></div></div>
     <p v-if="error" class="module-alert" role="alert">{{ error }}</p>
     <p v-if="loading" role="status">Loading assessments…</p>
     <div v-else-if="data.assessments.length" class="assessment-list">
@@ -36,7 +36,7 @@ function resetScenarios() { scenarios.value = {} }
         <strong>{{ item.weightedScore === null ? 'Not graded' : `${item.weightedScore}% contribution` }}</strong>
       </NuxtLink>
     </div>
-    <p v-else class="dossier-empty">No confirmed assessments. Add one manually or import a course outline.</p>
+    <p v-else class="dossier-empty">No confirmed assessments. Add one manually or paste an update into Academic Inbox.</p>
 
     <div class="grade-dashboard" aria-labelledby="grade-title">
       <div class="grade-dashboard__heading"><div><p>Deterministic estimate</p><h3 id="grade-title">Grade intelligence</h3></div><form @submit.prevent="saveTarget"><label for="target-percentage">Personal target %</label><UInput id="target-percentage" v-model.number="target.targetPercentage" type="number" min="0" max="100" step="0.1" /><label for="target-label">Optional label</label><UInput id="target-label" v-model="target.targetLabel" maxlength="50" placeholder="A target" /><UButton type="submit" size="sm" :loading="saving">Save target</UButton></form></div>

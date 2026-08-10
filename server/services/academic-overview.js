@@ -97,11 +97,6 @@ export function buildAcademicOverview(semester, now = new Date()) {
       readiness: readinessStatus(structure),
       completeAssessmentStructure: structure.complete,
       assessments,
-      reviewRequiredImports: enrolment.courseOutlineImports.map(item => ({
-        id: item.id,
-        label: item.originalFileName || item.sourceLabel || 'Course outline review',
-        createdAt: dateValue(item.createdAt)
-      })),
       grade: {
         targetPercentage: grade.targetPercentage,
         confirmedWeight: grade.confirmedWeight,
@@ -124,7 +119,7 @@ export function buildAcademicOverview(semester, now = new Date()) {
         kind: 'NO_ASSESSMENTS',
         moduleCode: module.code,
         title: `${module.code} has no confirmed assessments`,
-        description: 'Add assessments manually or review an existing course-outline import.',
+        description: 'Add an assessment or paste an update into Academic Inbox.',
         to: moduleAction(module.enrolmentId, '#assessments')
       })
     } else if (!module.completeAssessmentStructure) {
@@ -186,16 +181,6 @@ export function buildAcademicOverview(semester, now = new Date()) {
       }
     }
 
-    for (const importRecord of module.reviewRequiredImports) {
-      attention.push({
-        id: `outline-review:${importRecord.id}`,
-        kind: 'REVIEW_REQUIRED_IMPORT',
-        moduleCode: module.code,
-        title: `${module.code} course-outline import needs review`,
-        description: importRecord.label,
-        to: `/app/course-outline-imports/${importRecord.id}`
-      })
-    }
   }
 
   upcoming.sort((left, right) => new Date(left.date) - new Date(right.date) || left.moduleCode.localeCompare(right.moduleCode) || left.name.localeCompare(right.name))
@@ -221,7 +206,7 @@ export function buildAcademicOverview(semester, now = new Date()) {
     },
     attention,
     upcomingAssessments: upcoming,
-    modules: modules.map(({ assessments, reviewRequiredImports, completeAssessmentStructure, ...module }) => module),
+    modules: modules.map(({ assessments, completeAssessmentStructure, ...module }) => module),
     currentDate: now.toISOString()
   }
 }
@@ -264,12 +249,7 @@ export async function getAcademicOverview(userId, database = prisma, now = new D
               weightedScore: true
             }
           },
-          _count: { select: { classSessions: true } },
-          courseOutlineImports: {
-            where: { userId, status: 'REVIEW_REQUIRED' },
-            orderBy: { createdAt: 'asc' },
-            select: { id: true, originalFileName: true, sourceLabel: true, createdAt: true }
-          }
+          _count: { select: { classSessions: true } }
         }
       }
     }
