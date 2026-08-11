@@ -18,6 +18,7 @@
     "db:validate": "prisma validate",
     "dev": "nuxt dev",
     "generate": "nuxt generate",
+    "force:semester": "node scripts/force-my-semester.js",
     "opportunities:sync": "JITI_ALIAS=\"{\\\"#shared\\\":\\\"$PWD/shared\\\"}\" jiti server/opportunity-scanner/run-cli.js",
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
