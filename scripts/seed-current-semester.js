@@ -1,7 +1,9 @@
 import 'dotenv/config'
 import { PrismaNeon } from '@prisma/adapter-neon'
-import { PrismaClient } from '../server/generated/prisma/client.js'
+import { createJiti } from 'jiti'
 import { CURRENT_SEMESTER_SEED, classSessionIdentity, validateCurrentSemesterSeed } from './current-semester-seed-data.js'
+
+const { PrismaClient } = await createJiti(import.meta.url).import('../server/generated/prisma/client.ts')
 
 const connectionString = process.env.DATABASE_URL
 const requestedEmail = String(process.env.SEED_USER_EMAIL || '').trim()

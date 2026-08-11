@@ -1,8 +1,20 @@
+import { spawnSync } from 'node:child_process'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { CURRENT_SEMESTER_SEED, classSessionIdentity, currentSemesterSeedSummary, validateCurrentSemesterSeed } from '../scripts/current-semester-seed-data.js'
 import { CLASS_SESSION_TYPES, DAYS_OF_WEEK, SESSION_DELIVERY_MODES, SESSION_RECURRENCES } from '../shared/schemas/timetable.js'
 
 describe('current semester development seed data', () => {
+  it('loads the generated Prisma client when started directly with Node', () => {
+    const result = spawnSync(process.execPath, [fileURLToPath(new URL('../scripts/seed-current-semester.js', import.meta.url))], {
+      encoding: 'utf8',
+      env: { ...process.env, DATABASE_URL: 'postgresql://unused:unused@localhost:1/unused', SEED_USER_EMAIL: '' }
+    })
+    expect(result.status).toBe(1)
+    expect(result.stderr).toContain('SEED_USER_EMAIL is required')
+    expect(result.stderr).not.toContain('ERR_MODULE_NOT_FOUND')
+  })
+
   it('contains the exact requested semester totals and module indexes', () => {
     expect(validateCurrentSemesterSeed()).toEqual({ moduleCount: 6, academicUnits: 16, sessionCount: 9, examCount: 4 })
     expect(currentSemesterSeedSummary()).toEqual({ moduleCount: 6, academicUnits: 16, sessionCount: 9, examCount: 4 })
