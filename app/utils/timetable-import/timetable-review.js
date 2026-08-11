@@ -67,15 +67,14 @@ export function reviewIssues(modules = [], draft = {}) {
   })
   return timetableStructureIssues(modules, draft).concat(conflictIssues, modules.flatMap((module) => {
     if (!module.selected) return []
-    const moduleIssues = module.publicEnrichmentConfirmed === false ? [{
-      id: `${module.candidateId}-publicEnrichment`,
-      moduleCandidateId: module.candidateId,
-      sessionCandidateId: null,
-      field: 'publicEnrichment',
-      label: 'Resolve the public-source discrepancy',
-      context: module.code,
+    const moduleIssues = []
+    if (!String(module.code || '').trim()) moduleIssues.push({ id: `${module.candidateId}-code`, moduleCandidateId: module.candidateId, sessionCandidateId: null, field: 'code', label: 'Enter the module code', context: module.title || 'Module', targetId: `review-${module.candidateId}-code` })
+    if (!String(module.title || '').trim()) moduleIssues.push({ id: `${module.candidateId}-title`, moduleCandidateId: module.candidateId, sessionCandidateId: null, field: 'title', label: 'Enter the module title', context: module.code || 'Module', targetId: `review-${module.candidateId}-title` })
+    if (module.publicEnrichmentConfirmed === false) moduleIssues.push({
+      id: `${module.candidateId}-publicEnrichment`, moduleCandidateId: module.candidateId, sessionCandidateId: null,
+      field: 'publicEnrichment', label: 'Resolve the public-source discrepancy', context: module.code,
       targetId: `review-${module.candidateId}-publicEnrichment`
-    }] : []
+    })
     return moduleIssues.concat(module.sessions.flatMap(session => sessionIssueFields(session).map((issue, index) => ({
       id: `${session.candidateId}-${issue.field}-${index}`,
       moduleCandidateId: module.candidateId,
@@ -92,12 +91,33 @@ export function moduleIssueCount(module) {
   return reviewIssues([module]).length
 }
 
-export function initialExpandedModuleIds(modules = []) {
-  return modules.filter(module => moduleIssueCount(module) > 0).map(module => module.candidateId)
+export function initialExpandedModuleIds(modules = [], draft = {}) {
+  return [...new Set(reviewIssues(modules, draft).map(issue => issue.moduleCandidateId).filter(Boolean))]
 }
 
-export function initialExpandedSessionIds(modules = []) {
-  return modules.flatMap(module => module.sessions.filter(session => sessionIssueFields(session).length > 0).map(session => session.candidateId))
+export function initialExpandedSessionIds(modules = [], draft = {}) {
+  return [...new Set(reviewIssues(modules, draft).map(issue => issue.sessionCandidateId).filter(Boolean))]
+}
+
+export function formatWeekRanges(weekNumbers = []) {
+  const values = [...new Set(weekNumbers)].filter(Number.isInteger).sort((left, right) => left - right)
+  const ranges = []
+  for (const value of values) {
+    const last = ranges.at(-1)
+    if (last && value === last[1] + 1) last[1] = value
+    else ranges.push([value, value])
+  }
+  return ranges.map(([start, end]) => start === end ? `${start}` : `${start}–${end}`).join(', ')
+}
+
+export function compactSessionParts(session = {}) {
+  const day = session.dayOfWeek ? `${session.dayOfWeek.slice(0, 1)}${session.dayOfWeek.slice(1, 3).toLowerCase()}` : 'Day missing'
+  const start = formatMinutes(session.startMinutes)
+  const end = formatMinutes(session.endMinutes)
+  const time = start && end ? `${start}–${end}` : 'Time missing'
+  const venue = session.deliveryMode === 'ONLINE' && (!session.venue || session.venue.toUpperCase() === 'ONLINE') ? 'Online' : session.venue
+  const weeks = session.recurrence === 'CUSTOM' ? formatWeekRanges(session.weekNumbers) : ''
+  return [day, time, venue, weeks ? `Weeks ${weeks}` : null].filter(Boolean)
 }
 
 export function groupReviewSessions(sessions = []) {

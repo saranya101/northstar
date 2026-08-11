@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { applyPublicEnrichmentSuggestion, canConfirmReview, cloneReviewModules, groupReviewSessions, initialExpandedModuleIds, issueTargetId, revealReviewIssue, reviewIssues } from '../app/utils/timetable-import/timetable-review'
+import { applyPublicEnrichmentSuggestion, canConfirmReview, cloneReviewModules, compactSessionParts, formatWeekRanges, groupReviewSessions, initialExpandedModuleIds, initialExpandedSessionIds, issueTargetId, revealReviewIssue, reviewIssues } from '../app/utils/timetable-import/timetable-review'
 
 const session = overrides => ({ candidateId: 's1', selected: true, classType: 'LECTURE', groupLabel: 'LE', dayOfWeek: 'MONDAY', startMinutes: 540, endMinutes: 600, timeConfirmed: true, timeAlternatives: [], venue: 'LT1', deliveryModeConfirmed: true, recurrence: 'CUSTOM', recurrenceConfirmed: true, weekNumbers: [1, 3], ...overrides })
 const module = overrides => ({ candidateId: 'm1', selected: true, code: 'AB1201', title: 'Test module', academicUnits: 3, indexNumber: '12345', publicEnrichmentConfirmed: true, sessions: [], ...overrides })
@@ -10,6 +10,19 @@ describe('timetable review presentation', () => {
   it('starts modules with issues expanded and valid modules collapsed', () => {
     const modules = [module({ candidateId: 'valid' }), module({ candidateId: 'issue', sessions: [session({ timeConfirmed: false })] })]
     expect(initialExpandedModuleIds(modules)).toEqual(['issue'])
+    expect(initialExpandedSessionIds(modules)).toEqual(['s1'])
+  })
+
+  it('treats missing required module identity as a blocking issue', () => {
+    const modules = [module({ candidateId: 'missing-code', code: '' }), module({ candidateId: 'missing-title', title: '' })]
+    expect(reviewIssues(modules).map(issue => issue.label)).toEqual(['Enter the module code', 'Enter the module title'])
+    expect(initialExpandedModuleIds(modules)).toEqual(['missing-code', 'missing-title'])
+  })
+
+  it('formats compact session summaries without exposing internal enum values', () => {
+    expect(formatWeekRanges([2, 3, 4, 5, 10, 11])).toBe('2–5, 10–11')
+    expect(compactSessionParts(session({ dayOfWeek: 'TUESDAY', startMinutes: 630, endMinutes: 680, venue: 'LHS-TR+51', weekNumbers: [2, 3, 4, 5] }))).toEqual(['Tue', '10:30–11:20', 'LHS-TR+51', 'Weeks 2–5'])
+    expect(compactSessionParts(session({ deliveryMode: 'ONLINE', venue: 'ONLINE', recurrence: 'WEEKLY', weekNumbers: [] }))).toEqual(['Mon', '09:00–10:00', 'Online'])
   })
 
   it('groups matching sessions while preserving every original object and candidate ID', () => {
@@ -105,7 +118,29 @@ describe('timetable review presentation', () => {
     expect(page).toMatch(/modules\.value = cloneReviewModules\(value\.modules\)/)
     expect(page).toMatch(/moveSession\(module, session/)
     expect(page).toMatch(/markManual\(session, 'dayOfWeek'\)/)
-    expect(page).toMatch(/Physical block/)
-    expect(page).toMatch(/findTimetableConflicts\(selectedSessions\.value\)/)
+  })
+
+  it('renders a compact clean review and keeps advanced fields behind Edit', () => {
+    const page = readFileSync(join(new URL('..', import.meta.url).pathname, 'app/pages/app/timetable/import/[id].vue'), 'utf8')
+    const template = page.split('</script>')[1]
+    expect(page).toContain('Review timetable')
+    expect(page).toContain('All required timetable information was detected.')
+    expect(page).toContain('Matches current semester')
+    expect(page).toMatch(/v-for="module in modules"/)
+    expect(page).toMatch(/v-for="session in module\.sessions"/)
+    expect(page).toContain("'Edit'")
+    expect(page).toMatch(/v-show="expandedModules\.has\(module\.candidateId\)"/)
+    expect(page).toContain('Confirm timetable')
+    expect(template).not.toContain('Physical block')
+    expect(template).not.toContain('fieldProvenance')
+    expect(template).not.toContain('confidence')
+  })
+
+  it('surfaces issues compactly and opens only their module and session editors', () => {
+    const page = readFileSync(join(new URL('..', import.meta.url).pathname, 'app/pages/app/timetable/import/[id].vue'), 'utf8')
+    expect(page).toContain('Needs attention')
+    expect(page).toContain('Review issues')
+    expect(page).toMatch(/initialExpandedModuleIds\(modules\.value, value\)/)
+    expect(page).toMatch(/initialExpandedSessionIds\(modules\.value, value\)/)
   })
 })
