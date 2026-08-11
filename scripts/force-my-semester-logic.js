@@ -1,6 +1,7 @@
 import { buildTimetableEvents, dateKey } from '../shared/calendar/events.js'
 
 export const FORCE_SEMESTER_EMAIL = 'gavarasanasrisaisaranya@gmail.com'
+export const AUTHORITATIVE_TEACHING_START = '2026-08-10'
 
 function normalizedAssessmentName(value) {
   return value.trim().toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
@@ -21,6 +22,15 @@ export async function resolveForceSemesterTarget(database) {
   if (!userSemester) throw new Error(`User ${FORCE_SEMESTER_EMAIL} has no active semester.`)
 
   return { user, academicProfile, userSemester }
+}
+
+export async function setAuthoritativeTeachingStart(database, target) {
+  const teachingStartDate = new Date(`${AUTHORITATIVE_TEACHING_START}T00:00:00+08:00`)
+  await database.academicTerm.update({
+    where: { id: target.userSemester.academicTermId },
+    data: { teachingStartDate }
+  })
+  target.userSemester.academicTerm = { ...target.userSemester.academicTerm, teachingStartDate }
 }
 
 async function upsertModule(database, target, expected) {

@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { CURRENT_SEMESTER_SEED } from '../scripts/current-semester-seed-data.js'
-import { synchronizeCurrentSemester, teachingWeekMappingStatus } from '../scripts/force-my-semester-logic.js'
+import { AUTHORITATIVE_TEACHING_START, setAuthoritativeTeachingStart, synchronizeCurrentSemester, teachingWeekMappingStatus } from '../scripts/force-my-semester-logic.js'
+import { dateKey } from '../shared/calendar/events.js'
 
 const target = {
   user: { id: 'dev-user' },
@@ -56,6 +57,23 @@ function fakeDatabase() {
 }
 
 describe('one-off current semester synchronizer', () => {
+  it('sets only the resolved active AcademicTerm teaching start to the authoritative date', async () => {
+    const database = { academicTerm: { update: vi.fn().mockResolvedValue({}) } }
+    const scopedTarget = {
+      ...target,
+      userSemester: { ...target.userSemester, academicTerm: { ...target.userSemester.academicTerm, academicYear: '2026/2027', name: 'Semester 1' } }
+    }
+
+    await setAuthoritativeTeachingStart(database, scopedTarget)
+
+    expect(AUTHORITATIVE_TEACHING_START).toBe('2026-08-10')
+    expect(database.academicTerm.update).toHaveBeenCalledWith({
+      where: { id: 'term-1' },
+      data: { teachingStartDate: new Date('2026-08-09T16:00:00.000Z') }
+    })
+    expect(dateKey(scopedTarget.userSemester.academicTerm.teachingStartDate)).toBe('2026-08-10')
+  })
+
   it('replaces only the six scoped enrolments with nine canonical sessions and is idempotent', async () => {
     const { database, rows, exams } = fakeDatabase()
 
