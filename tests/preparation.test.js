@@ -114,6 +114,31 @@ describe('Today upcoming class preparation', () => {
     expect(database.classSession).toBeUndefined()
   })
 
+  it('derives Today and Upcoming from the same recurrence-aware occurrences', async () => {
+    const session = (id, overrides) => ({ id, classType: 'SEMINAR', groupLabel: '1', dayOfWeek: 'TUESDAY', recurrence: 'WEEKLY', weekNumbers: [], deliveryMode: 'IN_PERSON', source: 'MANUAL', ...overrides })
+    const enrolments = [
+      { ...enrolment, id: 'enrolment-ab0403', offering: { module: { code: 'AB0403', title: 'Decision Making With Programming & Analytics' } }, classSessions: [session('ab0403', { groupLabel: '5', startMinutes: 510, endMinutes: 620, venue: 'S4-SR2' })] },
+      { ...enrolment, id: 'enrolment-ab1201', offering: { module: { code: 'AB1201', title: 'Financial Management' } }, classSessions: [session('ab1201', { groupLabel: '11', startMinutes: 810, endMinutes: 980, venue: 'ESR4' })] },
+      { ...enrolment, id: 'enrolment-he5091', offering: { module: { code: 'HE5091', title: 'Principles of Economics' } }, classSessions: [session('excluded-custom', { classType: 'TUTORIAL', groupLabel: 'NBS16', startMinutes: 630, endMinutes: 680, venue: 'LHS-TR+44', recurrence: 'CUSTOM', weekNumbers: [2] })] }
+    ].map(item => ({ ...item, assessments: [], recurringCoursework: [], weekPreparations: [] }))
+    const database = {
+      userSemester: { findFirst: vi.fn().mockResolvedValue({
+        ...semester,
+        moduleEnrolments: enrolments
+      }) },
+      task: { findMany: vi.fn().mockResolvedValue([]) }
+    }
+
+    const result = await getToday('user-1', database, new Date('2026-08-11T04:00:00.000Z'))
+
+    expect(result.classes.map(item => [item.id, item.startMinutes])).toEqual([
+      ['class:ab0403:2026-08-11', 510],
+      ['class:ab1201:2026-08-11', 810]
+    ])
+    expect(result.upcomingClasses.map(item => item.id)).toEqual(['class:ab1201:2026-08-11'])
+    expect(result.classes.some(item => item.id.includes('excluded-custom'))).toBe(false)
+  })
+
   it('exposes dense preparation entry points on Today and the module dossier', () => {
     const root = new URL('..', import.meta.url).pathname
     const todayPage = readFileSync(join(root, 'app/pages/app/index.vue'), 'utf8')

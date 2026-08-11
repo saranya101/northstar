@@ -194,6 +194,15 @@ describe('academic calendar timetable expansion', () => {
       activeSemester: { teachingStartDate: null, teachingEndDate: null }
     })).toEqual([])
   })
+
+  it('treats an empty WEEKLY list as every week and CUSTOM as the explicit weeks only', () => {
+    const weekly = { ...timetable.sessions[0], id: 'weekly', recurrence: 'WEEKLY', weekNumbers: [] }
+    const custom = { ...timetable.sessions[0], id: 'custom', recurrence: 'CUSTOM', weekNumbers: [2] }
+    const events = buildTimetableEvents({ sessions: [weekly, custom], activeSemester: timetable.activeSemester })
+
+    expect(events.filter(event => event.sourceId === 'weekly').map(event => event.weekNumber)).toEqual([1, 2, 3])
+    expect(events.filter(event => event.sourceId === 'custom').map(event => event.weekNumber)).toEqual([2])
+  })
 })
 
 describe('calendar ordering, filters and month structures', () => {
