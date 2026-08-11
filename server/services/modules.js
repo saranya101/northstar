@@ -344,7 +344,9 @@ export async function getModuleDossier(userId, enrolmentId, database = prisma) {
       academicTerm: {
         id: offering.academicTerm.id,
         academicYear: offering.academicTerm.academicYear,
-        name: offering.academicTerm.name
+        name: offering.academicTerm.name,
+        teachingStartDate: dateValue(offering.academicTerm.teachingStartDate),
+        teachingEndDate: dateValue(offering.academicTerm.endDate)
       },
       sectionLabel: offering.sectionLabel,
       gradingType: offering.gradingType,

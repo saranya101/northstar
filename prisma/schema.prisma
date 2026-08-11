@@ -26,6 +26,7 @@ model User {
   timetableImports     TimetableImport[]
   academicIntakes      AcademicIntake[]
   assessments          Assessment[]
+  moduleWeekPreparations ModuleWeekPreparation[]
   recurringCoursework  RecurringCoursework[]
   recurringCourseworkOccurrences RecurringCourseworkOccurrence[]
   tasks                Task[]
@@ -635,12 +636,40 @@ model UserModuleEnrolment {
   privateFacts         UserModuleFact[]
   recurringCoursework  RecurringCoursework[]
   tasks                Task[]
+  weekPreparations     ModuleWeekPreparation[]
 
   @@unique([userId, offeringId])
   @@index([userId])
   @@index([userSemesterId])
   @@index([status])
   @@index([offeringId])
+}
+
+enum PreparationStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  DONE
+  NOT_REQUIRED
+}
+
+model ModuleWeekPreparation {
+  id                    String              @id @default(cuid())
+  userId                String
+  userModuleEnrolmentId String
+  teachingWeek          Int
+  materialStatus        PreparationStatus   @default(NOT_STARTED)
+  notesStatus           PreparationStatus   @default(NOT_STARTED)
+  requiredWorkStatus    PreparationStatus   @default(NOT_STARTED)
+  practiceStatus        PreparationStatus   @default(NOT_STARTED)
+  questions             String?
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+  user                  User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userModuleEnrolment   UserModuleEnrolment @relation(fields: [userModuleEnrolmentId], references: [id], onDelete: Cascade)
+
+  @@unique([userModuleEnrolmentId, teachingWeek])
+  @@index([userId])
+  @@index([userId, teachingWeek])
 }
 
 enum AcademicIntakeCategory {

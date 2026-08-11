@@ -98,6 +98,13 @@ export function dateKey(value, timeZone = DEFAULT_TIME_ZONE) {
   return parts ? `${parts.year}-${parts.month}-${parts.day}` : null
 }
 
+export function dateTimeKey(value, timeZone = DEFAULT_TIME_ZONE) {
+  const local = localDateTimeMatch(String(value || ''))
+  if (local) return `${local[1]}-${local[2]}-${local[3]}T${local[4]}:${local[5]}:${local[6] || '00'}`
+  const parts = partsInTimeZone(value, timeZone)
+  return parts ? `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:${parts.second}` : null
+}
+
 export function isAllDayValue(value) {
   return DATE_ONLY_PATTERN.test(String(value || ''))
 }

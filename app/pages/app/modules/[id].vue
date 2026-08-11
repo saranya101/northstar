@@ -77,7 +77,7 @@ function sessionTime(session) { const render = value => `${String(Math.floor(val
         </dl>
       </header>
 
-      <nav class="module-subnav" aria-label="Module sections"><a href="#overview">Overview</a><a href="#assessments">Assessments</a><a href="#coursework">Coursework</a><NuxtLink :to="`/app/tasks?moduleEnrolmentId=${route.params.id}`">Tasks</NuxtLink><a href="#sessions">Schedule</a><a href="#assessments">Grades</a><NuxtLink :to="{ path: '/app/inbox', query: { moduleEnrolmentId: route.params.id } }">Paste update</NuxtLink></nav>
+      <nav class="module-subnav" aria-label="Module sections"><a href="#overview">Overview</a><a href="#preparation">Preparation</a><a href="#assessments">Assessments</a><a href="#coursework">Coursework</a><NuxtLink :to="`/app/tasks?moduleEnrolmentId=${route.params.id}`">Tasks</NuxtLink><a href="#sessions">Schedule</a><a href="#assessments">Grades</a><NuxtLink :to="{ path: '/app/inbox', query: { moduleEnrolmentId: route.params.id } }">Paste update</NuxtLink></nav>
 
       <section id="overview" class="dossier-section">
         <div class="dossier-section__heading"><div><p>Shared record</p><h2>Academic details</h2></div></div>
@@ -90,6 +90,7 @@ function sessionTime(session) { const render = value => `${String(Math.floor(val
         <div class="dossier-links"><UButton v-if="dossier.module.officialUrl" :to="dossier.module.officialUrl" target="_blank" color="neutral" variant="outline">Official module page</UButton><UButton v-if="dossier.offering.syllabusUrl" :to="dossier.offering.syllabusUrl" target="_blank" color="neutral" variant="outline">Syllabus</UButton><span v-if="!dossier.module.officialUrl && !dossier.offering.syllabusUrl">No official links have been connected.</span></div>
       </section>
 
+      <AcademicPreparationPanel :enrolment-id="route.params.id" :module-code="dossier.module.code" :class-sessions="dossier.classSessions" :academic-term="dossier.offering.academicTerm" />
       <AcademicAssessmentsPanel :enrolment-id="route.params.id" />
       <AcademicRecurringCourseworkPanel :enrolment-id="route.params.id" />
 
