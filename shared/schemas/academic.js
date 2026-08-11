@@ -24,6 +24,7 @@ const assessmentShape = {
   officialDeadline: nullableDate,
   internalDeadline: nullableDate,
   eventDate: nullableDate,
+  eventEndDate: nullableDate,
   submissionPlatform: nullableText(100),
   submissionUrl: nullableHttpsUrl,
   instructions: nullableText(10_000),
@@ -45,6 +46,7 @@ function validateAssessment(value, context) {
   if (hasScore !== hasMaximum) context.addIssue({ code: 'custom', message: 'Score and maximum score must be provided together.', path: ['score'] })
   if (value.score !== null && value.maximumScore !== null && value.score > value.maximumScore) context.addIssue({ code: 'custom', message: 'Score cannot exceed the maximum score.', path: ['score'] })
   if (value.internalDeadline && value.officialDeadline && new Date(value.internalDeadline) > new Date(value.officialDeadline)) context.addIssue({ code: 'custom', message: 'Internal deadline must not be after the official deadline.', path: ['internalDeadline'] })
+  if (value.eventDate && value.eventEndDate && new Date(value.eventEndDate) <= new Date(value.eventDate)) context.addIssue({ code: 'custom', message: 'Event end time must be after its start time.', path: ['eventEndDate'] })
 }
 export const assessmentInputSchema = z.object(assessmentShape).strict().superRefine(validateAssessment)
 

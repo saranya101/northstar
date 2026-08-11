@@ -116,6 +116,7 @@ describe('academic calendar assessment dates', () => {
             status: 'NOT_STARTED',
             weight: 20,
             eventDate: '2026-10-15T02:00:00.000Z',
+            eventEndDate: '2026-10-15T03:30:00.000Z',
             officialDeadline: null,
             examFormat: 'In person',
             provenance: [{ sourceLabel: 'Course outline' }]
@@ -129,6 +130,7 @@ describe('academic calendar assessment dates', () => {
         type: CALENDAR_EVENT_TYPES.EXAM,
         category: CALENDAR_EVENT_CATEGORIES.EXAM,
         moduleCode: 'CC0001',
+        end: '2026-10-15T03:30:00.000Z',
         sourceStatus: 'CONFIRMED_SOURCE'
       })
     ])

@@ -841,6 +841,7 @@ model Assessment {
   officialDeadline      DateTime?
   internalDeadline      DateTime?
   eventDate             DateTime?
+  eventEndDate          DateTime?
   submissionPlatform    String?
   submissionUrl         String?
   instructions          String?

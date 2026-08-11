@@ -9,6 +9,8 @@ describe('academic API validation', () => {
     expect(assessmentInputSchema.safeParse({ ...base, weight: 101 }).success).toBe(false)
     expect(assessmentInputSchema.safeParse({ ...base, maximumScore: null }).success).toBe(false)
     expect(assessmentInputSchema.safeParse({ ...base, officialDeadline: '2026-10-10T00:00:00.000Z', internalDeadline: '2026-10-11T00:00:00.000Z' }).success).toBe(false)
+    expect(assessmentInputSchema.safeParse({ ...base, eventDate: '2026-11-23T05:00:00.000Z', eventEndDate: '2026-11-23T04:00:00.000Z' }).success).toBe(false)
+    expect(assessmentInputSchema.safeParse({ ...base, eventDate: '2026-11-23T05:00:00.000Z', eventEndDate: '2026-11-23T07:30:00.000Z' }).success).toBe(true)
   })
 
   it('accepts text intake and normalizes blank optional module context', () => {

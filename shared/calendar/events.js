@@ -237,7 +237,7 @@ function createAssessmentEvent({ assessment, module, kind, start, timeZone }) {
         : 'Assessment event',
     ...snapshot,
     start,
-    end: allDay ? addDays(eventDateKey, 1) : addMinutes(start, exam ? 120 : 30),
+    end: allDay ? addDays(eventDateKey, 1) : assessment.eventEndDate || addMinutes(start, exam ? 120 : 30),
     dateKey: eventDateKey,
     allDay,
     timeZone,

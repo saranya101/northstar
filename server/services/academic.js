@@ -17,7 +17,7 @@ function assessmentData(input) {
   const maximumScore = decimal(input.maximumScore)
   const weight = decimal(input.weight)
   const percentageScore = score !== null && maximumScore ? score / maximumScore * 100 : null
-  const allowed = ['name', 'type', 'weight', 'officialDeadline', 'internalDeadline', 'eventDate', 'submissionPlatform', 'submissionUrl', 'instructions', 'examFormat', 'estimatedEffortMinutes', 'actualEffortMinutes', 'groupAssessment', 'status', 'score', 'maximumScore', 'feedback', 'reflection', 'submittedAt', 'gradedAt']
+  const allowed = ['name', 'type', 'weight', 'officialDeadline', 'internalDeadline', 'eventDate', 'eventEndDate', 'submissionPlatform', 'submissionUrl', 'instructions', 'examFormat', 'estimatedEffortMinutes', 'actualEffortMinutes', 'groupAssessment', 'status', 'score', 'maximumScore', 'feedback', 'reflection', 'submittedAt', 'gradedAt']
   return {
     ...Object.fromEntries(allowed.filter(key => input[key] !== undefined).map(key => [key, input[key]])),
     normalizedName: normalizeAssessmentName(input.name), percentageScore,
@@ -30,7 +30,7 @@ export function serializeAssessment(value) {
   return {
     ...value, weight: decimal(value.weight), score: decimal(value.score), maximumScore: decimal(value.maximumScore),
     percentageScore: decimal(value.percentageScore), weightedScore: decimal(value.weightedScore),
-    officialDeadline: date(value.officialDeadline), internalDeadline: date(value.internalDeadline), eventDate: date(value.eventDate),
+    officialDeadline: date(value.officialDeadline), internalDeadline: date(value.internalDeadline), eventDate: date(value.eventDate), eventEndDate: date(value.eventEndDate),
     submittedAt: date(value.submittedAt), gradedAt: date(value.gradedAt), createdAt: date(value.createdAt), updatedAt: date(value.updatedAt),
     milestones: value.milestones?.map(item => ({ ...item, dueDate: date(item.dueDate), createdAt: date(item.createdAt), updatedAt: date(item.updatedAt) })) || [],
     deliverables: value.deliverables || []
@@ -64,6 +64,7 @@ export async function updateAssessment(userId, assessmentId, input, database = p
   if (!existing) throw domainError(404, 'Assessment not found.')
   const merged = { ...existing, ...input }
   if (merged.internalDeadline && merged.officialDeadline && new Date(merged.internalDeadline) > new Date(merged.officialDeadline)) throw domainError(400, 'Internal deadline must not be after the official deadline.')
+  if (merged.eventDate && merged.eventEndDate && new Date(merged.eventEndDate) <= new Date(merged.eventDate)) throw domainError(400, 'Event end time must be after its start time.')
   if ((merged.score === null) !== (merged.maximumScore === null)) throw domainError(400, 'Score and maximum score must be provided together.')
   if (merged.score !== null && merged.maximumScore !== null && Number(merged.score) > Number(merged.maximumScore)) throw domainError(400, 'Score cannot exceed the maximum score.')
   return serializeAssessment(await database.assessment.update({ where: { id: assessmentId }, data: assessmentData(merged), include: assessmentInclude }))

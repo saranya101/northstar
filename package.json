@@ -21,6 +21,7 @@
     "opportunities:sync": "JITI_ALIAS=\"{\\\"#shared\\\":\\\"$PWD/shared\\\"}\" jiti server/opportunity-scanner/run-cli.js",
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
+    "seed:semester": "node scripts/seed-current-semester.js",
     "test": "vitest",
     "test:run": "vitest run"
   },
