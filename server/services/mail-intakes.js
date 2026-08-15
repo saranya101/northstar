@@ -74,9 +74,40 @@ async function interpretedMail(input, interpreter) {
   return interpreted
 }
 
+const relationshipTokens = value => new Set(String(value || '')
+  .toLocaleLowerCase()
+  .replace(/\bs\s*&\s*t\b/g, 'sales trading')
+  .replace(/&/g, ' and ')
+  .match(/[a-z0-9]+/g)
+  ?.filter(token => !['and', 'the', 'case', 'assessment', 'portfolio', 'selection', 'application', 'recruitment', 'opportunity'].includes(token)) || [])
+
+async function withPossibleRelatedOpportunity(userId, interpreted, database) {
+  const admin = interpreted.extractedPayload?.admin
+  if (!admin?.selectionStage || !admin.organisation || !admin.title || !database.userOpportunity?.findMany) return interpreted
+  const requiredTokens = relationshipTokens(admin.title)
+  if (requiredTokens.size < 2) return interpreted
+  const rows = await database.userOpportunity.findMany({
+    where: { userId, opportunity: { organisation: { equals: admin.organisation, mode: 'insensitive' } } },
+    include: { opportunity: { select: { id: true, title: true, organisation: true } } },
+    take: 10
+  })
+  const matches = rows.map(row => row.opportunity).filter(opportunity => {
+    const candidateTokens = relationshipTokens(opportunity.title)
+    return [...requiredTokens].every(token => candidateTokens.has(token))
+  })
+  if (matches.length !== 1) return interpreted
+  return {
+    ...interpreted,
+    extractedPayload: {
+      ...interpreted.extractedPayload,
+      admin: { ...admin, possibleRelatedOpportunity: matches[0] }
+    }
+  }
+}
+
 async function persistMailIntake(userId, input, database, interpreter) {
   const normalized = normalizeStructuredMailInput(input)
-  const interpreted = await interpretedMail(normalized, interpreter)
+  const interpreted = await withPossibleRelatedOpportunity(userId, await interpretedMail(normalized, interpreter), database)
   const merged = { ...normalized, ...interpreted.metadata }
   const contentFingerprint = mailContentFingerprint(merged)
   const existing = await database.mailIntake.findUnique({

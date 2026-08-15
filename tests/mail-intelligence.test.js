@@ -71,6 +71,30 @@ describe('deterministic NTU mail intelligence', () => {
     expect(required.extractedPayload.admin).toMatchObject({ requiresAction: true, exactDeadline: '2026-08-19T15:59:00.000Z' })
   })
 
+  it('interprets an IBC selection-stage case assessment as an exact action', () => {
+    const result = deterministicMailInterpretation({ rawText: NTU_MAIL_FIXTURES.ibcCaseAssessment })
+    expect(result.classification.category).toBe('ACTION_REQUIRED')
+    expect(result.extractedPayload.opportunity).toBeNull()
+    expect(result.extractedPayload.admin).toMatchObject({
+      title: 'IBC S&T Portfolio — Case Assessment',
+      organisation: 'NTU Investment Banking Club',
+      academicSubtype: 'REQUIRED_ACTION',
+      selectionStage: 'ASSESSMENT',
+      actionRequired: 'Complete and submit case assessment',
+      requiresAction: true,
+      exactDeadline: '2026-08-19T15:59:00.000Z'
+    })
+  })
+
+  it('does not turn selection or notification timing into a deadline', () => {
+    const selection = deterministicMailInterpretation({ rawText: NTU_MAIL_FIXTURES.selectionProcessOnly })
+    const notification = deterministicMailInterpretation({ rawText: NTU_MAIL_FIXTURES.interviewNotification })
+    expect(selection.classification.category).not.toBe('ACTION_REQUIRED')
+    expect(selection.extractedPayload.admin).toBeNull()
+    expect(notification.classification.category).toBe('OPPORTUNITY')
+    expect(notification.extractedPayload.opportunity.deadline).toBeNull()
+  })
+
   it('keeps event classification distinct when no application or recruitment flow exists', () => {
     expect(classifyMailText(NTU_MAIL_FIXTURES.networkingEvent).category).toBe('EVENT')
   })

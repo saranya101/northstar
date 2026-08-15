@@ -123,7 +123,29 @@ Submit by 19 August 2026, 23:59.`,
 Organisation: Example Bank
 Applications are open for a summer internship.
 Only shortlisted candidates will receive an email by 21 Aug 2026.
-Apply at https://careers.example.com/apply.`
+Apply at https://careers.example.com/apply.`,
+  ibcCaseAssessment: `Subject: IBC S&T Portfolio — Case Assessment
+
+Dear Applicant,
+
+Thank you for your interest in the IBC S&T Portfolio.
+
+As part of the selection process, we would like to invite you to complete a case assessment.
+
+Kindly review the instructions carefully and submit your completed assessments by 19th August 2026, 23:59.
+
+Best Regards,
+NTU Investment Banking Club`,
+  selectionProcessOnly: `Subject: IBC S&T Portfolio selection update
+Dear Applicant,
+Your application is currently in the selection process. Further information will follow.
+Best Regards,
+NTU Investment Banking Club`,
+  interviewNotification: `Subject: Banking Internship Applications
+Organisation: Example Bank
+Applications are open for a summer internship.
+Shortlisted candidates will receive an interview email by 21 Aug 2026.
+No response is requested.`
 })
 
 export const TWO_EMAIL_PASTE = `${NTU_MAIL_FIXTURES.internshipNoDeadline}\n\n${NTU_MAIL_FIXTURES.ccaDeadline}`

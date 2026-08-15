@@ -2,8 +2,9 @@ import { parseOpportunityDateFragment } from './opportunity-text-parser'
 
 const MODULE = /\b[A-Z]{2,4}\d{4}\b/
 const BOILERPLATE = /\b(any multimedia items must be viewed online|view announcement|notification preferences?|confidentiality notice|email brought to you by|unsubscribe|do not reply to this automated|privileged and confidential)\b/i
-const ACTION = /\b(action required|you (?:are required to|must)\s+(?:submit|complete|respond|register|upload|acknowledge)|please\s+(?:submit|complete|respond|register|upload|acknowledge)|(?:submit|complete|respond|register|upload)\s+by\b|(?:submit|complete|respond|register|upload)\s+(?:the\s+)?[^.]{0,80}\s+by\b)/i
-const DEADLINE = /\b(deadline|due by|submit by|complete by|respond by|register by|upload by|apply by)\b/i
+const ACTION = /\b(action required|you (?:are required to|must)\s+(?:submit|complete|respond|register|upload|acknowledge)|shortlisted candidates are required to|(?:we would like to )?invite you to complete (?:a |the )?(?:case )?assessment|interview invitation|assessment invitation|please\s+(?:submit|complete|respond|register|upload|acknowledge)|(?:submit|complete|respond|register|upload)\s+by\b|(?:submit|complete|respond|register|upload)\s+(?:the\s+|your\s+)?[^.]{0,80}\s+by\b)/i
+const DEADLINE = /\b(deadline|due by|submit(?:\s+(?:the\s+|your\s+)?[^.]{0,80})?\s+by|complete(?:\s+(?:the\s+|your\s+)?[^.]{0,80})?\s+by|respond by|register by|upload by|apply by)\b/i
+const SELECTION_STAGE = /\b(selection process|case assessment|assessment invitation|interview invitation|shortlisted candidates are required to)\b/i
 const MONTHS = { jan: 1, january: 1, feb: 2, february: 2, mar: 3, march: 3, apr: 4, april: 4, may: 5, jun: 6, june: 6, jul: 7, july: 7, aug: 8, august: 8, sep: 9, sept: 9, september: 9, oct: 10, october: 10, nov: 11, november: 11, dec: 12, december: 12 }
 
 const clean = value => value?.replace(/^[\s:*#–—-]+|[\s:;|]+$/g, '').replace(/[ \t]+/g, ' ').trim() || null
@@ -38,6 +39,21 @@ function announcementTitle(subject) {
   value = value.replace(/^\s*[A-Z]{2,4}\d{4}\s+(?:Group|G(?:rp)?)\s*\w+\s*[-–—:]\s*/i, '')
   value = value.replace(/\s+on\s+\d{1,2}\s+[A-Za-z]+(?:\s+20\d{2})?(?:\s*\([^)]+\))?\s*$/i, '')
   return clean(value) || subject
+}
+
+function selectionOrganisation(sourceLines) {
+  const labelled = sourceLines.find(line => /^(?:organisation|organization)\s*[:–-]/i.test(line))
+  if (labelled) return clean(labelled.replace(/^(?:organisation|organization)\s*[:–-]\s*/i, ''))
+  const signoff = sourceLines.findIndex(line => /^(?:best\s+)?regards|^sincerely/i.test(line))
+  const candidate = signoff >= 0 ? sourceLines[signoff + 1] : null
+  return candidate && /\b(?:club|society|office|association|capital|bank|university)\b/i.test(candidate) ? candidate : null
+}
+
+function selectionTitle(combined) {
+  const portfolio = combined.match(/\bIBC\s+S\s*&\s*T\s+Portfolio\b/i)?.[0]
+    || combined.match(/\b[A-Z][A-Za-z0-9& ]{1,70}\s+Portfolio\b/)?.[0]
+  if (!portfolio || !/\b(?:case )?assessment\b/i.test(combined)) return null
+  return `${clean(portfolio.replace(/\s+/g, ' '))} — Case Assessment`
 }
 
 function subtype(text, requiresAction, resources) {
@@ -75,8 +91,12 @@ export function interpretAcademicMail(rawText, metadata = {}) {
   const sourceLines = lines(relevant)
   const combined = `${metadata.subject || ''}\n${relevant}`
   const moduleCode = combined.match(MODULE)?.[0] || null
-  const actionRequired = sourceLines.find(line => ACTION.test(line)) || null
-  const requiresAction = Boolean(actionRequired)
+  const actionLine = sourceLines.find(line => ACTION.test(line)) || null
+  const selectionStage = SELECTION_STAGE.test(combined) ? (/\b(?:case )?assessment\b/i.test(combined) ? 'ASSESSMENT' : 'SELECTION') : null
+  const actionRequired = selectionStage === 'ASSESSMENT' && actionLine && /\bsubmit\b/i.test(combined)
+    ? 'Complete and submit case assessment'
+    : actionLine
+  const requiresAction = Boolean(actionLine)
   const deadlineLine = requiresAction ? sourceLines.find(line => DEADLINE.test(line) && parseOpportunityDateFragment(line)) || null : null
   const exactDeadline = deadlineLine ? parseOpportunityDateFragment(deadlineLine) : null
   const eventLine = sourceLines.find(line => /\b(class|lesson|seminar|tutorial|lecture|date)\b/i.test(line) && /\b\d{1,2}\s+[A-Za-z]{3,9}\b/.test(line)) || metadata.subject || ''
@@ -86,9 +106,11 @@ export function interpretAcademicMail(rawText, metadata = {}) {
   const venueLine = sourceLines.find(line => /^(?:venue|location)\s*[:–-]/i.test(line))
   const venue = clean(venueLine?.replace(/^(?:venue|location)\s*[:–-]\s*/i, ''))
   const resources = resourcesFrom(rawText)
-  const evidence = sourceLines.filter(line => !BOILERPLATE.test(line) && (MODULE.test(line) || line === actionRequired || line === deadlineLine || line === venueLine || /\b\d{1,2}\s+[A-Za-z]{3,9}\b/.test(line) || /\.(?:xlsx?|docx?|pdf|pptx?)\b|https?:\/\//i.test(line))).slice(0, 12)
+  const evidence = sourceLines.filter(line => !BOILERPLATE.test(line) && (MODULE.test(line) || line === actionLine || line === deadlineLine || line === venueLine || /\b\d{1,2}(?:st|nd|rd|th)?\s+[A-Za-z]{3,9}\b/.test(line) || /\.(?:xlsx?|docx?|pdf|pptx?)\b|https?:\/\//i.test(line))).slice(0, 12)
   return {
-    title: announcementTitle(metadata.subject) || sourceLines.find(line => !/^(?:from|to|sent|subject):/i.test(line)) || 'Academic announcement',
+    title: selectionTitle(combined) || announcementTitle(metadata.subject) || sourceLines.find(line => !/^(?:from|to|sent|subject):/i.test(line)) || 'Academic announcement',
+    organisation: selectionStage ? selectionOrganisation(sourceLines) : null,
+    selectionStage,
     moduleCode,
     academicSubtype: subtype(combined, requiresAction, resources),
     eventDate,

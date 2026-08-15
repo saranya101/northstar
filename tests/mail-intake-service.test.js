@@ -41,6 +41,7 @@ function databaseFixture() {
       })
     },
     userModuleEnrolment: { findFirst: vi.fn().mockResolvedValue(null) },
+    userOpportunity: { findMany: vi.fn().mockResolvedValue([]) },
     opportunity: { create: vi.fn() }, task: { create: vi.fn() }, assessment: { create: vi.fn() }
   }
   return { database, records }
@@ -183,6 +184,22 @@ describe('mail intake persistence and review', () => {
     const result = await convertMailToTask('user-1', intake.id, { expectedUpdatedAt: intake.updatedAt }, database)
     expect(canonical.createTask).toHaveBeenCalledWith('user-1', expect.objectContaining({ type: 'ADMIN', description: NTU_MAIL_FIXTURES.requiredAdmin }), database)
     expect(result).toMatchObject({ taskId: 'task-1', intake: { status: 'CONVERTED' } })
+  })
+
+  it('keeps selection-stage mail as task review and only surfaces one deterministic related opportunity', async () => {
+    const { database } = databaseFixture()
+    database.userOpportunity.findMany.mockResolvedValue([{
+      opportunity: { id: 'existing-ibc', title: 'IBC Sales & Trading Recruitment', organisation: 'NTU Investment Banking Club' }
+    }])
+    const intake = await createMailIntake('user-1', { rawText: NTU_MAIL_FIXTURES.ibcCaseAssessment }, database)
+    expect(intake).toMatchObject({ classification: 'ACTION_REQUIRED', extractedPayload: { admin: {
+      possibleRelatedOpportunity: { id: 'existing-ibc', title: 'IBC Sales & Trading Recruitment', organisation: 'NTU Investment Banking Club' }
+    } } })
+    expect(database.userOpportunity.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: {
+      userId: 'user-1', opportunity: { organisation: { equals: 'NTU Investment Banking Club', mode: 'insensitive' } }
+    } }))
+    expect(canonical.createOpportunity).not.toHaveBeenCalled()
+    expect(canonical.createTask).not.toHaveBeenCalled()
   })
 
   it('dismisses or retains a note without creating an opportunity, task, or assessment', async () => {

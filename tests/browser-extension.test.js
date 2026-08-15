@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { createMemoryDeduper, createScanCancellation, isAllowedOutlookUrl, normalizeAutoSyncPreference, normalizeStructuredOutlookMessage, readingPaneHasSettled, sanitizeHttpLink, summarizeBatchItem } from '../browser-extension/extension-helpers.js'
+import { createMemoryDeduper, createScanCancellation, isAllowedOutlookUrl, isPlausibleOutlookBody, normalizeAutoSyncPreference, normalizeStructuredOutlookMessage, readingPaneHasSettled, sanitizeHttpLink, summarizeBatchItem } from '../browser-extension/extension-helpers.js'
 
 describe('Northstar Mail browser extension helpers', () => {
   it.each([
@@ -37,6 +37,20 @@ describe('Northstar Mail browser extension helpers', () => {
       receivedAt: '2026-08-14T17:30:00.000Z', rawText: 'Hello students.\n\nApplications are now open for review.',
       links: [{ text: 'Apply', url: 'https://example.edu.sg/apply' }]
     })
+  })
+
+  it('rejects subject-only, empty, and Outlook-chrome extractions before they can be sent', () => {
+    expect(isPlausibleOutlookBody('')).toBe(false)
+    expect(isPlausibleOutlookBody('Reply Reply all Forward Archive Delete More actions Previous Next Close')).toBe(false)
+    try { normalizeStructuredOutlookMessage({ subject: 'Nanyang Capital AY26/27 Investment Paper (Freshmen)', rawText: '' }) }
+    catch (error) { expect(error).toMatchObject({ code: 'INCOMPLETE_MESSAGE', message: expect.stringMatching(/body could not be extracted safely/i) }) }
+    expect(isPlausibleOutlookBody('Dear applicant, please review the attached investment paper and submit your response by the stated deadline. Regards, Nanyang Capital.')).toBe(true)
+
+    const worker = readFileSync(new URL('../browser-extension/service-worker.js', import.meta.url), 'utf8')
+    expect(worker.indexOf('normalizeStructuredOutlookMessage(message)')).toBeLessThan(worker.indexOf('fetch(`${NORTHSTAR_BASE_URL}/api/mail-intake/batch`'))
+    expect(worker).toContain("if (result?.status !== 'OK') return")
+    const extractor = readFileSync(new URL('../browser-extension/outlook-extractor.js', import.meta.url), 'utf8')
+    expect(extractor).toContain("status: 'INCOMPLETE_MESSAGE'")
   })
 
   it('uses only the requested minimum permissions and contains no sensitive APIs', () => {

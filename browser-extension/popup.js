@@ -15,6 +15,7 @@ async function activeOutlookTab() { const [tab] = await chrome.tabs.query({ acti
 const request = message => chrome.runtime.sendMessage(message)
 
 function extractionError(status) {
+  if (status === 'INCOMPLETE_MESSAGE') return 'Outlook exposed the subject but not a complete message body. Nothing was sent. Try reopening the email or run diagnostics.'
   if (status === 'NO_OPEN_MESSAGE') return 'No open email was found. Open one message in the reading pane and try again.'
   if (status === 'AMBIGUOUS_MESSAGE') return 'More than one message body is visible. Open one email by itself and try again.'
   if (status === 'UNSUPPORTED_OUTLOOK_DOM') return 'This Outlook layout is not recognised safely yet. Run diagnostics.'

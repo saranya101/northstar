@@ -38,7 +38,7 @@ export function parseOpportunityDateFragment(fragment, timeZone = 'Asia/Singapor
     if (match[6]?.toLowerCase() === 'am' && hour === 12) hour = 0
     return dateFromParts(match[1], Number(match[2]) - 1, match[3], hour, match[5] || 0, timeZone)
   }
-  match = text.match(/\b(\d{1,2})\s+(January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\s*,?\s*(20\d{2})(?:\s*(?:,|at)?\s*(\d{1,2})(?::([0-5]\d))?\s*(am|pm)?)?\b/i)
+  match = text.match(/\b(\d{1,2})(?:st|nd|rd|th)?\s+(January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\s*,?\s*(20\d{2})(?:\s*(?:,|at)?\s*(\d{1,2})(?::([0-5]\d))?\s*(am|pm)?)?\b/i)
   if (!match) return null
   let hour = Number(match[4] || 0)
   if (match[6]?.toLowerCase() === 'pm' && hour < 12) hour += 12

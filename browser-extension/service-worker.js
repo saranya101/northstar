@@ -4,6 +4,7 @@ import { extractOpenOutlookMessage } from './outlook-extractor.js'
 const session = { sent: 0, created: 0, duplicates: 0, lastError: null }
 const sentFingerprints = createMemoryDeduper()
 const pendingTabs = new Map()
+const errorCode = error => error?.code || (error instanceof TypeError ? 'NETWORK_ERROR' : error.message)
 
 async function fingerprint(message) {
   const value = JSON.stringify([message.subject, message.senderEmail, message.receivedAt, message.rawText, message.links])
@@ -46,7 +47,7 @@ async function autoSync(tabId) {
   if (!normalizeAutoSyncPreference(autoSyncEnabled)) return
   const result = await extractFromTab(tabId)
   if (result?.status !== 'OK') return
-  try { await sendMessage(result.message) } catch (error) { session.lastError = error instanceof TypeError ? 'NETWORK_ERROR' : error.message }
+  try { await sendMessage(result.message) } catch (error) { session.lastError = errorCode(error) }
 }
 
 chrome.runtime.onMessage.addListener((message, sender, respond) => {
@@ -71,6 +72,6 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
       catch { return { status: 'UNSUPPORTED_OUTLOOK_DOM', visibleCandidates: [] } }
     }
     return { status: 'UNKNOWN_REQUEST' }
-  })().then(respond).catch(error => respond({ status: 'ERROR', error: error instanceof TypeError ? 'NETWORK_ERROR' : error.message }))
+  })().then(respond).catch(error => respond({ status: 'ERROR', error: errorCode(error) }))
   return true
 })

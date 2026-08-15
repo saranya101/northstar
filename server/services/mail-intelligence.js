@@ -3,12 +3,12 @@ import { interpretAcademicMail, withoutAcademicBoilerplate } from './academic-ma
 
 const HEADER = /^(from|sender|subject|sent|date|to|cc):\s*/i
 const MODULE_CODE = /\b[A-Z]{2,4}\d{4}\b/
-const ACTION_REQUIRED = /\b(action required|mandatory|required action|you (?:are required to|must)|must complete|complete (?:the )?form|submit (?:the )?(?:form|declaration)|submit by|respond by|registration action)\b/i
+const ACTION_REQUIRED = /\b(action required|mandatory|required action|you (?:are required to|must)|shortlisted candidates are required to|must complete|complete (?:the )?form|complete (?:a |the )?(?:case )?assessment|submit (?:the |your )?(?:form|declaration|assessment|completed assessment)|submit(?:\s+[^.]{0,80})?\s+by|complete(?:\s+[^.]{0,80})?\s+by|respond by|please (?:complete|submit)|interview invitation|assessment invitation|registration action)\b/i
 const OPPORTUNITY = /\b(recruit(?:ment|ing)?|internship|career programme|competition|challenge|scholarship|exchange programme|gem (?:explorer|discoverer|programme)|mentor(?:ship|ing)?|volunteer(?:ing)?|leadership programme|applications? (?:are )?open|call for applications)\b/i
 const ACADEMIC = /\b(venue change|class venue|lecture|tutorial|seminar|module announcement|assessment|quiz|exam(?:ination)?|teaching update|lesson|course registration|add\/drop)\b/i
 const EVENT = /\b(networking (?:session|event)|employer event|workshop|webinar|talk|information session|info session|career fair|fireside chat)\b/i
 const NOISE = /\b(newsletter|weekly digest|monthly digest|unsubscribe|general publicity|promotional update)\b/i
-const DEADLINE_LINE = /\b(deadline|close[sd]?|apply by|submit by|due|week\s*\d+)\b/i
+const DEADLINE_LINE = /\b(deadline|close[sd]?|apply by|submit(?:\s+[^.]{0,80})?\s+by|complete(?:\s+[^.]{0,80})?\s+by|respond by|due|week\s*\d+)\b/i
 const ACTION_LINE = /\b(action required|must|required|complete|submit|respond|register|apply)\b/i
 
 const clean = value => value?.replace(/\r/g, '').replace(/[ \t]+/g, ' ').trim() || null
@@ -101,5 +101,5 @@ export function deterministicMailInterpretation(input) {
 }
 
 export function createMailInterpreter() {
-  return { key: 'ntu-mail-deterministic-v2', interpret: async input => deterministicMailInterpretation(input) }
+  return { key: 'ntu-mail-deterministic-v3', interpret: async input => deterministicMailInterpretation(input) }
 }

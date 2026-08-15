@@ -24,9 +24,21 @@ export function extractOpenOutlookMessage(options = {}) {
     ariaLabel: compact(element.getAttribute('aria-label')).slice(0, 160) || null
   })
 
+  const plausibleBodyText = value => {
+    const text = compact(value)
+    if (text.length < 40 || text.length > 50_000) return false
+    const words = text.match(/[\p{L}\p{N}][\p{L}\p{N}'’&/-]*/gu) || []
+    if (words.length < 7 || new Set(words.map(word => word.toLocaleLowerCase())).size < 5) return false
+    const chromeOnly = /^(?:new mail|inbox|focused|other|filter|sort|select|reply|reply all|forward|archive|delete|mark as unread|more actions|previous|next|close|open in new window|print|apps?)(?:\s*[·|,;:]?\s*)+$/i
+    if (chromeOnly.test(text)) return false
+    const chromeTokens = text.match(/\b(?:reply|reply all|forward|archive|delete|mark as unread|more actions|previous|next|close|open in new window|print)\b/gi) || []
+    const proseSignals = [/[.!?](?:\s|$)/, /\b(?:dear|hello|hi|regards|thank|please|kindly|we|you|your)\b/i, /\n/].filter(pattern => pattern.test(value)).length
+    return proseSignals >= 1 && chromeTokens.length * 3 < words.length
+  }
+
   const readingPanes = [...document.querySelectorAll('[aria-label*="reading pane" i], [role="main"]')].filter(visible)
   const roots = readingPanes.length ? readingPanes : []
-  const bodySelectors = ['[role="document"]', '[aria-label*="message body" i]', '[aria-label*="email body" i]']
+  const bodySelectors = ['[role="document"]', '[aria-label*="message body" i]', '[aria-label*="email body" i]', '[aria-label*="message content" i]', '[aria-label*="mail body" i]']
   const candidates = []
   const seenNodes = new Set()
   for (const root of roots) {
@@ -34,15 +46,19 @@ export function extractOpenOutlookMessage(options = {}) {
       const nodes = [...root.querySelectorAll(selector)]
       if (root.matches(selector)) nodes.unshift(root)
       for (const node of nodes) {
-        if (seenNodes.has(node) || !visible(node)) continue
+        if (seenNodes.has(node) || !visible(node) || node.closest('[role="navigation"], [role="toolbar"], [role="listbox"], [aria-label*="message list" i]')) continue
         seenNodes.add(node)
         const text = normalize(node.innerText || node.textContent)
-        if (text.length < 20 || text.length > 50_000) continue
+        if (!plausibleBodyText(text)) continue
         let score = 0
         if (node.getAttribute('role') === 'document') score += 6
         if (/message body|email body/i.test(node.getAttribute('aria-label') || '')) score += 6
         if (node.closest('[aria-label*="reading pane" i]')) score += 4
         if (text.length >= 80) score += 2
+        if (/\b(?:dear|hello|hi)\b/i.test(text)) score += 2
+        if (/\b(?:regards|sincerely|thank you)\b/i.test(text)) score += 1
+        const controlCount = node.querySelectorAll('button, [role="button"], input, select').length
+        if (controlCount > 4) score -= Math.min(6, controlCount)
         candidates.push({ node, root, text, score })
       }
     }
@@ -67,10 +83,15 @@ export function extractOpenOutlookMessage(options = {}) {
   }
   if (diagnosticMode) return { status: 'DIAGNOSTIC', diagnostic }
   if (!roots.length) return { status: 'UNSUPPORTED_OUTLOOK_DOM', diagnostic }
-  if (!plausible.length) return { status: 'NO_OPEN_MESSAGE', diagnostic }
+  if (!plausible.length) {
+    const hasVisibleMessageMetadata = [...document.querySelectorAll('[role="main"] h1, [role="main"] h2, [role="main"] [role="heading"], [aria-label*="subject" i]')]
+      .some(element => visible(element) && compact(element.innerText || element.textContent || element.getAttribute('aria-label')).length >= 3)
+    return { status: hasVisibleMessageMetadata ? 'INCOMPLETE_MESSAGE' : 'NO_OPEN_MESSAGE', diagnostic }
+  }
   if (plausible.length !== 1) return { status: 'AMBIGUOUS_MESSAGE', diagnostic }
 
   const selected = plausible[0]
+  if (!plausibleBodyText(selected.text)) return { status: 'INCOMPLETE_MESSAGE', diagnostic }
   const boundary = selected.node.closest('[aria-label*="reading pane" i]') || selected.root
   const beforeBody = element => Boolean(element.compareDocumentPosition(selected.node) & Node.DOCUMENT_POSITION_FOLLOWING)
   const metadataNodes = [...boundary.querySelectorAll('h1, h2, h3, [role="heading"], [aria-label], a[href^="mailto:"], time[datetime]')]
