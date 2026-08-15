@@ -145,7 +145,25 @@ NTU Investment Banking Club`,
 Organisation: Example Bank
 Applications are open for a summer internship.
 Shortlisted candidates will receive an interview email by 21 Aug 2026.
-No response is requested.`
+No response is requested.`,
+  asmiHackathon: `From: Student Life-Nanyang Business School <studentlife@ntu.edu.sg>
+Subject: ASMI M&OE Hackathon 2026 | NTU College of Business (Nanyang Business School)
+
+The Association of Singapore Marine & Offshore Energy Industries (ASMI) invites you to be part our 2nd ASMI Marine & Offshore Energy Hackathon 2026.
+
+This is a non-coding, solutions-based hackathon.
+Date: 7 October 2026 (Wednesday)
+Time: 8:00 AM - 6:30 PM
+Venue: 9 Jurong Town Hall Road #04-03 Trade Association Hub Jurong Town Hall, 609431
+Theme: Breaking Barriers: Steering Toward an Inclusive and Accessible Marine and Offshore Energy Industry
+
+Open to All Disciplines
+Students from business, IT, design, sustainability and other fields are encouraged.
+Sign up as a team of five.
+The Champion Team of each category will walk away with SGD $500.00 cash.
+Register: https://forms.office.com/r/ASMIHackathon2026
+
+Top teams will present at the Marine & Offshore Energy Youth Forum 2026 on 21 October 2026.`
 })
 
 export const TWO_EMAIL_PASTE = `${NTU_MAIL_FIXTURES.internshipNoDeadline}\n\n${NTU_MAIL_FIXTURES.ccaDeadline}`

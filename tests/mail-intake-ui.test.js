@@ -21,4 +21,10 @@ describe('multi-email intake review UI', () => {
     expect(component).toContain("decide(intake, 'dismiss')")
     expect(component).not.toMatch(/Delete Outlook/i)
   })
+
+  it('renders canonical opportunity event details in compact review', () => {
+    for (const field of ['startAt', 'endAt', 'location', 'eligibilityText', 'requirements', 'benefits']) expect(component).toContain(`opportunity(intake).${field}`)
+    expect(component).toContain('Detected registration form')
+    expect(component).toContain('Save to Opportunity Radar')
+  })
 })

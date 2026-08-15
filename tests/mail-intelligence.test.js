@@ -95,6 +95,29 @@ describe('deterministic NTU mail intelligence', () => {
     expect(notification.extractedPayload.opportunity.deadline).toBeNull()
   })
 
+  it('extracts explicit ASMI hackathon event details without inventing a deadline', () => {
+    const result = deterministicMailInterpretation({ rawText: NTU_MAIL_FIXTURES.asmiHackathon })
+    expect(result.metadata.senderName).toBe('Student Life-Nanyang Business School')
+    expect(result.classification.category).toBe('OPPORTUNITY')
+    expect(result.extractedPayload.opportunity).toMatchObject({
+      title: 'ASMI Marine & Offshore Energy Hackathon 2026',
+      organisation: 'Association of Singapore Marine & Offshore Energy Industries (ASMI)',
+      category: 'HACKATHON',
+      startAt: '2026-10-07T00:00:00.000Z',
+      endAt: '2026-10-07T10:30:00.000Z',
+      location: '9 Jurong Town Hall Road #04-03 Trade Association Hub Jurong Town Hall, 609431',
+      eligibilityText: 'Open to all disciplines',
+      requirements: 'Team of 5',
+      benefits: 'SGD 500 cash prize for the champion team in each category',
+      applicationUrl: 'https://forms.office.com/r/ASMIHackathon2026',
+      deadline: null,
+      deadlineSourceText: null
+    })
+    expect(result.extractedPayload.opportunity.organisation).not.toBe(result.metadata.senderName)
+    expect(result.extractedPayload.opportunity.description).toContain('21 October 2026')
+    expect(result.extractedPayload.opportunity.startAt).not.toContain('2026-10-21')
+  })
+
   it('keeps event classification distinct when no application or recruitment flow exists', () => {
     expect(classifyMailText(NTU_MAIL_FIXTURES.networkingEvent).category).toBe('EVENT')
   })

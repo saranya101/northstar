@@ -4,7 +4,7 @@ import { interpretAcademicMail, withoutAcademicBoilerplate } from './academic-ma
 const HEADER = /^(from|sender|subject|sent|date|to|cc):\s*/i
 const MODULE_CODE = /\b[A-Z]{2,4}\d{4}\b/
 const ACTION_REQUIRED = /\b(action required|mandatory|required action|you (?:are required to|must)|shortlisted candidates are required to|must complete|complete (?:the )?form|complete (?:a |the )?(?:case )?assessment|submit (?:the |your )?(?:form|declaration|assessment|completed assessment)|submit(?:\s+[^.]{0,80})?\s+by|complete(?:\s+[^.]{0,80})?\s+by|respond by|please (?:complete|submit)|interview invitation|assessment invitation|registration action)\b/i
-const OPPORTUNITY = /\b(recruit(?:ment|ing)?|internship|career programme|competition|challenge|scholarship|exchange programme|gem (?:explorer|discoverer|programme)|mentor(?:ship|ing)?|volunteer(?:ing)?|leadership programme|applications? (?:are )?open|call for applications)\b/i
+const OPPORTUNITY = /\b(recruit(?:ment|ing)?|internship|career programme|hackathon|competition|challenge|scholarship|exchange programme|gem (?:explorer|discoverer|programme)|mentor(?:ship|ing)?|volunteer(?:ing)?|leadership programme|applications? (?:are )?open|call for applications)\b/i
 const ACADEMIC = /\b(venue change|class venue|lecture|tutorial|seminar|module announcement|assessment|quiz|exam(?:ination)?|teaching update|lesson|course registration|add\/drop)\b/i
 const EVENT = /\b(networking (?:session|event)|employer event|workshop|webinar|talk|information session|info session|career fair|fireside chat)\b/i
 const NOISE = /\b(newsletter|weekly digest|monthly digest|unsubscribe|general publicity|promotional update)\b/i
@@ -71,7 +71,7 @@ function plainOpportunity(candidate, subject, rawText) {
   const value = key => candidate[key]?.value ?? null
   const sourceLines = lines(rawText)
   return {
-    title: subject || value('title'), organisation: value('organisation'), category: value('category'),
+    title: value('title') || subject, organisation: value('organisation'), category: value('category'),
     description: lines(rawText).filter(line => !HEADER.test(line)).join('\n').slice(0, 5000) || null,
     deadline: value('deadline'), deadlineSourceText: lines(rawText).find(line => DEADLINE_LINE.test(line)) || null,
     applicationUrl: value('applicationUrl'), sourceUrl: value('sourceUrl'), startAt: value('startAt'), endAt: value('endAt'),
@@ -101,5 +101,5 @@ export function deterministicMailInterpretation(input) {
 }
 
 export function createMailInterpreter() {
-  return { key: 'ntu-mail-deterministic-v3', interpret: async input => deterministicMailInterpretation(input) }
+  return { key: 'ntu-mail-deterministic-v4', interpret: async input => deterministicMailInterpretation(input) }
 }
