@@ -114,6 +114,39 @@ describe('Today upcoming class preparation', () => {
     expect(database.classSession).toBeUndefined()
   })
 
+  it('omits recess classes and maps the first post-recess preparation to Week 8', async () => {
+    const classSession = {
+      id: 'session-post-recess', classType: 'SEMINAR', groupLabel: '11', dayOfWeek: 'TUESDAY',
+      startMinutes: 810, endMinutes: 980, venue: 'ESR4', recurrence: 'WEEKLY', weekNumbers: [],
+      deliveryMode: 'IN_PERSON', source: 'MANUAL'
+    }
+    const database = {
+      userSemester: { findFirst: vi.fn().mockResolvedValue({
+        ...semester,
+        academicTerm: {
+          ...semester.academicTerm,
+          recessStartDate: new Date('2026-09-28T00:00:00.000Z'),
+          recessEndDate: new Date('2026-10-04T00:00:00.000Z')
+        },
+        moduleEnrolments: [{
+          ...enrolment, classSessions: [classSession], assessments: [], recurringCoursework: [],
+          weekPreparations: [{ teachingWeek: 8, materialStatus: 'DONE', notesStatus: 'DONE', requiredWorkStatus: 'NOT_REQUIRED', practiceStatus: 'IN_PROGRESS', questions: null }]
+        }]
+      }) },
+      task: { findMany: vi.fn().mockResolvedValue([]) }
+    }
+
+    const recess = await getToday('user-1', database, new Date('2026-09-28T04:00:00.000Z'))
+    const resumed = await getToday('user-1', database, new Date('2026-10-05T04:00:00.000Z'))
+
+    expect(recess.classes).toEqual([])
+    expect(recess.upcomingClasses).toEqual([])
+    expect(resumed.upcomingClasses).toEqual([expect.objectContaining({
+      id: 'class:session-post-recess:2026-10-06', teachingWeek: 8,
+      preparation: expect.objectContaining({ readiness: 'IN_PROGRESS' })
+    })])
+  })
+
   it('derives Today and Upcoming from the same recurrence-aware occurrences', async () => {
     const session = (id, overrides) => ({ id, classType: 'SEMINAR', groupLabel: '1', dayOfWeek: 'TUESDAY', recurrence: 'WEEKLY', weekNumbers: [], deliveryMode: 'IN_PERSON', source: 'MANUAL', ...overrides })
     const enrolments = [

@@ -65,7 +65,9 @@ export async function listPreparation(userId, database = prisma) {
       academicYear: semester.academicTerm.academicYear,
       name: semester.academicTerm.name,
       teachingStartDate: dateValue(semester.academicTerm.teachingStartDate),
-      teachingEndDate: dateValue(semester.academicTerm.endDate)
+      teachingEndDate: dateValue(semester.academicTerm.endDate),
+      recessStartDate: dateValue(semester.academicTerm.recessStartDate),
+      recessEndDate: dateValue(semester.academicTerm.recessEndDate)
     },
     modules: enrolments.map(enrolment => ({
       enrolmentId: enrolment.id,

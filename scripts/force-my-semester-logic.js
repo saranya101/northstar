@@ -115,7 +115,12 @@ export function teachingWeekMappingStatus(academicTerm, sessions) {
   if (missingFields.length) return { safe: false, missingFields, occurrenceCount: 0 }
   const events = buildTimetableEvents({
     sessions,
-    activeSemester: { teachingStartDate: academicTerm.teachingStartDate, teachingEndDate: academicTerm.endDate }
+    activeSemester: {
+      teachingStartDate: academicTerm.teachingStartDate,
+      teachingEndDate: academicTerm.endDate,
+      recessStartDate: academicTerm.recessStartDate,
+      recessEndDate: academicTerm.recessEndDate
+    }
   })
   return { safe: events.length > 0, missingFields: [], occurrenceCount: events.length }
 }

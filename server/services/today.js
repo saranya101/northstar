@@ -35,7 +35,7 @@ export async function getToday(userId, database = prisma, now = new Date()) {
       enrolmentId: enrolment.id,
       module: { code: enrolment.offering.module.code, title: enrolment.offering.module.title }
     }))),
-    activeSemester: { teachingStartDate: semester.academicTerm.teachingStartDate, teachingEndDate: semester.academicTerm.endDate },
+    activeSemester: { teachingStartDate: semester.academicTerm.teachingStartDate, teachingEndDate: semester.academicTerm.endDate, recessStartDate: semester.academicTerm.recessStartDate, recessEndDate: semester.academicTerm.recessEndDate },
     rangeStart: dateKey(now),
     rangeEnd: dateKey(horizon)
   })

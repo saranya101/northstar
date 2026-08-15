@@ -7,7 +7,8 @@ import {
   buildMonthGrid,
   buildTimetableEvents,
   filterCalendarEvents,
-  groupCalendarEventsByDate
+  groupCalendarEventsByDate,
+  teachingWeekForDate
 } from '../shared/calendar/events.js'
 
 const modules = [
@@ -202,6 +203,46 @@ describe('academic calendar timetable expansion', () => {
 
     expect(events.filter(event => event.sourceId === 'weekly').map(event => event.weekNumber)).toEqual([1, 2, 3])
     expect(events.filter(event => event.sourceId === 'custom').map(event => event.weekNumber)).toEqual([2])
+  })
+
+  it('maps teaching weeks through an inclusive recess and fails invalid metadata safely', () => {
+    const term = {
+      teachingStartDate: '2026-08-10', teachingEndDate: '2026-10-18',
+      recessStartDate: '2026-09-28', recessEndDate: '2026-10-04'
+    }
+    expect(teachingWeekForDate('2026-08-10', term)).toBe(1)
+    expect(teachingWeekForDate('2026-08-31', term)).toBe(4)
+    expect(teachingWeekForDate('2026-09-21', term)).toBe(7)
+    expect(teachingWeekForDate('2026-09-28', term)).toBeNull()
+    expect(teachingWeekForDate('2026-10-01', term)).toBeNull()
+    expect(teachingWeekForDate('2026-10-04', term)).toBeNull()
+    expect(teachingWeekForDate('2026-10-05', term)).toBe(8)
+    expect(teachingWeekForDate('2026-10-12', term)).toBe(9)
+    expect(teachingWeekForDate('2026-10-05', { teachingStartDate: term.teachingStartDate })).toBe(9)
+    expect(teachingWeekForDate('2026-08-10', {})).toBeNull()
+    expect(teachingWeekForDate('2026-08-10', { teachingStartDate: term.teachingStartDate, recessStartDate: term.recessStartDate })).toBeNull()
+    expect(teachingWeekForDate('2026-08-10', { ...term, recessStartDate: '2026-10-04', recessEndDate: '2026-09-28' })).toBeNull()
+  })
+
+  it('skips weekly and explicit occurrences during recess and resumes explicit Week 8 afterwards', () => {
+    const activeSemester = {
+      teachingStartDate: '2026-08-10', teachingEndDate: '2026-10-18',
+      recessStartDate: '2026-09-28', recessEndDate: '2026-10-04'
+    }
+    const base = { ...timetable.sessions[0], dayOfWeek: 'MONDAY' }
+    const events = buildTimetableEvents({
+      activeSemester,
+      sessions: [
+        { ...base, id: 'weekly', recurrence: 'WEEKLY', weekNumbers: [] },
+        { ...base, id: 'custom', recurrence: 'CUSTOM', weekNumbers: [8] }
+      ]
+    })
+    const weekly = events.filter(event => event.sourceId === 'weekly')
+    const custom = events.filter(event => event.sourceId === 'custom')
+    expect(weekly.some(event => event.dateKey >= '2026-09-28' && event.dateKey <= '2026-10-04')).toBe(false)
+    expect(weekly.find(event => event.dateKey === '2026-10-05')).toMatchObject({ weekNumber: 8 })
+    expect(custom).toEqual([expect.objectContaining({ dateKey: '2026-10-05', weekNumber: 8 })])
+    expect(buildTimetableEvents({ sessions: [base], activeSemester: { ...activeSemester, recessEndDate: null } })).toEqual([])
   })
 })
 

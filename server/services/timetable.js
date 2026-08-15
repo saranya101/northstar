@@ -178,7 +178,7 @@ export async function listTimetable(userId, database = prisma) {
   const records = await database.classSession.findMany({ where: { userModuleEnrolment: { userId, userSemesterId: activeSemester.id, status: 'ACTIVE' } }, include: SESSION_INCLUDE, orderBy: [{ dayOfWeek: 'asc' }, { startMinutes: 'asc' }] })
   const sessions = records.map(serializeSession)
   const days = Object.fromEntries(['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'].map(day => [day, sessions.filter(session => session.dayOfWeek === day)]))
-  return { activeSemester: { id: activeSemester.id, label: `${activeSemester.academicTerm.academicYear} · ${activeSemester.academicTerm.name}`, teachingStartDate: dateValue(activeSemester.academicTerm.teachingStartDate), teachingEndDate: dateValue(activeSemester.academicTerm.endDate) }, days, sessions, conflicts: conflictPairs(sessions), currentDate: new Date().toISOString() }
+  return { activeSemester: { id: activeSemester.id, label: `${activeSemester.academicTerm.academicYear} · ${activeSemester.academicTerm.name}`, teachingStartDate: dateValue(activeSemester.academicTerm.teachingStartDate), teachingEndDate: dateValue(activeSemester.academicTerm.endDate), recessStartDate: dateValue(activeSemester.academicTerm.recessStartDate), recessEndDate: dateValue(activeSemester.academicTerm.recessEndDate) }, days, sessions, conflicts: conflictPairs(sessions), currentDate: new Date().toISOString() }
 }
 
 async function ownedEnrolment(userId, enrolmentId, database) {

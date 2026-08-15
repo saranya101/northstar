@@ -27,7 +27,7 @@ const nowKey = dateTimeKey(now)
 const todayMonday = startOfWeekMonday(dateKey(now))
 const events = computed(() => buildTimetableEvents({
   sessions: props.classSessions.map(session => ({ ...session, enrolmentId: props.enrolmentId, module: { code: props.moduleCode } })),
-  activeSemester: { teachingStartDate: props.academicTerm.teachingStartDate, teachingEndDate: props.academicTerm.teachingEndDate }
+  activeSemester: { teachingStartDate: props.academicTerm.teachingStartDate, teachingEndDate: props.academicTerm.teachingEndDate, recessStartDate: props.academicTerm.recessStartDate, recessEndDate: props.academicTerm.recessEndDate }
 }))
 const allWeeks = computed(() => [...new Set(events.value.map(event => event.weekNumber))].sort((a, b) => a - b))
 const moduleOverview = computed(() => overview.value?.modules?.find(module => module.enrolmentId === props.enrolmentId) || null)
