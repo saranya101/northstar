@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('../server/utils/prisma', () => ({ prisma: {} }))
-import { confirmTimetableImport, createTimetableImport, deleteClassSession, getTimetableImport, sourceSemesterStatus, updateClassSession } from '../server/services/timetable'
+import { confirmTimetableImport, createTimetableImport, deleteClassSession, getTimetableImport, listTimetable, sourceSemesterStatus, updateClassSession } from '../server/services/timetable'
 import { parseTimetableText } from '../app/utils/timetable-import/timetable-text-parser'
 
 describe('source semester validation', () => {
@@ -33,6 +33,23 @@ describe('source semester validation', () => {
 })
 
 describe('timetable ownership', () => {
+  it('exposes active-term recess metadata to every occurrence consumer', async () => {
+    const academicTerm = {
+      universityId: 'university-1', academicYear: '2026/2027', name: 'Semester 1',
+      teachingStartDate: new Date('2026-08-10T00:00:00.000Z'), endDate: new Date('2026-11-30T00:00:00.000Z'),
+      recessStartDate: new Date('2026-09-28T00:00:00.000Z'), recessEndDate: new Date('2026-10-04T00:00:00.000Z')
+    }
+    const database = {
+      userAcademicProfile: { findUnique: vi.fn().mockResolvedValue({ universityId: 'university-1' }) },
+      userSemester: { findFirst: vi.fn().mockResolvedValue({ id: 'semester-1', academicTerm }) },
+      classSession: { findMany: vi.fn().mockResolvedValue([]) }
+    }
+    await expect(listTimetable('user-1', database)).resolves.toMatchObject({ activeSemester: {
+      teachingStartDate: '2026-08-10T00:00:00.000Z', teachingEndDate: '2026-11-30T00:00:00.000Z',
+      recessStartDate: '2026-09-28T00:00:00.000Z', recessEndDate: '2026-10-04T00:00:00.000Z'
+    } })
+  })
+
   it('returns 404 when another user reads an import', async () => {
     const database = { timetableImport: { findFirst: vi.fn().mockResolvedValue(null) } }
     await expect(getTimetableImport('other-user', 'import-1', database)).rejects.toMatchObject({ statusCode: 404 })

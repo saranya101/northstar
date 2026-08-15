@@ -1,10 +1,10 @@
+import { teachingWeekForDate } from '../calendar/events.js'
+
 export const PLANNER_STORAGE_VERSION = 1
 export const STUDY_BLOCK_STATUSES = Object.freeze(['PLANNED', 'COMPLETED', 'SKIPPED'])
 export const WEEKDAY_KEYS = Object.freeze(['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'])
 
 const DATE_KEY = /^\d{4}-\d{2}-\d{2}$/
-const DAY_MS = 86_400_000
-
 function text(value, maximum) {
   const result = typeof value === 'string' ? value.trim() : ''
   return result ? result.slice(0, maximum) : null
@@ -151,12 +151,6 @@ export function studyBlockConflicts(candidate, studyBlocks = [], classOccurrence
   return conflicts.sort((left, right) => left.startMinutes - right.startMinutes || left.label.localeCompare(right.label))
 }
 
-function teachingWeekNumber(weekStart, teachingStartDate) {
-  const teachingStart = teachingStartDate ? startOfLocalWeek(new Date(teachingStartDate)) : null
-  if (!teachingStart || Number.isNaN(teachingStart.getTime())) return null
-  return Math.floor((startOfLocalWeek(weekStart).getTime() - teachingStart.getTime()) / (7 * DAY_MS)) + 1
-}
-
 export function classSessionOccursInWeek(session, weekStart, activeSemester = {}) {
   const dates = weekDateKeys(weekStart)
   const day = dates.find(item => item.day === session?.dayOfWeek)
@@ -167,8 +161,8 @@ export function classSessionOccursInWeek(session, weekStart, activeSemester = {}
   if (teachingStart && day.dateKey < teachingStart) return false
   if (teachingEnd && day.dateKey > teachingEnd) return false
 
-  const weekNumber = teachingWeekNumber(weekStart, activeSemester.teachingStartDate)
-  if (weekNumber === null) return true
+  const weekNumber = teachingWeekForDate(day.dateKey, activeSemester)
+  if (weekNumber === null) return false
   if (session.recurrence === 'ODD_WEEKS') return weekNumber > 0 && weekNumber % 2 === 1
   if (session.recurrence === 'EVEN_WEEKS') return weekNumber > 0 && weekNumber % 2 === 0
   if (session.recurrence === 'CUSTOM') return Array.isArray(session.weekNumbers) && session.weekNumbers.includes(weekNumber)

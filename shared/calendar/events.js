@@ -19,6 +19,7 @@ export const CALENDAR_FILTER_TYPES = Object.freeze([
 ])
 
 const DEFAULT_TIME_ZONE = 'Asia/Singapore'
+const DAY_MS = 86_400_000
 const DATE_ONLY_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/
 const LOCAL_DATE_TIME_PATTERN = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/
 const EXAM_TYPES = new Set(['FINAL_EXAMINATION', 'ORAL_EXAMINATION'])
@@ -98,6 +99,13 @@ export function dateKey(value, timeZone = DEFAULT_TIME_ZONE) {
   return parts ? `${parts.year}-${parts.month}-${parts.day}` : null
 }
 
+export function dateTimeKey(value, timeZone = DEFAULT_TIME_ZONE) {
+  const local = localDateTimeMatch(String(value || ''))
+  if (local) return `${local[1]}-${local[2]}-${local[3]}T${local[4]}:${local[5]}:${local[6] || '00'}`
+  const parts = partsInTimeZone(value, timeZone)
+  return parts ? `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:${parts.second}` : null
+}
+
 export function isAllDayValue(value) {
   return DATE_ONLY_PATTERN.test(String(value || ''))
 }
@@ -137,6 +145,39 @@ export function startOfWeekMonday(dateValue) {
   const mondayOffset = (date.getUTCDay() + 6) % 7
   date.setUTCDate(date.getUTCDate() - mondayOffset)
   return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())}`
+}
+
+function teachingCalendar(activeSemester, timeZone) {
+  const teachingStart = dateKey(activeSemester?.teachingStartDate, timeZone)
+  if (!teachingStart) return null
+  const hasRecessStart = activeSemester?.recessStartDate !== null && activeSemester?.recessStartDate !== undefined
+  const hasRecessEnd = activeSemester?.recessEndDate !== null && activeSemester?.recessEndDate !== undefined
+  if (hasRecessStart !== hasRecessEnd) return null
+  if (!hasRecessStart) return { teachingStart, weekOneMonday: startOfWeekMonday(teachingStart), recessStart: null, recessEnd: null, recessDays: 0 }
+
+  const recessStart = dateKey(activeSemester.recessStartDate, timeZone)
+  const recessEnd = dateKey(activeSemester.recessEndDate, timeZone)
+  if (!recessStart || !recessEnd || recessEnd < recessStart || recessStart < teachingStart) return null
+  const start = dateFromKey(recessStart)
+  const end = dateFromKey(recessEnd)
+  const recessDays = Math.floor((end.getTime() - start.getTime()) / DAY_MS) + 1
+  return { teachingStart, weekOneMonday: startOfWeekMonday(teachingStart), recessStart, recessEnd, recessDays }
+}
+
+export function teachingWeekForDate(value, activeSemester = {}, timeZone = DEFAULT_TIME_ZONE) {
+  const calendar = teachingCalendar(activeSemester, timeZone)
+  const target = dateKey(value, timeZone)
+  if (!calendar || !target || target < calendar.teachingStart) return null
+  if (calendar.recessStart && target >= calendar.recessStart && target <= calendar.recessEnd) return null
+
+  const effectiveDate = calendar.recessEnd && target > calendar.recessEnd
+    ? addDays(target, -calendar.recessDays)
+    : target
+  const effectiveMonday = startOfWeekMonday(effectiveDate)
+  const start = dateFromKey(calendar.weekOneMonday)
+  const current = dateFromKey(effectiveMonday)
+  const weekNumber = Math.floor((current.getTime() - start.getTime()) / (7 * DAY_MS)) + 1
+  return weekNumber > 0 ? weekNumber : null
 }
 
 export function firstDayOfMonth(value, timeZone = DEFAULT_TIME_ZONE) {
@@ -351,6 +392,7 @@ export function buildTimetableEvents({
   const teachingStart = dateKey(activeSemester?.teachingStartDate, timeZone)
   const teachingEnd = dateKey(activeSemester?.teachingEndDate, timeZone)
   if (!teachingStart || !teachingEnd || teachingEnd < teachingStart) return []
+  if (teachingWeekForDate(teachingStart, activeSemester, timeZone) !== 1) return []
 
   const weekOneMonday = startOfWeekMonday(teachingStart)
   const effectiveStart = rangeStart && rangeStart > teachingStart ? rangeStart : teachingStart
@@ -366,11 +408,12 @@ export function buildTimetableEvents({
     const dayOffset = DAY_OFFSETS[session.dayOfWeek]
     if (dayOffset === undefined) continue
 
-    for (let weekNumber = 1; weekNumber <= maximumWeek; weekNumber += 1) {
-      if (!recurrenceAllowsWeek(session, weekNumber)) continue
-      const sessionDate = addDays(weekOneMonday, (weekNumber - 1) * 7 + dayOffset)
+    for (let calendarWeek = 1; calendarWeek <= maximumWeek; calendarWeek += 1) {
+      const sessionDate = addDays(weekOneMonday, (calendarWeek - 1) * 7 + dayOffset)
       if (!sessionDate || sessionDate < teachingStart || sessionDate > teachingEnd) continue
       if (sessionDate < effectiveStart || sessionDate > effectiveEnd) continue
+      const weekNumber = teachingWeekForDate(sessionDate, activeSemester, timeZone)
+      if (weekNumber === null || !recurrenceAllowsWeek(session, weekNumber)) continue
 
       const start = minutesDateTime(sessionDate, session.startMinutes)
       const end = minutesDateTime(sessionDate, session.endMinutes)
@@ -389,6 +432,10 @@ export function buildTimetableEvents({
         moduleTitle: module.title || '',
         start,
         end,
+        startMinutes: session.startMinutes,
+        endMinutes: session.endMinutes,
+        classType: session.classType,
+        groupLabel: session.groupLabel,
         dateKey: sessionDate,
         allDay: false,
         timeZone,
@@ -521,6 +568,7 @@ export function buildCalendarData({
     timetableMapped: Boolean(
       dateKey(timetable?.activeSemester?.teachingStartDate, timeZone)
       && dateKey(timetable?.activeSemester?.teachingEndDate, timeZone)
+      && teachingWeekForDate(timetable.activeSemester.teachingStartDate, timetable.activeSemester, timeZone) === 1
     )
   }
 }

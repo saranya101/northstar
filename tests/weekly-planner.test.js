@@ -31,6 +31,16 @@ describe('weekly planner calculations', () => {
     expect(classOccurrencesForWeek(timetable, week)).toMatchObject([{ id: 's1', date: '2026-08-11', fixed: true }])
   })
 
+  it('uses the canonical recess-aware teaching week for planner occurrences', () => {
+    const activeSemester = {
+      teachingStartDate: '2026-08-10', teachingEndDate: '2026-11-30',
+      recessStartDate: '2026-09-28', recessEndDate: '2026-10-04'
+    }
+    const session = { id: 'week-8', dayOfWeek: 'TUESDAY', startMinutes: 540, endMinutes: 660, recurrence: 'CUSTOM', weekNumbers: [8] }
+    expect(classOccurrencesForWeek({ activeSemester, sessions: [session] }, startOfLocalWeek(new Date(2026, 8, 28, 12)))).toEqual([])
+    expect(classOccurrencesForWeek({ activeSemester, sessions: [session] }, startOfLocalWeek(new Date(2026, 9, 5, 12)))).toMatchObject([{ id: 'week-8', date: '2026-10-06' }])
+  })
+
   it('calculates planned, completed and module totals without counting skipped time', () => {
     const result = summarizeStudyWeek([
       block('planned', { enrolmentId: 'e1', moduleCode: 'AB1201' }),
