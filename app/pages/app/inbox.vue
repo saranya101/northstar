@@ -15,6 +15,7 @@ onMounted(() => Promise.all([loadModules(), load()]))
 <template>
   <main class="app-page v2-page inbox-page">
     <header class="v2-page-heading"><div><p>Academic Inbox</p><h1>Paste once. Review before anything changes.</h1></div><span>Text is retained as evidence. Interpretation never writes directly to academic records.</span></header>
+    <AcademicMailIntakePanel />
     <section class="v2-intake-composer" aria-labelledby="intake-title">
       <div class="v2-section-heading"><div><p>Text-first intake</p><h2 id="intake-title">What changed?</h2></div><select v-model="moduleEnrolmentId" aria-label="Module context"><option value="">No module selected</option><option v-for="module in modules" :key="module.enrolmentId" :value="module.enrolmentId">{{ module.code }} · {{ module.title }}</option></select></div>
       <textarea v-model="rawText" rows="7" maxlength="30000" placeholder="Paste an announcement, course update, assignment instruction, assessment information or anything from NTULearn…" />

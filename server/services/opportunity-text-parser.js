@@ -27,7 +27,7 @@ function dateFromParts(day, month, year, hours = 0, minutes = 0, timeZone = 'Asi
   return result.toISOString()
 }
 
-function parseDateFragment(fragment, timeZone) {
+export function parseOpportunityDateFragment(fragment, timeZone = 'Asia/Singapore') {
   const text = fragment.trim()
   let match = text.match(/\b(20\d{2})-(\d{1,2})-(\d{1,2})(?:[ T](\d{1,2}):([0-5]\d))?\b/)
   if (match) return dateFromParts(match[3], Number(match[2]) - 1, match[1], match[4] || 0, match[5] || 0, timeZone)
@@ -58,7 +58,7 @@ function labeledLine(lines, labels) {
 function extractDate(lines, labels, timeZone) {
   const matching = lines.find(line => new RegExp(`\\b(?:${labels.join('|')})\\b`, 'i').test(line))
   if (!matching) return field()
-  const parsed = parseDateFragment(matching, timeZone)
+  const parsed = parseOpportunityDateFragment(matching, timeZone)
   if (parsed) return field(parsed, 0.92)
   if (/\b\d{1,2}\s+[A-Za-z]{3,9}\b/.test(matching)) return field(null, 0, ['A date was found without a safe year and was left blank.'])
   return field(null, 0, ['The referenced date could not be parsed safely.'])
@@ -73,7 +73,7 @@ export function extractOpportunityFromText(input, { timeZone = 'Asia/Singapore' 
   const text = input.replace(/\r/g, '').trim()
   const lines = text.split('\n').map(line => line.trim()).filter(Boolean)
   const urls = [...new Set((text.match(/https:\/\/[^\s<>()"']+/gi) || []).map(url => url.replace(/[.,;!?]+$/, '')))]
-  const applicationUrl = urls.find(url => /apply|application|forms?\.|eventbrite|lu\.ma/i.test(url)) || null
+  const applicationUrl = urls.find(url => /apply|application|forms?\.|\/forms?(?:\/|$)|eventbrite|lu\.ma/i.test(url)) || null
   const sourceUrl = urls.find(url => url !== applicationUrl) || null
   const titleLine = labeledLine(lines, ['title', 'event', 'opportunity']) || lines.find(line => line.length >= 4 && line.length <= 180 && !/^https?:|^(deadline|apply|date|location|eligibility|requirements?|benefits?)\b/i.test(line))
   const organisation = labeledLine(lines, ['organisation', 'organization', 'organiser', 'organizer', 'host', 'hosted by', 'organised by', 'organized by'])
@@ -92,7 +92,7 @@ export function extractOpportunityFromText(input, { timeZone = 'Asia/Singapore' 
       organisation: field(organisation, organisation ? 0.88 : 0, organisation ? [] : ['Review and add the organisation.']),
       category: field(category, category ? 0.86 : 0, category ? [] : ['Choose a category during review.']),
       description: field(),
-      deadline: extractDate(lines, ['deadline', 'applications? close', 'closing date', 'apply by'], timeZone),
+      deadline: extractDate(lines, ['deadline', 'applications? close', 'closing date', 'apply by', 'submit by', 'respond by', 'complete by', 'due'], timeZone),
       startAt: extractDate(lines, ['start date', 'starts', 'event date', 'date'], timeZone),
       endAt: extractDate(lines, ['end date', 'ends'], timeZone),
       location: field(location, location ? 0.88 : 0),
