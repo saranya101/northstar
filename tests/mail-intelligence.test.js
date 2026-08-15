@@ -1,0 +1,132 @@
+import { describe, expect, it } from 'vitest'
+import { createMailBatchSchema, createMailIntakeSchema } from '../shared/schemas/mail-intake.js'
+import { classifyMailText, deterministicMailInterpretation } from '../server/services/mail-intelligence.js'
+import { NTU_MAIL_FIXTURES } from './fixtures/ntu-mail.js'
+
+describe('deterministic NTU mail intelligence', () => {
+  it.each([
+    ['ccaRecruitment', 'OPPORTUNITY'], ['internship', 'OPPORTUNITY'], ['competition', 'OPPORTUNITY'],
+    ['exchange', 'OPPORTUNITY'], ['scholarship', 'OPPORTUNITY'], ['mentorship', 'OPPORTUNITY'],
+    ['requiredAdmin', 'ACTION_REQUIRED'], ['venueChange', 'ACADEMIC_ADMIN'], ['networkingEvent', 'EVENT'],
+    ['newsletter', 'NOISE'], ['ambiguous', 'UNCERTAIN']
+  ])('classifies the synthetic %s fixture as %s', (fixture, category) => {
+    const result = deterministicMailInterpretation({ rawText: NTU_MAIL_FIXTURES[fixture] })
+    expect(result.classification.category).toBe(category)
+    expect(result.classification.reasons.length).toBeGreaterThan(0)
+    expect(['HIGH', 'MEDIUM', 'LOW']).toContain(result.classification.confidenceBand)
+  })
+
+  it('parses obvious headers and extracts only an exact deadline', () => {
+    const result = deterministicMailInterpretation({ rawText: NTU_MAIL_FIXTURES.ccaRecruitment })
+    expect(result.metadata).toMatchObject({ subject: 'IBC Sales & Trading Recruitment', senderName: 'NBS Investment Banking Club', senderEmail: 'ibc@example.edu.sg', receivedAt: '2026-08-15T01:30:00.000Z' })
+    expect(result.extractedPayload.opportunity).toMatchObject({
+      title: 'IBC Sales & Trading Recruitment', category: 'CLUB', eligibilityText: 'Freshmen eligible',
+      applicationUrl: 'https://example.edu.sg/forms/ibc-recruitment'
+    })
+    expect(result.extractedPayload.opportunity.deadline).toBe('2026-08-18T15:59:00.000Z')
+  })
+
+  it('preserves an academic-week deadline as unresolved source text', () => {
+    const result = deterministicMailInterpretation({ rawText: NTU_MAIL_FIXTURES.exchange })
+    expect(result.extractedPayload.opportunity.deadline).toBeNull()
+    expect(result.extractedPayload.opportunity.deadlineSourceText).toBe('Deadline: Week 3 of Semester 2')
+  })
+
+  it('extracts module and admin evidence without proposing an academic mutation', () => {
+    const result = deterministicMailInterpretation({ rawText: NTU_MAIL_FIXTURES.venueChange })
+    expect(result.extractedPayload.admin).toMatchObject({ moduleCode: 'AB1201', deadline: null })
+    expect(result.extractedPayload.opportunity).toBeNull()
+  })
+
+  it('extracts an exact administrative deadline and explicit commitment', () => {
+    const admin = deterministicMailInterpretation({ rawText: NTU_MAIL_FIXTURES.requiredAdmin })
+    const mentorship = deterministicMailInterpretation({ rawText: NTU_MAIL_FIXTURES.mentorship })
+    expect(admin.extractedPayload.admin.deadline).toBe('2026-08-20T09:00:00.000Z')
+    expect(mentorship.extractedPayload.opportunity.commitment).toBe('Two hours each month')
+  })
+
+  it('extracts the AB1088 class announcement without Blackboard contamination', () => {
+    const result = deterministicMailInterpretation({ rawText: NTU_MAIL_FIXTURES.ab1088Announcement })
+    expect(result.classification.category).toBe('ACADEMIC_ADMIN')
+    expect(result.extractedPayload.admin).toMatchObject({
+      moduleCode: 'AB1088', title: 'Power Dressing and Professional Etiquette', academicSubtype: 'CLASS_INFORMATION',
+      eventDate: '2026-08-17', venue: 'S3 Building, Conference Room 1', requiresAction: false, actionRequired: null,
+      exactDeadline: null, deadline: null
+    })
+    expect(result.extractedPayload.admin.resources).toEqual(expect.arrayContaining([
+      expect.objectContaining({ label: expect.stringContaining('Class Schedule for Week 2 to Week 3'), type: 'ATTACHMENT' }),
+      expect.objectContaining({ label: expect.stringContaining('Direction to your classes.docx'), url: 'https://example.ntu.edu.sg/directions.docx' }),
+      expect.objectContaining({ label: 'NTU Campus Map', url: 'https://maps.ntu.edu.sg/', type: 'MAP' })
+    ]))
+    expect(result.extractedPayload.admin.evidence.join(' ')).not.toMatch(/multimedia|notification preferences|brought to you/i)
+  })
+
+  it('separates class dates, notification timing, and explicit deadlines', () => {
+    const announcement = deterministicMailInterpretation({ rawText: NTU_MAIL_FIXTURES.ab1088Announcement })
+    const notification = deterministicMailInterpretation({ rawText: NTU_MAIL_FIXTURES.notificationTiming })
+    const required = deterministicMailInterpretation({ rawText: NTU_MAIL_FIXTURES.explicitAcademicDeadline })
+    expect(announcement.extractedPayload.admin).toMatchObject({ eventDate: '2026-08-17', exactDeadline: null })
+    expect(notification.extractedPayload.opportunity.deadline).toBeNull()
+    expect(required.classification.category).toBe('ACTION_REQUIRED')
+    expect(required.extractedPayload.admin).toMatchObject({ requiresAction: true, exactDeadline: '2026-08-19T15:59:00.000Z' })
+  })
+
+  it('interprets an IBC selection-stage case assessment as an exact action', () => {
+    const result = deterministicMailInterpretation({ rawText: NTU_MAIL_FIXTURES.ibcCaseAssessment })
+    expect(result.classification.category).toBe('ACTION_REQUIRED')
+    expect(result.extractedPayload.opportunity).toBeNull()
+    expect(result.extractedPayload.admin).toMatchObject({
+      title: 'IBC S&T Portfolio — Case Assessment',
+      organisation: 'NTU Investment Banking Club',
+      academicSubtype: 'REQUIRED_ACTION',
+      selectionStage: 'ASSESSMENT',
+      actionRequired: 'Complete and submit case assessment',
+      requiresAction: true,
+      exactDeadline: '2026-08-19T15:59:00.000Z'
+    })
+  })
+
+  it('does not turn selection or notification timing into a deadline', () => {
+    const selection = deterministicMailInterpretation({ rawText: NTU_MAIL_FIXTURES.selectionProcessOnly })
+    const notification = deterministicMailInterpretation({ rawText: NTU_MAIL_FIXTURES.interviewNotification })
+    expect(selection.classification.category).not.toBe('ACTION_REQUIRED')
+    expect(selection.extractedPayload.admin).toBeNull()
+    expect(notification.classification.category).toBe('OPPORTUNITY')
+    expect(notification.extractedPayload.opportunity.deadline).toBeNull()
+  })
+
+  it('extracts explicit ASMI hackathon event details without inventing a deadline', () => {
+    const result = deterministicMailInterpretation({ rawText: NTU_MAIL_FIXTURES.asmiHackathon })
+    expect(result.metadata.senderName).toBe('Student Life-Nanyang Business School')
+    expect(result.classification.category).toBe('OPPORTUNITY')
+    expect(result.extractedPayload.opportunity).toMatchObject({
+      title: 'ASMI Marine & Offshore Energy Hackathon 2026',
+      organisation: 'Association of Singapore Marine & Offshore Energy Industries (ASMI)',
+      category: 'HACKATHON',
+      startAt: '2026-10-07T00:00:00.000Z',
+      endAt: '2026-10-07T10:30:00.000Z',
+      location: '9 Jurong Town Hall Road #04-03 Trade Association Hub Jurong Town Hall, 609431',
+      eligibilityText: 'Open to all disciplines',
+      requirements: 'Team of 5',
+      benefits: 'SGD 500 cash prize for the champion team in each category',
+      applicationUrl: 'https://forms.office.com/r/ASMIHackathon2026',
+      deadline: null,
+      deadlineSourceText: null
+    })
+    expect(result.extractedPayload.opportunity.organisation).not.toBe(result.metadata.senderName)
+    expect(result.extractedPayload.opportunity.description).toContain('21 October 2026')
+    expect(result.extractedPayload.opportunity.startAt).not.toContain('2026-10-21')
+  })
+
+  it('keeps event classification distinct when no application or recruitment flow exists', () => {
+    expect(classifyMailText(NTU_MAIL_FIXTURES.networkingEvent).category).toBe('EVENT')
+  })
+
+  it('fails malformed or undersized input safely', () => {
+    expect(createMailIntakeSchema.safeParse({ rawText: 'too short' }).success).toBe(false)
+    expect(createMailIntakeSchema.safeParse({ rawText: 'A valid body long enough to review.', accessToken: 'secret' }).success).toBe(false)
+    expect(createMailBatchSchema.safeParse({ messages: [{ rawText: 'A valid body long enough to review.' }] }).success).toBe(true)
+    expect(createMailBatchSchema.safeParse({ messages: [{ rawText: 'A valid body long enough to review.', links: [{ text: 'Unsafe', url: 'javascript:alert(1)' }] }] }).success).toBe(false)
+    expect(createMailBatchSchema.safeParse({ messages: [{ rawText: 'A valid body long enough to review.', senderEmail: 'not-an-email' }] }).success).toBe(false)
+  })
+})

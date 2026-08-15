@@ -528,13 +528,25 @@ export async function findOpportunityDuplicates(userId, input, database = prisma
   const urlConditions = []
   if (sourceUrl) urlConditions.push({ sourceUrl })
   if (applicationUrl) urlConditions.push({ applicationUrl })
-  if (!urlConditions.length) return []
+  const identityCondition = input.title && input.organisation && input.deadline ? {
+    title: { equals: input.title, mode: 'insensitive' },
+    organisation: { equals: input.organisation, mode: 'insensitive' },
+    deadline: new Date(input.deadline)
+  } : null
+  if (!urlConditions.length && !identityCondition) return []
+  const lookupConditions = urlConditions.length
+    ? [{ sourceUrl: { not: null } }, { applicationUrl: { not: null } }, ...(identityCondition ? [identityCondition] : [])]
+    : [identityCondition]
   const rows = await database.userOpportunity.findMany({
-    where: { userId, opportunity: { OR: [{ sourceUrl: { not: null } }, { applicationUrl: { not: null } }] } },
+    where: { userId, opportunity: { OR: lookupConditions } },
     include: { opportunity: true },
     take: 5
   })
-  return rows.filter(row => (sourceUrl && normalizeOpportunityUrl(row.opportunity.sourceUrl) === sourceUrl) || (applicationUrl && normalizeOpportunityUrl(row.opportunity.applicationUrl) === applicationUrl)).map(row => ({ id: row.opportunity.id, title: row.opportunity.title, organisation: row.opportunity.organisation, sourceUrl: row.opportunity.sourceUrl, applicationUrl: row.opportunity.applicationUrl }))
+  const sameIdentity = opportunity => identityCondition
+    && opportunity.title.toLocaleLowerCase() === input.title.toLocaleLowerCase()
+    && opportunity.organisation.toLocaleLowerCase() === input.organisation.toLocaleLowerCase()
+    && new Date(opportunity.deadline).getTime() === new Date(input.deadline).getTime()
+  return rows.filter(row => (sourceUrl && normalizeOpportunityUrl(row.opportunity.sourceUrl) === sourceUrl) || (applicationUrl && normalizeOpportunityUrl(row.opportunity.applicationUrl) === applicationUrl) || sameIdentity(row.opportunity)).map(row => ({ id: row.opportunity.id, title: row.opportunity.title, organisation: row.opportunity.organisation, sourceUrl: row.opportunity.sourceUrl, applicationUrl: row.opportunity.applicationUrl }))
 }
 
 export async function getOpportunity(userId, id, database = prisma, now = new Date()) {
