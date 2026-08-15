@@ -2,8 +2,7 @@ import 'dotenv/config'
 import { PrismaNeon } from '@prisma/adapter-neon'
 import { createJiti } from 'jiti'
 import { CURRENT_SEMESTER_SEED, validateCurrentSemesterSeed } from './current-semester-seed-data.js'
-import { dateKey } from '../shared/calendar/events.js'
-import { loadForceSemesterDiagnostics, resolveForceSemesterTarget, setAuthoritativeTeachingStart, synchronizeCurrentSemester } from './force-my-semester-logic.js'
+import { academicCalendarDiagnosticLines, loadForceSemesterDiagnostics, resolveForceSemesterTarget, setAuthoritativeAcademicCalendar, synchronizeCurrentSemester } from './force-my-semester-logic.js'
 
 const { PrismaClient } = await createJiti(import.meta.url).import('../server/generated/prisma/client.ts')
 const connectionString = process.env.DATABASE_URL
@@ -20,7 +19,7 @@ function minutes(value) {
 
 function printDiagnostics(diagnostics) {
   console.log(`Active semester: ${diagnostics.activeSemester}`)
-  console.log(`Teaching start: ${dateKey(diagnostics.teachingStartDate) || 'UNSET'}`)
+  for (const line of academicCalendarDiagnosticLines(diagnostics)) console.log(line)
   console.log(`Sessions: ${diagnostics.sessions.length}`)
   for (const module of CURRENT_SEMESTER_SEED.modules) console.log(`${module.code}: ${diagnostics.counts[module.code] || 0}`)
   for (const session of diagnostics.sessions) {
@@ -37,7 +36,7 @@ try {
   } else {
     const diagnostics = await prisma.$transaction(async (database) => {
       const target = await resolveForceSemesterTarget(database)
-      await setAuthoritativeTeachingStart(database, target)
+      await setAuthoritativeAcademicCalendar(database, target)
       await synchronizeCurrentSemester(database, target, CURRENT_SEMESTER_SEED)
       return loadForceSemesterDiagnostics(database, target, CURRENT_SEMESTER_SEED)
     }, { isolationLevel: 'Serializable', maxWait: 10_000, timeout: 30_000 })

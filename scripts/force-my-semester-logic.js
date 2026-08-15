@@ -1,7 +1,19 @@
-import { buildTimetableEvents, dateKey } from '../shared/calendar/events.js'
+import { buildTimetableEvents, dateKey, teachingWeekForDate } from '../shared/calendar/events.js'
 
 export const FORCE_SEMESTER_EMAIL = 'gavarasanasrisaisaranya@gmail.com'
 export const AUTHORITATIVE_TEACHING_START = '2026-08-10'
+export const AUTHORITATIVE_RECESS_START = '2026-09-28'
+export const AUTHORITATIVE_RECESS_END = '2026-10-02'
+
+const TEACHING_WEEK_CHECKS = Object.freeze([
+  { date: '2026-08-10', expected: 1 },
+  { date: '2026-09-21', expected: 7 },
+  { date: '2026-09-28', expected: null },
+  { date: '2026-09-30', expected: null },
+  { date: '2026-10-02', expected: null },
+  { date: '2026-10-05', expected: 8 },
+  { date: '2026-10-12', expected: 9 }
+])
 
 function normalizedAssessmentName(value) {
   return value.trim().toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
@@ -24,13 +36,20 @@ export async function resolveForceSemesterTarget(database) {
   return { user, academicProfile, userSemester }
 }
 
-export async function setAuthoritativeTeachingStart(database, target) {
+export async function setAuthoritativeAcademicCalendar(database, target) {
   const teachingStartDate = new Date(`${AUTHORITATIVE_TEACHING_START}T00:00:00+08:00`)
+  const recessStartDate = new Date(`${AUTHORITATIVE_RECESS_START}T00:00:00+08:00`)
+  const recessEndDate = new Date(`${AUTHORITATIVE_RECESS_END}T00:00:00+08:00`)
   await database.academicTerm.update({
     where: { id: target.userSemester.academicTermId },
-    data: { teachingStartDate }
+    data: { teachingStartDate, recessStartDate, recessEndDate }
   })
-  target.userSemester.academicTerm = { ...target.userSemester.academicTerm, teachingStartDate }
+  target.userSemester.academicTerm = {
+    ...target.userSemester.academicTerm,
+    teachingStartDate,
+    recessStartDate,
+    recessEndDate
+  }
 }
 
 async function upsertModule(database, target, expected) {
@@ -112,7 +131,13 @@ export function teachingWeekMappingStatus(academicTerm, sessions) {
   const missingFields = []
   if (!dateKey(academicTerm?.teachingStartDate)) missingFields.push('teachingStartDate')
   if (!dateKey(academicTerm?.endDate)) missingFields.push('endDate')
-  if (missingFields.length) return { safe: false, missingFields, occurrenceCount: 0 }
+  if (!dateKey(academicTerm?.recessStartDate)) missingFields.push('recessStartDate')
+  if (!dateKey(academicTerm?.recessEndDate)) missingFields.push('recessEndDate')
+  if (missingFields.length) return { safe: false, missingFields, occurrenceCount: 0, checks: [] }
+  const checks = TEACHING_WEEK_CHECKS.map(check => ({
+    ...check,
+    actual: teachingWeekForDate(check.date, academicTerm)
+  }))
   const events = buildTimetableEvents({
     sessions,
     activeSemester: {
@@ -122,7 +147,24 @@ export function teachingWeekMappingStatus(academicTerm, sessions) {
       recessEndDate: academicTerm.recessEndDate
     }
   })
-  return { safe: events.length > 0, missingFields: [], occurrenceCount: events.length }
+  return {
+    safe: events.length > 0 && checks.every(check => check.actual === check.expected),
+    missingFields: [],
+    occurrenceCount: events.length,
+    checks
+  }
+}
+
+export function academicCalendarDiagnosticLines(diagnostics) {
+  const lines = [
+    `Teaching start: ${dateKey(diagnostics.teachingStartDate) || 'UNSET'}`,
+    `Recess start: ${dateKey(diagnostics.recessStartDate) || 'UNSET'}`,
+    `Recess end: ${dateKey(diagnostics.recessEndDate) || 'UNSET'}`
+  ]
+  for (const check of diagnostics.mapping.checks) {
+    lines.push(`${check.date} -> ${check.actual === null ? 'RECESS / null' : `Week ${check.actual}`}`)
+  }
+  return lines
 }
 
 export async function loadForceSemesterDiagnostics(database, target, seed) {
@@ -150,6 +192,8 @@ export async function loadForceSemesterDiagnostics(database, target, seed) {
   return {
     activeSemester: `${target.userSemester.academicTerm.academicYear} · ${target.userSemester.academicTerm.name}`,
     teachingStartDate: target.userSemester.academicTerm.teachingStartDate,
+    recessStartDate: target.userSemester.academicTerm.recessStartDate,
+    recessEndDate: target.userSemester.academicTerm.recessEndDate,
     endDate: target.userSemester.academicTerm.endDate,
     sessions,
     counts: Object.fromEntries(codes.map(code => [code, sessions.filter(session => session.module.code === code).length])),
