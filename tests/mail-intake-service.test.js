@@ -90,6 +90,26 @@ describe('mail intake persistence and review', () => {
     expect(database.mailIntake.create).toHaveBeenCalledTimes(2)
   })
 
+  it('bypasses paste segmentation for an already-separated batch message', async () => {
+    const { database } = databaseFixture()
+    const result = await createMailBatch('user-1', [{ rawText: TWO_EMAIL_PASTE }], database)
+    expect(result).toHaveLength(1)
+    expect(database.mailIntake.create).toHaveBeenCalledTimes(1)
+  })
+
+  it('normalizes extension links into retained evidence before interpretation', async () => {
+    const { database } = databaseFixture()
+    const [result] = await createMailBatch('user-1', [{
+      subject: 'Summer Analyst Internship',
+      rawText: 'Applications are open for the Example Capital summer internship.',
+      links: [{ text: 'Apply now', url: 'https://careers.example.com/apply/summer' }]
+    }], database)
+    expect(result.rawText).toContain('Referenced links:\n- Apply now: https://careers.example.com/apply/summer')
+    expect(result.extractedPayload.opportunity.applicationUrl).toBe('https://careers.example.com/apply/summer')
+    expect(canonical.createOpportunity).not.toHaveBeenCalled()
+    expect(canonical.createTask).not.toHaveBeenCalled()
+  })
+
   it('keeps accepted segment conversion independent', async () => {
     const { database, records } = databaseFixture()
     const [internship, cca] = await createMailBatch('user-1', [

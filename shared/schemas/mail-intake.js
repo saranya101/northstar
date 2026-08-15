@@ -7,13 +7,18 @@ export const MAIL_INTAKE_STATUSES = ['NEW', 'REVIEWED', 'CONVERTED', 'DISMISSED'
 const blank = value => value === '' || value === null || value === undefined ? undefined : value
 const text = (maximum, minimum = 1) => z.preprocess(blank, z.string().trim().min(minimum).max(maximum).optional())
 const date = z.preprocess(blank, z.iso.datetime({ offset: true }).optional())
+const mailLinkSchema = z.object({
+  text: z.string().trim().max(500).default(''),
+  url: z.url().max(2000).refine(value => ['http:', 'https:'].includes(new URL(value).protocol), 'Only HTTP links are accepted.')
+}).strict()
 
 export const createMailIntakeSchema = z.object({
   subject: text(300),
   senderName: text(240),
   senderEmail: z.preprocess(blank, z.email().max(320).optional()),
   receivedAt: date,
-  rawText: z.string().trim().min(20, 'Paste at least 20 characters.').max(50_000)
+  rawText: z.string().trim().min(20, 'Paste at least 20 characters.').max(50_000),
+  links: z.array(mailLinkSchema).max(100).optional()
 }).strict()
 
 export const createMailBatchSchema = z.object({

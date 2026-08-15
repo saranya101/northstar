@@ -1,0 +1,18 @@
+{
+  "manifest_version": 3,
+  "name": "Northstar Mail",
+  "version": "1.0.0",
+  "description": "Send the one email open in Outlook Web to Northstar for review.",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage"
+  ],
+  "host_permissions": [
+    "http://localhost:3000/*"
+  ],
+  "action": {
+    "default_title": "Northstar Mail",
+    "default_popup": "popup.html"
+  }
+}

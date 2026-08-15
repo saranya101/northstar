@@ -53,5 +53,7 @@ describe('deterministic NTU mail intelligence', () => {
     expect(createMailIntakeSchema.safeParse({ rawText: 'too short' }).success).toBe(false)
     expect(createMailIntakeSchema.safeParse({ rawText: 'A valid body long enough to review.', accessToken: 'secret' }).success).toBe(false)
     expect(createMailBatchSchema.safeParse({ messages: [{ rawText: 'A valid body long enough to review.' }] }).success).toBe(true)
+    expect(createMailBatchSchema.safeParse({ messages: [{ rawText: 'A valid body long enough to review.', links: [{ text: 'Unsafe', url: 'javascript:alert(1)' }] }] }).success).toBe(false)
+    expect(createMailBatchSchema.safeParse({ messages: [{ rawText: 'A valid body long enough to review.', senderEmail: 'not-an-email' }] }).success).toBe(false)
   })
 })

@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Northstar Mail</title>
+    <link rel="stylesheet" href="popup.css">
+  </head>
+  <body>
+    <main>
+      <header class="brand"><span aria-hidden="true">N</span><div><strong>Northstar Mail</strong><small>Outlook Web intake</small></div></header>
+
+      <section id="initial-view" class="stack">
+        <p>Open an email in NTU Outlook,<br>then extract it here.</p>
+        <button id="extract-button" class="primary" type="button">Extract open email</button>
+      </section>
+
+      <section id="review-view" class="stack" hidden>
+        <dl>
+          <div><dt>Subject</dt><dd id="subject-value">—</dd></div>
+          <div><dt>From</dt><dd id="sender-value">—</dd></div>
+          <div><dt>Body</dt><dd id="body-value">—</dd></div>
+          <div><dt>Links</dt><dd id="links-value">—</dd></div>
+        </dl>
+        <details><summary>Preview</summary><pre id="preview-value"></pre></details>
+        <button id="send-button" class="primary" type="button">Send to Northstar</button>
+        <button id="extract-again-button" class="secondary" type="button">Extract again</button>
+      </section>
+
+      <section id="success-view" class="stack success" hidden>
+        <div class="success-mark" aria-hidden="true">✓</div>
+        <strong>Sent to Northstar</strong>
+        <p id="classification-value">Classification and review are ready.</p>
+        <button id="open-inbox-button" class="primary" type="button">Open Northstar Inbox</button>
+      </section>
+
+      <p id="status-message" class="status" role="status" hidden></p>
+
+      <details class="diagnostics">
+        <summary>Safe extractor diagnostics</summary>
+        <p>Reports selector counts and lengths only. It never prints email text.</p>
+        <button id="diagnostic-button" class="secondary" type="button">Run diagnostics</button>
+        <pre id="diagnostic-output" hidden></pre>
+      </details>
+    </main>
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>

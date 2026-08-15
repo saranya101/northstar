@@ -27,6 +27,32 @@ export function mailContentFingerprint(input) {
   return createHash('sha256').update(JSON.stringify(normalized)).digest('hex')
 }
 
+export function normalizeStructuredMailInput(input) {
+  const rawText = input.rawText.replace(/\r\n?/g, '\n').trim()
+  const links = []
+  const seenLinks = new Set()
+  for (const link of input.links || []) {
+    try {
+      if (!['http:', 'https:'].includes(new URL(link.url).protocol) || seenLinks.has(link.url)) continue
+      seenLinks.add(link.url)
+      links.push({ text: link.text?.trim() || '', url: link.url })
+    } catch {}
+  }
+  const missingLinks = links.filter(link => !rawText.includes(link.url))
+  if (!missingLinks.length) return { ...input, rawText, links: undefined }
+  const prefix = '\n\nReferenced links:\n'
+  const available = Math.max(0, 50_000 - rawText.length - prefix.length)
+  const evidenceLines = []
+  let evidenceLength = 0
+  for (const link of missingLinks) {
+    const line = `- ${link.text ? `${link.text}: ` : ''}${link.url}`
+    if (evidenceLength + line.length + (evidenceLines.length ? 1 : 0) > available) break
+    evidenceLines.push(line)
+    evidenceLength += line.length + (evidenceLines.length > 1 ? 1 : 0)
+  }
+  return { ...input, rawText: evidenceLines.length ? `${rawText}${prefix}${evidenceLines.join('\n')}` : rawText, links: undefined }
+}
+
 export function serializeMailIntake(record, duplicate = false) {
   return {
     ...record,
@@ -49,8 +75,9 @@ async function interpretedMail(input, interpreter) {
 }
 
 async function persistMailIntake(userId, input, database, interpreter) {
-  const interpreted = await interpretedMail(input, interpreter)
-  const merged = { ...input, ...interpreted.metadata }
+  const normalized = normalizeStructuredMailInput(input)
+  const interpreted = await interpretedMail(normalized, interpreter)
+  const merged = { ...normalized, ...interpreted.metadata }
   const contentFingerprint = mailContentFingerprint(merged)
   const existing = await database.mailIntake.findUnique({
     where: { userId_contentFingerprint: { userId, contentFingerprint } }, include
@@ -59,7 +86,7 @@ async function persistMailIntake(userId, input, database, interpreter) {
   try {
     const record = await database.mailIntake.create({ data: {
       userId, subject: merged.subject, senderName: merged.senderName, senderEmail: merged.senderEmail,
-      receivedAt: merged.receivedAt ? new Date(merged.receivedAt) : null, rawText: input.rawText, contentFingerprint,
+      receivedAt: merged.receivedAt ? new Date(merged.receivedAt) : null, rawText: normalized.rawText, contentFingerprint,
       classification: interpreted.classification.category, confidenceBand: interpreted.classification.confidenceBand,
       reasons: interpreted.classification.reasons, extractedPayload: interpreted.extractedPayload,
       interpreterKey: interpreter.key
