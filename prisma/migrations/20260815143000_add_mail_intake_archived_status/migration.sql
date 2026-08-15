@@ -1,0 +1,1 @@
+ALTER TYPE "MailIntakeStatus" ADD VALUE 'ARCHIVED';

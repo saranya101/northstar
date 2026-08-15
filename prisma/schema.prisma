@@ -8,29 +8,30 @@ datasource db {
 }
 
 model User {
-  id                   String                @id
-  name                 String
-  email                String
-  emailVerified        Boolean               @default(false)
-  image                String?
-  createdAt            DateTime              @default(now())
-  updatedAt            DateTime              @updatedAt
-  sessions             Session[]
-  accounts             Account[]
-  profile              Profile?
-  academicProfile      UserAcademicProfile?
-  studyPreference      StudyPreference?
-  opportunityRadarPreference OpportunityRadarPreference?
-  semesters            UserSemester[]
-  moduleEnrolments     UserModuleEnrolment[]
-  timetableImports     TimetableImport[]
-  academicIntakes      AcademicIntake[]
-  assessments          Assessment[]
-  recurringCoursework  RecurringCoursework[]
+  id                             String                          @id
+  name                           String
+  email                          String
+  emailVerified                  Boolean                         @default(false)
+  image                          String?
+  createdAt                      DateTime                        @default(now())
+  updatedAt                      DateTime                        @updatedAt
+  sessions                       Session[]
+  accounts                       Account[]
+  profile                        Profile?
+  academicProfile                UserAcademicProfile?
+  studyPreference                StudyPreference?
+  opportunityRadarPreference     OpportunityRadarPreference?
+  semesters                      UserSemester[]
+  moduleEnrolments               UserModuleEnrolment[]
+  timetableImports               TimetableImport[]
+  academicIntakes                AcademicIntake[]
+  mailIntakes                    MailIntake[]
+  assessments                    Assessment[]
+  recurringCoursework            RecurringCoursework[]
   recurringCourseworkOccurrences RecurringCourseworkOccurrence[]
-  tasks                Task[]
-  createdOpportunities Opportunity[]         @relation("OpportunityCreator")
-  userOpportunities    UserOpportunity[]
+  tasks                          Task[]
+  createdOpportunities           Opportunity[]                   @relation("OpportunityCreator")
+  userOpportunities              UserOpportunity[]
 
   @@unique([email])
   @@map("user")
@@ -189,22 +190,22 @@ enum OpportunityPortfolioGoal {
 }
 
 model OpportunityRadarPreference {
-  id                    String                         @id @default(cuid())
-  userId                String                         @unique
-  feedRefreshCadence    OpportunityFeedRefreshCadence @default(EVERY_6_HOURS)
-  preferredSources      String[]                       @default([])
-  preferredCategories   OpportunityCategory[]          @default([])
-  preferredModes        OpportunityMode[]              @default([])
-  closingSoonDays       Int                            @default(7)
-  defaultSort           OpportunityDefaultSort         @default(RECOMMENDED)
-  hideExpired           Boolean                        @default(true)
-  includeOther          Boolean                        @default(true)
-  portfolioGoals        OpportunityPortfolioGoal[]     @default([])
-  skillGoals            String[]                       @default([])
-  lastManualRefreshAt   DateTime?
-  createdAt             DateTime                       @default(now())
-  updatedAt             DateTime                       @updatedAt
-  user                  User                           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                  String                        @id @default(cuid())
+  userId              String                        @unique
+  feedRefreshCadence  OpportunityFeedRefreshCadence @default(EVERY_6_HOURS)
+  preferredSources    String[]                      @default([])
+  preferredCategories OpportunityCategory[]         @default([])
+  preferredModes      OpportunityMode[]             @default([])
+  closingSoonDays     Int                           @default(7)
+  defaultSort         OpportunityDefaultSort        @default(RECOMMENDED)
+  hideExpired         Boolean                       @default(true)
+  includeOther        Boolean                       @default(true)
+  portfolioGoals      OpportunityPortfolioGoal[]    @default([])
+  skillGoals          String[]                      @default([])
+  lastManualRefreshAt DateTime?
+  createdAt           DateTime                      @default(now())
+  updatedAt           DateTime                      @updatedAt
+  user                User                          @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
 }
@@ -416,6 +417,7 @@ model Opportunity {
   sourceListings      OpportunitySourceListing[]
   duplicateCandidates OpportunityDuplicateReview[] @relation("DuplicateCandidate")
   probableDuplicates  OpportunityDuplicateReview[] @relation("ProbableDuplicate")
+  mailIntakes         MailIntake[]
 
   @@index([createdByUserId])
   @@index([deadline])
@@ -610,31 +612,31 @@ model InstructorAssignment {
 }
 
 model UserModuleEnrolment {
-  id                 String                   @id @default(cuid())
-  userId             String
-  userSemesterId     String
-  offeringId         String
-  targetGrade        String?
-  targetPercentage   Decimal?                 @db.Decimal(5, 2)
-  targetLabel        String?
-  personalNotes      String?
-  colour             ModuleColour             @default(MINERAL)
-  status             ModuleEnrolmentStatus    @default(ACTIVE)
-  indexNumber        String?
-  courseType         String?
-  registrationStatus CourseRegistrationStatus @default(UNKNOWN)
-  createdAt          DateTime                 @default(now())
-  updatedAt          DateTime                 @updatedAt
-  user               User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userSemester       UserSemester             @relation(fields: [userSemesterId], references: [id], onDelete: Cascade)
-  offering           ModuleOffering           @relation(fields: [offeringId], references: [id])
-  classSessions      ClassSession[]
-  academicIntakes      AcademicIntake[]
-  assessments          Assessment[]
-  weeklyTopics         ModuleWeeklyTopic[]
-  privateFacts         UserModuleFact[]
-  recurringCoursework  RecurringCoursework[]
-  tasks                Task[]
+  id                  String                   @id @default(cuid())
+  userId              String
+  userSemesterId      String
+  offeringId          String
+  targetGrade         String?
+  targetPercentage    Decimal?                 @db.Decimal(5, 2)
+  targetLabel         String?
+  personalNotes       String?
+  colour              ModuleColour             @default(MINERAL)
+  status              ModuleEnrolmentStatus    @default(ACTIVE)
+  indexNumber         String?
+  courseType          String?
+  registrationStatus  CourseRegistrationStatus @default(UNKNOWN)
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
+  user                User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userSemester        UserSemester             @relation(fields: [userSemesterId], references: [id], onDelete: Cascade)
+  offering            ModuleOffering           @relation(fields: [offeringId], references: [id])
+  classSessions       ClassSession[]
+  academicIntakes     AcademicIntake[]
+  assessments         Assessment[]
+  weeklyTopics        ModuleWeeklyTopic[]
+  privateFacts        UserModuleFact[]
+  recurringCoursework RecurringCoursework[]
+  tasks               Task[]
 
   @@unique([userId, offeringId])
   @@index([userId])
@@ -656,6 +658,58 @@ enum AcademicIntakeCategory {
   EXAM_INFORMATION
   ANNOUNCEMENT
   GENERAL_NOTE
+}
+
+enum MailClassification {
+  ACTION_REQUIRED
+  ACADEMIC_ADMIN
+  OPPORTUNITY
+  EVENT
+  NOISE
+  UNCERTAIN
+}
+
+enum MailConfidenceBand {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum MailIntakeStatus {
+  NEW
+  REVIEWED
+  CONVERTED
+  ARCHIVED
+  DISMISSED
+}
+
+model MailIntake {
+  id                     String             @id @default(cuid())
+  userId                 String
+  subject                String?
+  senderName             String?
+  senderEmail            String?
+  receivedAt             DateTime?
+  rawText                String
+  contentFingerprint     String
+  classification         MailClassification
+  confidenceBand         MailConfidenceBand
+  reasons                String[]           @default([])
+  extractedPayload       Json?
+  status                 MailIntakeStatus   @default(NEW)
+  interpreterKey         String             @default("ntu-mail-deterministic-v1")
+  convertedOpportunityId String?
+  convertedTaskId        String?
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+  user                   User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  convertedOpportunity   Opportunity?       @relation(fields: [convertedOpportunityId], references: [id], onDelete: SetNull)
+  convertedTask          Task?              @relation(fields: [convertedTaskId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, contentFingerprint])
+  @@index([userId, status, createdAt])
+  @@index([convertedOpportunityId])
+  @@index([convertedTaskId])
 }
 
 enum AcademicIntakeStatus {
@@ -765,37 +819,37 @@ enum RecurringCourseworkOccurrenceStatus {
 }
 
 model AcademicIntake {
-  id                    String                 @id @default(cuid())
-  userId                String
-  moduleEnrolmentId     String?
-  rawText               String
-  detectedCategory      AcademicIntakeCategory
-  status                AcademicIntakeStatus   @default(PENDING_REVIEW)
-  clarificationReason   String?
-  interpreterKey        String                 @default("deterministic-v1")
-  createdAt             DateTime               @default(now())
-  updatedAt             DateTime               @updatedAt
-  user                  User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  moduleEnrolment       UserModuleEnrolment?   @relation(fields: [moduleEnrolmentId], references: [id], onDelete: SetNull)
-  proposals             AcademicProposal[]
+  id                  String                 @id @default(cuid())
+  userId              String
+  moduleEnrolmentId   String?
+  rawText             String
+  detectedCategory    AcademicIntakeCategory
+  status              AcademicIntakeStatus   @default(PENDING_REVIEW)
+  clarificationReason String?
+  interpreterKey      String                 @default("deterministic-v1")
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
+  user                User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  moduleEnrolment     UserModuleEnrolment?   @relation(fields: [moduleEnrolmentId], references: [id], onDelete: SetNull)
+  proposals           AcademicProposal[]
 
   @@index([userId, status, createdAt])
   @@index([moduleEnrolmentId, createdAt])
 }
 
 model AcademicProposal {
-  id                    String                   @id @default(cuid())
-  intakeId              String
-  actionType            AcademicProposalAction
-  targetType            AcademicProposalTarget
-  targetId              String?
-  payload               Json
-  status                AcademicProposalStatus   @default(PENDING)
-  conflictReason        String?
-  appliedAt             DateTime?
-  createdAt             DateTime                 @default(now())
-  updatedAt             DateTime                 @updatedAt
-  intake                AcademicIntake           @relation(fields: [intakeId], references: [id], onDelete: Cascade)
+  id             String                 @id @default(cuid())
+  intakeId       String
+  actionType     AcademicProposalAction
+  targetType     AcademicProposalTarget
+  targetId       String?
+  payload        Json
+  status         AcademicProposalStatus @default(PENDING)
+  conflictReason String?
+  appliedAt      DateTime?
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+  intake         AcademicIntake         @relation(fields: [intakeId], references: [id], onDelete: Cascade)
 
   @@index([intakeId, status])
   @@index([targetType, targetId])
@@ -831,48 +885,48 @@ model UserModuleFact {
 }
 
 model Assessment {
-  id                    String           @id @default(cuid())
-  userId                String
-  userModuleEnrolmentId String
-  name                  String
-  normalizedName        String
-  type                  AssessmentType
-  weight                Decimal?         @db.Decimal(5, 2)
-  officialDeadline      DateTime?
-  internalDeadline      DateTime?
-  eventDate             DateTime?
-  eventEndDate          DateTime?
-  submissionPlatform    String?
-  submissionUrl         String?
-  instructions          String?
-  examFormat            String?
+  id                     String                  @id @default(cuid())
+  userId                 String
+  userModuleEnrolmentId  String
+  name                   String
+  normalizedName         String
+  type                   AssessmentType
+  weight                 Decimal?                @db.Decimal(5, 2)
+  officialDeadline       DateTime?
+  internalDeadline       DateTime?
+  eventDate              DateTime?
+  eventEndDate           DateTime?
+  submissionPlatform     String?
+  submissionUrl          String?
+  instructions           String?
+  examFormat             String?
   estimatedEffortMinutes Int?
-  actualEffortMinutes   Int?
-  groupAssessment       Boolean?
-  status                AssessmentStatus @default(NOT_STARTED)
-  score                 Decimal?         @db.Decimal(10, 2)
-  maximumScore          Decimal?         @db.Decimal(10, 2)
-  percentageScore       Decimal?         @db.Decimal(7, 4)
-  weightedScore         Decimal?         @db.Decimal(7, 4)
-  feedback              String?
-  reflection            String?
-  submittedAt           DateTime?
-  gradedAt              DateTime?
-  createdAt             DateTime         @default(now())
-  updatedAt             DateTime         @updatedAt
-  user                  User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userModuleEnrolment   UserModuleEnrolment @relation(fields: [userModuleEnrolmentId], references: [id], onDelete: Cascade)
-  deliverables          AssessmentDeliverable[]
-  milestones            AssessmentMilestone[]
-  recurringCoursework   RecurringCoursework[]
-  tasks                 Task[]
+  actualEffortMinutes    Int?
+  groupAssessment        Boolean?
+  status                 AssessmentStatus        @default(NOT_STARTED)
+  score                  Decimal?                @db.Decimal(10, 2)
+  maximumScore           Decimal?                @db.Decimal(10, 2)
+  percentageScore        Decimal?                @db.Decimal(7, 4)
+  weightedScore          Decimal?                @db.Decimal(7, 4)
+  feedback               String?
+  reflection             String?
+  submittedAt            DateTime?
+  gradedAt               DateTime?
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
+  user                   User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userModuleEnrolment    UserModuleEnrolment     @relation(fields: [userModuleEnrolmentId], references: [id], onDelete: Cascade)
+  deliverables           AssessmentDeliverable[]
+  milestones             AssessmentMilestone[]
+  recurringCoursework    RecurringCoursework[]
+  tasks                  Task[]
 
   @@index([userId, userModuleEnrolmentId])
   @@index([userModuleEnrolmentId, officialDeadline])
 }
 
 model RecurringCoursework {
-  id                    String                       @id @default(cuid())
+  id                    String                          @id @default(cuid())
   userId                String
   userModuleEnrolmentId String
   assessmentId          String?
@@ -883,18 +937,18 @@ model RecurringCoursework {
   totalExpected         Int
   firstTeachingWeek     Int?
   lastTeachingWeek      Int?
-  recessWeeks           Int[]                        @default([])
-  includeRecessWeeks    Boolean                      @default(false)
-  graded                Boolean                      @default(false)
-  totalAssessmentWeight Decimal?                     @db.Decimal(5, 2)
-  completeBeforeClass   Boolean                      @default(false)
+  recessWeeks           Int[]                           @default([])
+  includeRecessWeeks    Boolean                         @default(false)
+  graded                Boolean                         @default(false)
+  totalAssessmentWeight Decimal?                        @db.Decimal(5, 2)
+  completeBeforeClass   Boolean                         @default(false)
   timingNote            String?
-  status                RecurringCourseworkStatus    @default(ACTIVE)
-  createdAt             DateTime                     @default(now())
-  updatedAt             DateTime                     @updatedAt
-  user                  User                         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userModuleEnrolment   UserModuleEnrolment          @relation(fields: [userModuleEnrolmentId], references: [id], onDelete: Cascade)
-  assessment            Assessment?                  @relation(fields: [assessmentId], references: [id], onDelete: SetNull)
+  status                RecurringCourseworkStatus       @default(ACTIVE)
+  createdAt             DateTime                        @default(now())
+  updatedAt             DateTime                        @updatedAt
+  user                  User                            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userModuleEnrolment   UserModuleEnrolment             @relation(fields: [userModuleEnrolmentId], references: [id], onDelete: Cascade)
+  assessment            Assessment?                     @relation(fields: [assessmentId], references: [id], onDelete: SetNull)
   occurrences           RecurringCourseworkOccurrence[]
   tasks                 Task[]
 
@@ -934,15 +988,15 @@ model RecurringCourseworkOccurrence {
 }
 
 model AssessmentDeliverable {
-  id           String   @id @default(cuid())
+  id           String     @id @default(cuid())
   assessmentId String
   title        String
   description  String?
-  required     Boolean  @default(true)
-  completed    Boolean  @default(false)
-  sortOrder    Int      @default(0)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  required     Boolean    @default(true)
+  completed    Boolean    @default(false)
+  sortOrder    Int        @default(0)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
   assessment   Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
 
   @@index([assessmentId, sortOrder])
@@ -993,7 +1047,7 @@ enum TaskPriority {
 }
 
 model Task {
-  id                              String                        @id @default(cuid())
+  id                              String                         @id @default(cuid())
   userId                          String
   moduleEnrolmentId               String?
   assessmentId                    String?
@@ -1003,26 +1057,27 @@ model Task {
   parentTaskId                    String?
   title                           String
   description                     String?
-  type                            TaskType                      @default(STUDY)
-  status                          TaskStatus                    @default(BACKLOG)
-  priority                        TaskPriority                  @default(MEDIUM)
+  type                            TaskType                       @default(STUDY)
+  status                          TaskStatus                     @default(BACKLOG)
+  priority                        TaskPriority                   @default(MEDIUM)
   dueAt                           DateTime?
   timingNote                      String?
   estimatedMinutes                Int?
   actualMinutes                   Int?
-  sortOrder                       Int                           @default(0)
+  sortOrder                       Int                            @default(0)
   startedAt                       DateTime?
   completedAt                     DateTime?
-  createdAt                       DateTime                      @default(now())
-  updatedAt                       DateTime                      @updatedAt
-  user                            User                          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  moduleEnrolment                 UserModuleEnrolment?          @relation(fields: [moduleEnrolmentId], references: [id], onDelete: SetNull)
-  assessment                      Assessment?                   @relation(fields: [assessmentId], references: [id], onDelete: SetNull)
-  recurringCoursework             RecurringCoursework?          @relation(fields: [recurringCourseworkId], references: [id], onDelete: SetNull)
+  createdAt                       DateTime                       @default(now())
+  updatedAt                       DateTime                       @updatedAt
+  user                            User                           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  moduleEnrolment                 UserModuleEnrolment?           @relation(fields: [moduleEnrolmentId], references: [id], onDelete: SetNull)
+  assessment                      Assessment?                    @relation(fields: [assessmentId], references: [id], onDelete: SetNull)
+  recurringCoursework             RecurringCoursework?           @relation(fields: [recurringCourseworkId], references: [id], onDelete: SetNull)
   recurringCourseworkOccurrence   RecurringCourseworkOccurrence? @relation(fields: [recurringCourseworkOccurrenceId], references: [id], onDelete: SetNull)
-  assessmentMilestone             AssessmentMilestone?          @relation(fields: [assessmentMilestoneId], references: [id], onDelete: SetNull)
+  assessmentMilestone             AssessmentMilestone?           @relation(fields: [assessmentMilestoneId], references: [id], onDelete: SetNull)
   parentTask                      Task?                          @relation("TaskSubtasks", fields: [parentTaskId], references: [id], onDelete: Cascade)
   subtasks                        Task[]                         @relation("TaskSubtasks")
+  mailIntakes                     MailIntake[]
 
   @@unique([userId, recurringCourseworkOccurrenceId])
   @@unique([userId, assessmentMilestoneId])

@@ -1,0 +1,175 @@
+export const NTU_MAIL_FIXTURES = Object.freeze({
+  ccaRecruitment: `From: NBS Investment Banking Club <ibc@example.edu.sg>
+Subject: IBC Sales & Trading Recruitment
+Sent: 15 August 2026, 09:30 AM
+Applications are open for freshmen interested in finance.
+Eligibility: Freshmen eligible
+Applications close: 18 Aug 2026, 23:59
+Apply: https://example.edu.sg/forms/ibc-recruitment`,
+  internship: `Subject: Summer Analyst Internship
+Organisation: Example Capital
+Applications are open for a summer internship.
+Deadline: 30 September 2026 at 17:00
+Application: https://careers.example.com/apply/internship`,
+  competition: `Subject: ASEAN Analytics Competition
+Organisation: Analytics Society
+Form a student team for this competition.
+Apply by: 12 October 2026 at 12:00
+https://example.org/forms/analytics-challenge`,
+  exchange: `Subject: GEM Explorer Applications
+Organisation: NTU Global
+Applications are open for the GEM Explorer exchange programme.
+Deadline: Week 3 of Semester 2
+Eligibility: Full-time undergraduates`,
+  scholarship: `Subject: Future Leaders Scholarship
+Organisation: Example Foundation
+Call for applications for a scholarship supporting university students.
+Deadline: 2 November 2026 at 23:59
+https://foundation.example/apply`,
+  mentorship: `Subject: Women in Business Mentorship
+Organisation: NBS Alumni Network
+Applications are open for a six-month mentorship programme.
+Commitment: Two hours each month
+Apply by: 25 August 2026 at 18:00
+https://example.edu.sg/forms/mentorship`,
+  requiredAdmin: `From: Office of Academic Services <oas@example.edu.sg>
+Subject: Action required: student declaration
+You are required to complete the student declaration form.
+Submit by: 20 August 2026 at 17:00
+https://example.edu.sg/forms/declaration`,
+  venueChange: `Subject: AB1201 seminar venue change
+AB1201 Seminar Group 11 has moved from ESR4 to LT1 from 17 August 2026.
+No response is required.`,
+  networkingEvent: `Subject: Employer networking session
+Organisation: Example Bank
+Join our employer networking event.
+Date: 27 August 2026 at 18:30
+Venue: NBS Lounge
+Register: https://events.example.com/networking`,
+  newsletter: `Subject: Campus weekly newsletter
+This weekly digest contains general publicity and highlights from around campus.
+Manage preferences or unsubscribe at https://example.edu.sg/preferences`,
+  ambiguous: `Subject: A quick update
+Hello students, please note that more information will be shared soon.
+Thank you for your attention.`,
+  internshipNoDeadline: `From: NBS Careers <careers@ntu.edu.sg>
+Sent: Saturday, 15 August 2026 09:00
+To: Student <student@e.ntu.edu.sg>
+Subject: Summer Analyst Internship
+
+Dear student,
+Organisation: Example Capital
+Applications are open for a summer internship.
+Apply: https://careers.example.com/internship
+
+Regards,
+NBS Careers`,
+  ccaDeadline: `From: NTU Student Life <studentlife@ntu.edu.sg>
+Sent: Saturday, 15 August 2026 10:00
+To: Student <student@e.ntu.edu.sg>
+Subject: CCA Recruitment 2026
+
+Hello students,
+Organisation: Adventure Club
+Applications are open for CCA recruitment.
+Deadline: 25 August 2026 at 23:59
+Apply: https://example.edu.sg/cca`,
+  subjectless: `From the Office of Student Affairs
+
+Dear students,
+
+This is a subjectless informational message with several paragraphs.
+
+Please read the attached guidance when convenient.
+
+Regards,
+Student Affairs`,
+  ambiguousMultiple: `Subject: First student update
+Hello students, this is the first update.
+Regards,
+Office A
+--------------------
+Subject: Second student update
+Hello students, this may be another message.`,
+  forwarded: `Subject: Fwd: Employer briefing
+Hello,
+Please see the forwarded message below.
+
+-----Original Message-----
+From: Employer Relations <employer@ntu.edu.sg>
+Sent: Saturday, 15 August 2026 11:00
+To: Students <students@e.ntu.edu.sg>
+Subject: Employer briefing
+
+Join the employer webinar next week.`,
+  ab1088Announcement: `From: NTULearn <notifications@ntu.edu.sg>
+Subject: AB1088-CAREER LAUNCHPAD (SEM) AY26/27 SEM 1-1: AB1088 Group 1 - Power Dressing and Professional Etiquette on 17 Aug (Monday)
+
+An announcement has been posted in NTULearn.
+First class: 17 Aug 2026
+Venue: S3 Building, Conference Room 1
+Attachment: Class Schedule for Week 2 to Week 3 (Power Dressing & Professional Etiquette).xlsx
+Direction to your classes.docx: https://example.ntu.edu.sg/directions.docx
+NTU Campus Map: https://maps.ntu.edu.sg/
+
+Any multimedia items must be viewed online.
+View Announcement
+Manage your notification preferences.
+Email brought to you by Blackboard.`,
+  explicitAcademicDeadline: `Subject: AB1088 action required: submit declaration
+You are required to submit the student declaration.
+Submit by 19 August 2026, 23:59.`,
+  notificationTiming: `Subject: Banking Internship Applications
+Organisation: Example Bank
+Applications are open for a summer internship.
+Only shortlisted candidates will receive an email by 21 Aug 2026.
+Apply at https://careers.example.com/apply.`,
+  ibcCaseAssessment: `Subject: IBC S&T Portfolio — Case Assessment
+
+Dear Applicant,
+
+Thank you for your interest in the IBC S&T Portfolio.
+
+As part of the selection process, we would like to invite you to complete a case assessment.
+
+Kindly review the instructions carefully and submit your completed assessments by 19th August 2026, 23:59.
+
+Best Regards,
+NTU Investment Banking Club`,
+  selectionProcessOnly: `Subject: IBC S&T Portfolio selection update
+Dear Applicant,
+Your application is currently in the selection process. Further information will follow.
+Best Regards,
+NTU Investment Banking Club`,
+  interviewNotification: `Subject: Banking Internship Applications
+Organisation: Example Bank
+Applications are open for a summer internship.
+Shortlisted candidates will receive an interview email by 21 Aug 2026.
+No response is requested.`,
+  asmiHackathon: `From: Student Life-Nanyang Business School <studentlife@ntu.edu.sg>
+Subject: ASMI M&OE Hackathon 2026 | NTU College of Business (Nanyang Business School)
+
+The Association of Singapore Marine & Offshore Energy Industries (ASMI) invites you to be part our 2nd ASMI Marine & Offshore Energy Hackathon 2026.
+
+This is a non-coding, solutions-based hackathon.
+Date: 7 October 2026 (Wednesday)
+Time: 8:00 AM - 6:30 PM
+Venue: 9 Jurong Town Hall Road #04-03 Trade Association Hub Jurong Town Hall, 609431
+Theme: Breaking Barriers: Steering Toward an Inclusive and Accessible Marine and Offshore Energy Industry
+
+Open to All Disciplines
+Students from business, IT, design, sustainability and other fields are encouraged.
+Sign up as a team of five.
+The Champion Team of each category will walk away with SGD $500.00 cash.
+Register: https://forms.office.com/r/ASMIHackathon2026
+
+Top teams will present at the Marine & Offshore Energy Youth Forum 2026 on 21 October 2026.`
+})
+
+export const TWO_EMAIL_PASTE = `${NTU_MAIL_FIXTURES.internshipNoDeadline}\n\n${NTU_MAIL_FIXTURES.ccaDeadline}`
+export const FOUR_EMAIL_PASTE = [
+  NTU_MAIL_FIXTURES.internshipNoDeadline,
+  NTU_MAIL_FIXTURES.ccaDeadline,
+  `From: Academic Office <academic@ntu.edu.sg>\nSent: 15 August 2026 11:00\nTo: Student <student@e.ntu.edu.sg>\nSubject: AB1201 venue update\n\nAB1201 seminar venue has changed to LT1.`,
+  `From: Campus News <news@ntu.edu.sg>\nSent: 15 August 2026 12:00\nTo: Student <student@e.ntu.edu.sg>\nSubject: Campus weekly newsletter\n\nThis weekly digest contains general publicity. Unsubscribe in the footer.`
+].join('\n\n')
