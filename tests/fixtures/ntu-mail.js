@@ -101,7 +101,29 @@ Sent: Saturday, 15 August 2026 11:00
 To: Students <students@e.ntu.edu.sg>
 Subject: Employer briefing
 
-Join the employer webinar next week.`
+Join the employer webinar next week.`,
+  ab1088Announcement: `From: NTULearn <notifications@ntu.edu.sg>
+Subject: AB1088-CAREER LAUNCHPAD (SEM) AY26/27 SEM 1-1: AB1088 Group 1 - Power Dressing and Professional Etiquette on 17 Aug (Monday)
+
+An announcement has been posted in NTULearn.
+First class: 17 Aug 2026
+Venue: S3 Building, Conference Room 1
+Attachment: Class Schedule for Week 2 to Week 3 (Power Dressing & Professional Etiquette).xlsx
+Direction to your classes.docx: https://example.ntu.edu.sg/directions.docx
+NTU Campus Map: https://maps.ntu.edu.sg/
+
+Any multimedia items must be viewed online.
+View Announcement
+Manage your notification preferences.
+Email brought to you by Blackboard.`,
+  explicitAcademicDeadline: `Subject: AB1088 action required: submit declaration
+You are required to submit the student declaration.
+Submit by 19 August 2026, 23:59.`,
+  notificationTiming: `Subject: Banking Internship Applications
+Organisation: Example Bank
+Applications are open for a summer internship.
+Only shortlisted candidates will receive an email by 21 Aug 2026.
+Apply at https://careers.example.com/apply.`
 })
 
 export const TWO_EMAIL_PASTE = `${NTU_MAIL_FIXTURES.internshipNoDeadline}\n\n${NTU_MAIL_FIXTURES.ccaDeadline}`

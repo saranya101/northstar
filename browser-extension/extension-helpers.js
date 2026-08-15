@@ -1,5 +1,29 @@
 export const NORTHSTAR_BASE_URL = 'http://localhost:3000'
 
+export const normalizeAutoSyncPreference = value => value === true
+
+export function createMemoryDeduper() {
+  const keys = new Set()
+  return {
+    has: key => keys.has(key),
+    add: key => { keys.add(key) },
+    size: () => keys.size
+  }
+}
+
+export function summarizeBatchItem(item) {
+  return { duplicate: item?.duplicate === true, created: item?.duplicate !== true && Boolean(item?.id || item?.mailIntakeId) }
+}
+
+export function createScanCancellation() {
+  let cancelled = false
+  return { cancel: () => { cancelled = true }, isCancelled: () => cancelled }
+}
+
+export function readingPaneHasSettled(lastMutationAt, now = Date.now(), minimumDelay = 750) {
+  return Number.isFinite(lastMutationAt) && now - lastMutationAt >= minimumDelay
+}
+
 const OUTLOOK_HOSTS = new Set([
   'outlook.office.com',
   'outlook.office365.com',

@@ -1,8 +1,9 @@
 import { extractOpportunityFromText, parseOpportunityDateFragment } from './opportunity-text-parser'
+import { interpretAcademicMail, withoutAcademicBoilerplate } from './academic-mail-interpreter'
 
 const HEADER = /^(from|sender|subject|sent|date|to|cc):\s*/i
 const MODULE_CODE = /\b[A-Z]{2,4}\d{4}\b/
-const ACTION_REQUIRED = /\b(action required|mandatory|required action|you (?:are required to|must)|must complete|complete (?:the )?form|submit (?:the )?(?:form|declaration)|respond by|registration action)\b/i
+const ACTION_REQUIRED = /\b(action required|mandatory|required action|you (?:are required to|must)|must complete|complete (?:the )?form|submit (?:the )?(?:form|declaration)|submit by|respond by|registration action)\b/i
 const OPPORTUNITY = /\b(recruit(?:ment|ing)?|internship|career programme|competition|challenge|scholarship|exchange programme|gem (?:explorer|discoverer|programme)|mentor(?:ship|ing)?|volunteer(?:ing)?|leadership programme|applications? (?:are )?open|call for applications)\b/i
 const ACADEMIC = /\b(venue change|class venue|lecture|tutorial|seminar|module announcement|assessment|quiz|exam(?:ination)?|teaching update|lesson|course registration|add\/drop)\b/i
 const EVENT = /\b(networking (?:session|event)|employer event|workshop|webinar|talk|information session|info session|career fair|fireside chat)\b/i
@@ -38,7 +39,7 @@ function confidence(classification, signalCount) {
 }
 
 export function classifyMailText(rawText, metadata = {}) {
-  const text = `${metadata.subject || ''}\n${rawText}`
+  const text = `${metadata.subject || ''}\n${withoutAcademicBoilerplate(rawText)}`
   const reasons = []
   let classification = 'UNCERTAIN'
   if (ACTION_REQUIRED.test(text)) {
@@ -90,23 +91,15 @@ export function deterministicMailInterpretation(input) {
   }
   const classification = classifyMailText(input.rawText, metadata)
   const extractionText = metadata.subject ? `Title: ${metadata.subject}\n${input.rawText}` : input.rawText
-  const extracted = extractOpportunityFromText(extractionText)
-  const rawLines = lines(input.rawText)
-  const moduleCode = rawLines.join(' ').match(MODULE_CODE)?.[0] || null
-  const actionRequired = rawLines.find(line => ACTION_LINE.test(line)) || null
+  const extracted = ['OPPORTUNITY', 'EVENT'].includes(classification.category) ? extractOpportunityFromText(extractionText) : null
   const payload = {
-    opportunity: ['OPPORTUNITY', 'EVENT'].includes(classification.category) ? plainOpportunity(extracted.candidate, metadata.subject, input.rawText) : null,
-    admin: ['ACTION_REQUIRED', 'ACADEMIC_ADMIN'].includes(classification.category) ? {
-      title: metadata.subject || actionRequired || rawLines.find(line => !HEADER.test(line)) || 'NTU mail action',
-      moduleCode, actionRequired, deadline: extracted.candidate.deadline.value,
-      deadlineSourceText: rawLines.find(line => DEADLINE_LINE.test(line)) || null,
-      sourceText: input.rawText
-    } : null,
-    unresolved: extracted.warnings.concat(extracted.candidate.deadline.warnings)
+    opportunity: extracted ? plainOpportunity(extracted.candidate, metadata.subject, input.rawText) : null,
+    admin: ['ACTION_REQUIRED', 'ACADEMIC_ADMIN'].includes(classification.category) ? interpretAcademicMail(input.rawText, metadata) : null,
+    unresolved: extracted ? extracted.warnings.concat(extracted.candidate.deadline.warnings) : []
   }
   return { metadata, classification, extractedPayload: payload }
 }
 
 export function createMailInterpreter() {
-  return { key: 'ntu-mail-deterministic-v1', interpret: async input => deterministicMailInterpretation(input) }
+  return { key: 'ntu-mail-deterministic-v2', interpret: async input => deterministicMailInterpretation(input) }
 }

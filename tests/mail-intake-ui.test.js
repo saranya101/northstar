@@ -14,4 +14,11 @@ describe('multi-email intake review UI', () => {
     expect(component).toContain('Deliberately proceed as one')
     expect(component).toContain('Structure for review')
   })
+
+  it('keeps active, archived, and dismissed mail distinct', () => {
+    expect(component).toContain("['active','archived','dismissed']")
+    expect(component).toContain("decide(intake, 'archive')")
+    expect(component).toContain("decide(intake, 'dismiss')")
+    expect(component).not.toMatch(/Delete Outlook/i)
+  })
 })

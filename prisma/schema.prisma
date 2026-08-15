@@ -679,6 +679,7 @@ enum MailIntakeStatus {
   NEW
   REVIEWED
   CONVERTED
+  ARCHIVED
   DISMISSED
 }
 

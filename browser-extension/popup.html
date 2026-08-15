@@ -11,8 +11,13 @@
       <header class="brand"><span aria-hidden="true">N</span><div><strong>Northstar Mail</strong><small>Outlook Web intake</small></div></header>
 
       <section id="initial-view" class="stack">
-        <p>Open an email in NTU Outlook,<br>then extract it here.</p>
+        <p id="outlook-state"><strong>Checking Outlook…</strong></p>
+        <label class="toggle-row"><span><strong>Auto-sync while Outlook is open</strong><small id="auto-status">Off</small></span><input id="auto-sync-toggle" type="checkbox" role="switch"></label>
+        <dl class="session-stats"><div><dt>Last sync</dt><dd id="last-sync-value">Never</dd></div><div><dt>This session</dt><dd><span id="sent-value">0</span> sent · <span id="new-value">0</span> new · <span id="duplicate-value">0</span> duplicates</dd></div></dl>
+        <button id="scan-button" class="primary" type="button">Scan new emails</button>
+        <button id="stop-scan-button" class="secondary" type="button" hidden>Stop</button>
         <button id="extract-button" class="primary" type="button">Extract open email</button>
+        <button id="open-inbox-button" class="secondary" type="button">Open Northstar Inbox</button>
       </section>
 
       <section id="review-view" class="stack" hidden>
@@ -31,7 +36,7 @@
         <div class="success-mark" aria-hidden="true">✓</div>
         <strong>Sent to Northstar</strong>
         <p id="classification-value">Classification and review are ready.</p>
-        <button id="open-inbox-button" class="primary" type="button">Open Northstar Inbox</button>
+        <button id="open-success-inbox-button" class="primary" type="button">Open Northstar Inbox</button>
       </section>
 
       <p id="status-message" class="status" role="status" hidden></p>

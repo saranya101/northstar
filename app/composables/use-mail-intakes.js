@@ -6,11 +6,13 @@ export function useMailIntakes() {
   const error = useState('northstar-mail-intakes-error', () => '')
   const fieldErrors = useState('northstar-mail-intakes-field-errors', () => ({}))
   const notice = useState('northstar-mail-intakes-notice', () => '')
+  const view = useState('northstar-mail-intakes-view', () => 'active')
   const clear = () => { error.value = ''; fieldErrors.value = {}; notice.value = '' }
 
-  async function load() {
+  async function load(nextView = view.value) {
+    view.value = nextView
     loading.value = true; clear()
-    try { records.value = await requestFetch('/api/mail-intake'); return records.value }
+    try { records.value = await requestFetch('/api/mail-intake', { query: { view: view.value } }); return records.value }
     catch (cause) { error.value = cause?.data?.message || cause?.statusMessage || 'Unable to load pasted mail.'; return [] }
     finally { loading.value = false }
   }
@@ -23,6 +25,7 @@ export function useMailIntakes() {
   async function create(body) {
     const result = await request('/api/mail-intake', { method: 'POST', body })
     if (result) {
+      view.value = 'active'
       records.value = [result, ...records.value.filter(item => item.id !== result.id)]
       notice.value = result.duplicate ? 'This email was already in your review history, so the existing intake was reused.' : 'Email structured for review. Nothing else was created.'
     }
@@ -45,13 +48,15 @@ export function useMailIntakes() {
     const result = await request(`/api/mail-intake/${intake.id}/${action}`, { method: 'POST', body: { expectedUpdatedAt: intake.updatedAt, ...extra } })
     if (result) {
       const updated = result.intake || result
-      records.value = records.value.map(item => item.id === updated.id ? updated : item)
+      const belongs = view.value === 'active' ? updated.status === 'NEW' : view.value === 'dismissed' ? updated.status === 'DISMISSED' : ['ARCHIVED', 'REVIEWED', 'CONVERTED'].includes(updated.status)
+      records.value = belongs ? records.value.map(item => item.id === updated.id ? updated : item) : records.value.filter(item => item.id !== updated.id)
       if (action === 'opportunity') notice.value = result.duplicate ? 'Linked to the matching saved Opportunity Radar item.' : 'Saved to Opportunity Radar.'
       if (action === 'task') notice.value = 'Task created.'
       if (action === 'note') notice.value = 'Kept as a reviewed Inbox note.'
       if (action === 'dismiss') notice.value = 'Mail dismissed.'
+      if (action === 'archive') notice.value = 'Mail archived in Northstar.'
     }
     return result
   }
-  return { records, loading, saving, error, fieldErrors, notice, load, create, preview, createBatch, decide }
+  return { records, view, loading, saving, error, fieldErrors, notice, load, create, preview, createBatch, decide }
 }

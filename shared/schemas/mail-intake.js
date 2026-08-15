@@ -2,7 +2,7 @@ import { z } from 'zod'
 
 export const MAIL_CLASSIFICATIONS = ['ACTION_REQUIRED', 'ACADEMIC_ADMIN', 'OPPORTUNITY', 'EVENT', 'NOISE', 'UNCERTAIN']
 export const MAIL_CONFIDENCE_BANDS = ['HIGH', 'MEDIUM', 'LOW']
-export const MAIL_INTAKE_STATUSES = ['NEW', 'REVIEWED', 'CONVERTED', 'DISMISSED']
+export const MAIL_INTAKE_STATUSES = ['NEW', 'REVIEWED', 'CONVERTED', 'ARCHIVED', 'DISMISSED']
 
 const blank = value => value === '' || value === null || value === undefined ? undefined : value
 const text = (maximum, minimum = 1) => z.preprocess(blank, z.string().trim().min(minimum).max(maximum).optional())

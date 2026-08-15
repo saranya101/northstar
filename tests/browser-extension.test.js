@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { isAllowedOutlookUrl, normalizeStructuredOutlookMessage, sanitizeHttpLink } from '../browser-extension/extension-helpers.js'
+import { createMemoryDeduper, createScanCancellation, isAllowedOutlookUrl, normalizeAutoSyncPreference, normalizeStructuredOutlookMessage, readingPaneHasSettled, sanitizeHttpLink, summarizeBatchItem } from '../browser-extension/extension-helpers.js'
 
 describe('Northstar Mail browser extension helpers', () => {
   it.each([
@@ -43,10 +43,46 @@ describe('Northstar Mail browser extension helpers', () => {
     const manifest = JSON.parse(readFileSync(new URL('../browser-extension/manifest.json', import.meta.url), 'utf8'))
     const source = [
       readFileSync(new URL('../browser-extension/popup.js', import.meta.url), 'utf8'),
-      readFileSync(new URL('../browser-extension/outlook-extractor.js', import.meta.url), 'utf8')
+      readFileSync(new URL('../browser-extension/outlook-extractor.js', import.meta.url), 'utf8'),
+      readFileSync(new URL('../browser-extension/content-script.js', import.meta.url), 'utf8'),
+      readFileSync(new URL('../browser-extension/service-worker.js', import.meta.url), 'utf8')
     ].join('\n')
-    expect(manifest).toMatchObject({ manifest_version: 3, permissions: ['activeTab', 'scripting', 'storage'], host_permissions: ['http://localhost:3000/*'] })
+    expect(manifest).toMatchObject({
+      manifest_version: 3, permissions: ['activeTab', 'scripting', 'storage'],
+      host_permissions: ['http://localhost:3000/*', 'https://outlook.office.com/*', 'https://outlook.office365.com/*'],
+      background: { service_worker: 'service-worker.js', type: 'module' }
+    })
     expect(manifest.permissions).not.toContain('cookies')
-    expect(source).not.toMatch(/chrome\.cookies|document\.cookie|console\.(?:log|info|debug)|webRequest|XMLHttpRequest/)
+    expect(manifest.host_permissions).not.toContain('<all_urls>')
+    expect(source).not.toMatch(/chrome\.cookies|document\.cookie|console\.(?:log|info|debug)|webRequest|XMLHttpRequest|\.click\(\)/)
+    expect(source).not.toMatch(/chrome\.storage\.local\.set\(\s*\{\s*(?:rawText|message|body)\s*:/)
+    expect(source.match(/chrome\.storage\.local\.set\(\s*\{[^}]+\}\s*\)/g)).toEqual([
+      'chrome.storage.local.set({ lastSyncAt: new Date().toISOString() })',
+      'chrome.storage.local.set({ autoSyncEnabled: message.enabled === true })'
+    ])
+  })
+
+  it('normalizes opt-in auto-sync and deduplicates content only in memory', () => {
+    expect(normalizeAutoSyncPreference(true)).toBe(true)
+    expect(normalizeAutoSyncPreference('true')).toBe(false)
+    const deduper = createMemoryDeduper()
+    expect(deduper.has('message-hash')).toBe(false)
+    deduper.add('message-hash')
+    expect(deduper.has('message-hash')).toBe(true)
+    expect(deduper.size()).toBe(1)
+  })
+
+  it('handles duplicate server responses without treating them as new', () => {
+    expect(summarizeBatchItem({ id: 'mail-1', duplicate: true })).toEqual({ duplicate: true, created: false })
+    expect(summarizeBatchItem({ id: 'mail-2', duplicate: false })).toEqual({ duplicate: false, created: true })
+  })
+
+  it('supports scan cancellation and reading-pane settling', () => {
+    const cancellation = createScanCancellation()
+    expect(cancellation.isCancelled()).toBe(false)
+    cancellation.cancel()
+    expect(cancellation.isCancelled()).toBe(true)
+    expect(readingPaneHasSettled(1000, 1749)).toBe(false)
+    expect(readingPaneHasSettled(1000, 1750)).toBe(true)
   })
 })

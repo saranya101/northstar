@@ -10,7 +10,7 @@ vi.mock('../server/services/opportunities', () => ({
 }))
 vi.mock('../server/services/tasks', () => ({ createTask: canonical.createTask }))
 
-import { convertMailToOpportunity, convertMailToTask, createMailBatch, createMailIntake, dismissMailIntake, getMailIntake, previewMailPaste, retainMailAsNote } from '../server/services/mail-intakes.js'
+import { archiveMailIntake, convertMailToOpportunity, convertMailToTask, createMailBatch, createMailIntake, dismissMailIntake, getMailIntake, listMailIntakes, previewMailPaste, retainMailAsNote } from '../server/services/mail-intakes.js'
 import { NTU_MAIL_FIXTURES, TWO_EMAIL_PASTE } from './fixtures/ntu-mail.js'
 
 const createdAt = new Date('2026-08-15T02:00:00.000Z')
@@ -27,7 +27,10 @@ function databaseFixture() {
         return Promise.resolve(record)
       }),
       findFirst: vi.fn(({ where }) => Promise.resolve(records.find(item => item.id === where.id && item.userId === where.userId) || null)),
-      findMany: vi.fn(({ where }) => Promise.resolve(records.filter(item => item.userId === where.userId))),
+      findMany: vi.fn(({ where }) => Promise.resolve(records.filter(item => {
+        if (item.userId !== where.userId) return false
+        return typeof where.status === 'string' ? item.status === where.status : where.status?.in?.includes(item.status) ?? true
+      }))),
       updateMany: vi.fn(({ where, data }) => {
         const record = records.find(item => item.id === where.id && item.userId === where.userId)
         if (!record) return Promise.resolve({ count: 0 })
@@ -192,5 +195,27 @@ describe('mail intake persistence and review', () => {
     expect(canonical.createOpportunity).not.toHaveBeenCalled()
     expect(canonical.createTask).not.toHaveBeenCalled()
     expect(first.database.assessment.create).not.toHaveBeenCalled()
+  })
+
+  it('archives mail out of the active feed while retaining dedupe history', async () => {
+    const { database } = databaseFixture()
+    const intake = await createMailIntake('user-1', { rawText: NTU_MAIL_FIXTURES.venueChange }, database)
+    await expect(archiveMailIntake('user-1', intake.id, { expectedUpdatedAt: intake.updatedAt }, database)).resolves.toMatchObject({ status: 'ARCHIVED' })
+    await expect(listMailIntakes('user-1', 'active', database)).resolves.toHaveLength(0)
+    await expect(listMailIntakes('user-1', 'archived', database)).resolves.toHaveLength(1)
+    await expect(createMailIntake('user-1', { rawText: NTU_MAIL_FIXTURES.venueChange }, database)).resolves.toMatchObject({ id: intake.id, status: 'ARCHIVED', duplicate: true })
+  })
+
+  it('dismisses mail out of active review and blocks consequential transitions', async () => {
+    const { database } = databaseFixture()
+    const intake = await createMailIntake('user-1', { rawText: NTU_MAIL_FIXTURES.internship }, database)
+    const dismissed = await dismissMailIntake('user-1', intake.id, { expectedUpdatedAt: intake.updatedAt }, database)
+    expect(dismissed.status).toBe('DISMISSED')
+    await expect(listMailIntakes('user-1', 'active', database)).resolves.toHaveLength(0)
+    await expect(listMailIntakes('user-1', 'dismissed', database)).resolves.toHaveLength(1)
+    await expect(convertMailToOpportunity('user-1', intake.id, { expectedUpdatedAt: dismissed.updatedAt }, database)).rejects.toMatchObject({ statusCode: 409 })
+    await expect(archiveMailIntake('user-1', intake.id, { expectedUpdatedAt: dismissed.updatedAt }, database)).rejects.toMatchObject({ statusCode: 409 })
+    expect(canonical.createOpportunity).not.toHaveBeenCalled()
+    expect(canonical.createTask).not.toHaveBeenCalled()
   })
 })

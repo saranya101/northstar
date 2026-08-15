@@ -1,44 +1,39 @@
-# Northstar Mail Chrome Extension V1
+# Northstar Mail Automation V2
 
-Northstar Mail extracts the one email currently open in Outlook Web and sends it to the local Northstar mail-intelligence review pipeline. It does not scan a mailbox, use Microsoft Graph, read cookies, classify mail, or automatically create opportunities or tasks.
+Northstar Mail ingests individual Outlook Web messages into the local Northstar review pipeline while Outlook is open. Northstar remains responsible for classification, extraction, persistent deduplication, review, and user-confirmed Opportunity or Task creation.
 
-## Manual installation
+The extension does not use Microsoft Graph or OAuth, read cookies, download attachments, classify messages, call third parties, or modify Outlook mail.
 
-1. Open `chrome://extensions`.
-2. Enable **Developer mode**.
-3. Click **Load unpacked**.
-4. Select `/Users/gavar/projects/northstar/browser-extension`.
-5. Pin **Northstar Mail**.
-6. Start Northstar with `npm run dev` from `/Users/gavar/projects/northstar`.
-7. Sign into Northstar at `http://localhost:3000`.
-8. Open NTU Outlook Web.
-9. Open **one** email.
-10. Click **Northstar Mail**.
-11. Click **Extract open email**.
-12. Review the detected metadata and optional preview.
-13. Click **Send to Northstar**.
-14. Open the Northstar Inbox to review the classification.
+## Install or reload
 
-This is an unpacked local-development extension. It is not distributed through the Chrome Web Store.
+1. Start Northstar with `npm run dev` in `/Users/gavar/projects/northstar`.
+2. Sign into `http://localhost:3000`.
+3. Open `chrome://extensions`.
+4. Enable **Developer mode**.
+5. For a first install, click **Load unpacked** and select `/Users/gavar/projects/northstar/browser-extension`.
+6. For an existing V1 install, click **Reload** on the Northstar Mail extension card so the V2 manifest, service worker, and content script are active.
+7. Review the new requested site access. It is limited to localhost, `outlook.office.com`, and `outlook.office365.com`.
+8. Pin **Northstar Mail**.
+9. Open NTU Outlook Web and refresh the Outlook tab once after reloading the extension.
+10. Open one email and use **Extract open email**, or explicitly enable **Auto-sync while Outlook is open**.
+11. Open Northstar Inbox to review the resulting MailIntake. No Opportunity or Task is created automatically.
 
-## Supported scope
+## Auto-sync
 
-- Outlook Web pages on `outlook.office.com`, `outlook.office365.com`, and `outlook.cloud.microsoft`, under `/mail` or `/owa`.
-- One visible reading-pane message at a time.
-- Local Northstar at `http://localhost:3000`.
-- Existing Northstar browser session, sent by `fetch` with `credentials: "include"`.
+Auto-sync defaults to off. When enabled, a debounced content script observes meaningful Outlook DOM changes. The service worker runs the fail-closed semantic extractor after the reading pane settles, hashes the structured message in memory to suppress SPA rerenders, and posts the already-separated message to `/api/mail-intake/batch`. Only `autoSyncEnabled` and `lastSyncAt` are stored; raw mail is never written to extension storage.
 
-The extension requests `activeTab`, `scripting`, and `storage`, plus host access only to `http://localhost:3000/*`. It does not request cookie access or persistent Outlook host access. Chrome storage contains only the last successful connection timestamp; email content and credentials are never stored.
+## Scan new emails safety boundary
 
-If Northstar returns 401, open Northstar and sign in. If Chrome cannot share the existing session in the installed environment, do not add cookie permission; the follow-up design should use a short-lived Northstar extension pairing token.
+**Scan new emails** conservatively discovers visible rows in the current Outlook message list and reports the candidate count. V2 does not click those rows: Outlook may mark a message read when opened, and that mailbox-state mutation cannot be ruled out through the unstable DOM. The scan therefore fails closed before sequential extraction. It does not scan hidden folders, infer messages from preview text, or navigate the mailbox.
+
+## Permissions
+
+- `activeTab`, `scripting`, and `storage`.
+- `http://localhost:3000/*` for the authenticated Northstar batch request.
+- `https://outlook.office.com/*` and `https://outlook.office365.com/*` for the persistent content script while Outlook is open.
+
+There is no `<all_urls>`, `cookies`, `webRequest`, `identity`, `history`, or `browsingData` permission. If the tested NTU Outlook host differs, add that exact host only after confirming it.
 
 ## Safe diagnostics
 
-Outlook's DOM can change. Expand **Safe extractor diagnostics** in the popup and run it while one email is open. It reports only:
-
-- whether the Outlook host was recognised;
-- reading-pane and body candidate counts;
-- candidate tag names, roles, and truncated ARIA labels;
-- heading counts, body character lengths, and selector scores.
-
-Diagnostics never include email body text, cookies, storage, tokens, or request headers. The initial selectors are intentionally conservative and must be verified against the real NTU Outlook DOM before they can be considered confirmed.
+The popup diagnostic reports reading-pane/body candidate counts, tag names, roles, truncated ARIA labels, heading counts, character lengths, and scores. It never reports body text, cookies, tokens, request headers, or stored credentials. Outlook selectors and authentication still require verification against the real NTU environment.

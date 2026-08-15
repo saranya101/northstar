@@ -136,8 +136,9 @@ export async function createMailBatch(userId, messages, database = prisma, inter
   return records
 }
 
-export async function listMailIntakes(userId, database = prisma) {
-  const rows = await database.mailIntake.findMany({ where: { userId }, include, orderBy: { createdAt: 'desc' }, take: 50 })
+export async function listMailIntakes(userId, view = 'active', database = prisma) {
+  const status = view === 'dismissed' ? 'DISMISSED' : view === 'archived' ? { in: ['ARCHIVED', 'REVIEWED', 'CONVERTED'] } : 'NEW'
+  const rows = await database.mailIntake.findMany({ where: { userId, status }, include, orderBy: { createdAt: 'desc' }, take: 50 })
   return rows.map(row => serializeMailIntake(row))
 }
 
@@ -160,9 +161,17 @@ async function updateOwned(database, userId, id, data) {
 export async function dismissMailIntake(userId, id, input, database = prisma) {
   const record = await getMailIntake(userId, id, database)
   assertCurrent(record, input.expectedUpdatedAt)
-  if (record.status === 'CONVERTED') fail(409, 'Converted mail cannot be dismissed.')
+  if (record.status === 'CONVERTED' || record.convertedOpportunityId || record.convertedTaskId) fail(409, 'Converted mail cannot be dismissed.')
   if (record.status === 'DISMISSED') return serializeMailIntake(record)
   return updateOwned(database, userId, id, { status: 'DISMISSED' })
+}
+
+export async function archiveMailIntake(userId, id, input, database = prisma) {
+  const record = await getMailIntake(userId, id, database)
+  assertCurrent(record, input.expectedUpdatedAt)
+  if (record.status === 'DISMISSED') fail(409, 'Dismissed mail cannot be archived.')
+  if (record.status === 'ARCHIVED') return serializeMailIntake(record)
+  return updateOwned(database, userId, id, { status: 'ARCHIVED' })
 }
 
 export async function retainMailAsNote(userId, id, input, database = prisma) {
@@ -188,7 +197,7 @@ export async function convertMailToOpportunity(userId, id, input, database = pri
   assertCurrent(record, input.expectedUpdatedAt)
   if (record.convertedOpportunityId) return { intake: serializeMailIntake(record), opportunityId: record.convertedOpportunityId, duplicate: true }
   if (!['OPPORTUNITY', 'EVENT'].includes(record.classification)) fail(409, 'This mail is not an opportunity or event proposal.')
-  if (record.status === 'DISMISSED') fail(409, 'Dismissed mail cannot be converted.')
+  if (['DISMISSED', 'ARCHIVED'].includes(record.status)) fail(409, 'Archived or dismissed mail cannot be converted.')
   const opportunityInput = validatedOpportunity(record, input.opportunity)
   const duplicates = await findOpportunityDuplicates(userId, opportunityInput, database)
   let opportunityId = duplicates[0]?.id || null
@@ -213,12 +222,12 @@ export async function convertMailToTask(userId, id, input, database = prisma) {
   assertCurrent(record, input.expectedUpdatedAt)
   if (record.convertedTaskId) return { intake: serializeMailIntake(record), taskId: record.convertedTaskId, duplicate: true }
   if (!['ACTION_REQUIRED', 'ACADEMIC_ADMIN'].includes(record.classification)) fail(409, 'This mail is not an academic or administrative action proposal.')
-  if (record.status === 'DISMISSED') fail(409, 'Dismissed mail cannot be converted.')
+  if (['DISMISSED', 'ARCHIVED'].includes(record.status)) fail(409, 'Archived or dismissed mail cannot be converted.')
   const admin = record.extractedPayload?.admin || {}
   const parsed = createTaskSchema.safeParse({
     moduleEnrolmentId: await activeModuleId(database, userId, admin.moduleCode),
     title: input.title || admin.title, description: record.rawText, type: 'ADMIN', status: 'BACKLOG', priority: 'MEDIUM',
-    dueAt: input.dueAt || admin.deadline || undefined, timingNote: admin.deadline ? undefined : admin.deadlineSourceText || undefined
+    dueAt: input.dueAt || admin.exactDeadline || admin.deadline || undefined, timingNote: (admin.exactDeadline || admin.deadline) ? undefined : admin.deadlineSourceText || undefined
   })
   if (!parsed.success) fail(400, 'Review the unresolved task fields.', Object.fromEntries(parsed.error.issues.map(issue => [issue.path.join('.') || '_form', issue.message])))
   const task = await createTask(userId, parsed.data, database)

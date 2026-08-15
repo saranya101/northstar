@@ -45,6 +45,32 @@ describe('deterministic NTU mail intelligence', () => {
     expect(mentorship.extractedPayload.opportunity.commitment).toBe('Two hours each month')
   })
 
+  it('extracts the AB1088 class announcement without Blackboard contamination', () => {
+    const result = deterministicMailInterpretation({ rawText: NTU_MAIL_FIXTURES.ab1088Announcement })
+    expect(result.classification.category).toBe('ACADEMIC_ADMIN')
+    expect(result.extractedPayload.admin).toMatchObject({
+      moduleCode: 'AB1088', title: 'Power Dressing and Professional Etiquette', academicSubtype: 'CLASS_INFORMATION',
+      eventDate: '2026-08-17', venue: 'S3 Building, Conference Room 1', requiresAction: false, actionRequired: null,
+      exactDeadline: null, deadline: null
+    })
+    expect(result.extractedPayload.admin.resources).toEqual(expect.arrayContaining([
+      expect.objectContaining({ label: expect.stringContaining('Class Schedule for Week 2 to Week 3'), type: 'ATTACHMENT' }),
+      expect.objectContaining({ label: expect.stringContaining('Direction to your classes.docx'), url: 'https://example.ntu.edu.sg/directions.docx' }),
+      expect.objectContaining({ label: 'NTU Campus Map', url: 'https://maps.ntu.edu.sg/', type: 'MAP' })
+    ]))
+    expect(result.extractedPayload.admin.evidence.join(' ')).not.toMatch(/multimedia|notification preferences|brought to you/i)
+  })
+
+  it('separates class dates, notification timing, and explicit deadlines', () => {
+    const announcement = deterministicMailInterpretation({ rawText: NTU_MAIL_FIXTURES.ab1088Announcement })
+    const notification = deterministicMailInterpretation({ rawText: NTU_MAIL_FIXTURES.notificationTiming })
+    const required = deterministicMailInterpretation({ rawText: NTU_MAIL_FIXTURES.explicitAcademicDeadline })
+    expect(announcement.extractedPayload.admin).toMatchObject({ eventDate: '2026-08-17', exactDeadline: null })
+    expect(notification.extractedPayload.opportunity.deadline).toBeNull()
+    expect(required.classification.category).toBe('ACTION_REQUIRED')
+    expect(required.extractedPayload.admin).toMatchObject({ requiresAction: true, exactDeadline: '2026-08-19T15:59:00.000Z' })
+  })
+
   it('keeps event classification distinct when no application or recruitment flow exists', () => {
     expect(classifyMailText(NTU_MAIL_FIXTURES.networkingEvent).category).toBe('EVENT')
   })
