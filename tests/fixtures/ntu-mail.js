@@ -51,5 +51,63 @@ This weekly digest contains general publicity and highlights from around campus.
 Manage preferences or unsubscribe at https://example.edu.sg/preferences`,
   ambiguous: `Subject: A quick update
 Hello students, please note that more information will be shared soon.
-Thank you for your attention.`
+Thank you for your attention.`,
+  internshipNoDeadline: `From: NBS Careers <careers@ntu.edu.sg>
+Sent: Saturday, 15 August 2026 09:00
+To: Student <student@e.ntu.edu.sg>
+Subject: Summer Analyst Internship
+
+Dear student,
+Organisation: Example Capital
+Applications are open for a summer internship.
+Apply: https://careers.example.com/internship
+
+Regards,
+NBS Careers`,
+  ccaDeadline: `From: NTU Student Life <studentlife@ntu.edu.sg>
+Sent: Saturday, 15 August 2026 10:00
+To: Student <student@e.ntu.edu.sg>
+Subject: CCA Recruitment 2026
+
+Hello students,
+Organisation: Adventure Club
+Applications are open for CCA recruitment.
+Deadline: 25 August 2026 at 23:59
+Apply: https://example.edu.sg/cca`,
+  subjectless: `From the Office of Student Affairs
+
+Dear students,
+
+This is a subjectless informational message with several paragraphs.
+
+Please read the attached guidance when convenient.
+
+Regards,
+Student Affairs`,
+  ambiguousMultiple: `Subject: First student update
+Hello students, this is the first update.
+Regards,
+Office A
+--------------------
+Subject: Second student update
+Hello students, this may be another message.`,
+  forwarded: `Subject: Fwd: Employer briefing
+Hello,
+Please see the forwarded message below.
+
+-----Original Message-----
+From: Employer Relations <employer@ntu.edu.sg>
+Sent: Saturday, 15 August 2026 11:00
+To: Students <students@e.ntu.edu.sg>
+Subject: Employer briefing
+
+Join the employer webinar next week.`
 })
+
+export const TWO_EMAIL_PASTE = `${NTU_MAIL_FIXTURES.internshipNoDeadline}\n\n${NTU_MAIL_FIXTURES.ccaDeadline}`
+export const FOUR_EMAIL_PASTE = [
+  NTU_MAIL_FIXTURES.internshipNoDeadline,
+  NTU_MAIL_FIXTURES.ccaDeadline,
+  `From: Academic Office <academic@ntu.edu.sg>\nSent: 15 August 2026 11:00\nTo: Student <student@e.ntu.edu.sg>\nSubject: AB1201 venue update\n\nAB1201 seminar venue has changed to LT1.`,
+  `From: Campus News <news@ntu.edu.sg>\nSent: 15 August 2026 12:00\nTo: Student <student@e.ntu.edu.sg>\nSubject: Campus weekly newsletter\n\nThis weekly digest contains general publicity. Unsubscribe in the footer.`
+].join('\n\n')

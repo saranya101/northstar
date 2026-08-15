@@ -4,6 +4,7 @@ import { prisma } from '../utils/prisma'
 import { createOpportunitySchema } from '#shared/schemas/opportunities'
 import { createTaskSchema } from '#shared/schemas/tasks'
 import { createMailInterpreter } from './mail-intelligence'
+import { splitPastedEmails } from './mail-segmentation'
 import { createOpportunity, findOpportunityDuplicates } from './opportunities'
 import { createTask } from './tasks'
 
@@ -34,7 +35,7 @@ export function serializeMailIntake(record, duplicate = false) {
   }
 }
 
-export async function createMailIntake(userId, input, database = prisma, interpreter = createMailInterpreter()) {
+async function interpretedMail(input, interpreter) {
   let interpreted
   try { interpreted = await interpreter.interpret(input) }
   catch {
@@ -44,6 +45,11 @@ export async function createMailIntake(userId, input, database = prisma, interpr
       extractedPayload: { opportunity: null, admin: null, unresolved: ['Interpretation failed safely; review the retained source text.'] }
     }
   }
+  return interpreted
+}
+
+async function persistMailIntake(userId, input, database, interpreter) {
+  const interpreted = await interpretedMail(input, interpreter)
   const merged = { ...input, ...interpreted.metadata }
   const contentFingerprint = mailContentFingerprint(merged)
   const existing = await database.mailIntake.findUnique({
@@ -64,6 +70,43 @@ export async function createMailIntake(userId, input, database = prisma, interpr
     const duplicate = await database.mailIntake.findUnique({ where: { userId_contentFingerprint: { userId, contentFingerprint } }, include })
     return serializeMailIntake(duplicate, true)
   }
+}
+
+export async function previewMailPaste(input, interpreter = createMailInterpreter()) {
+  const proposal = splitPastedEmails(input.rawText)
+  const segments = await Promise.all(proposal.segments.map(async (segment, index) => {
+    const segmentInput = proposal.segments.length === 1 ? { ...input, rawText: segment.rawText } : { rawText: segment.rawText }
+    const interpreted = await interpretedMail(segmentInput, interpreter)
+    const merged = { ...segmentInput, ...interpreted.metadata }
+    return {
+      id: `segment-${index + 1}`,
+      ...segment,
+      ...interpreted.metadata,
+      classification: interpreted.classification,
+      extractedPayload: interpreted.extractedPayload,
+      contentFingerprint: mailContentFingerprint(merged)
+    }
+  }))
+  return {
+    segments,
+    ambiguous: proposal.ambiguous,
+    warning: proposal.warning,
+    requiresBoundaryReview: segments.length > 1 || proposal.ambiguous
+  }
+}
+
+export async function createMailIntake(userId, input, database = prisma, interpreter = createMailInterpreter()) {
+  const proposal = splitPastedEmails(input.rawText)
+  if (proposal.segments.length > 1 || proposal.ambiguous) {
+    fail(409, 'Multiple emails may be present. Review the proposed splits before continuing.')
+  }
+  return persistMailIntake(userId, input, database, interpreter)
+}
+
+export async function createMailBatch(userId, messages, database = prisma, interpreter = createMailInterpreter()) {
+  const records = []
+  for (const input of messages) records.push(await persistMailIntake(userId, input, database, interpreter))
+  return records
 }
 
 export async function listMailIntakes(userId, database = prisma) {

@@ -16,6 +16,10 @@ export const createMailIntakeSchema = z.object({
   rawText: z.string().trim().min(20, 'Paste at least 20 characters.').max(50_000)
 }).strict()
 
+export const createMailBatchSchema = z.object({
+  messages: z.array(createMailIntakeSchema).min(1).max(20)
+}).strict()
+
 export const mailDecisionSchema = z.object({ expectedUpdatedAt: z.iso.datetime({ offset: true }) }).strict()
 
 export const convertMailOpportunitySchema = mailDecisionSchema.extend({

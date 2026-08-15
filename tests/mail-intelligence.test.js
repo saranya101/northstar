@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createMailIntakeSchema } from '../shared/schemas/mail-intake.js'
+import { createMailBatchSchema, createMailIntakeSchema } from '../shared/schemas/mail-intake.js'
 import { classifyMailText, deterministicMailInterpretation } from '../server/services/mail-intelligence.js'
 import { NTU_MAIL_FIXTURES } from './fixtures/ntu-mail.js'
 
@@ -52,5 +52,6 @@ describe('deterministic NTU mail intelligence', () => {
   it('fails malformed or undersized input safely', () => {
     expect(createMailIntakeSchema.safeParse({ rawText: 'too short' }).success).toBe(false)
     expect(createMailIntakeSchema.safeParse({ rawText: 'A valid body long enough to review.', accessToken: 'secret' }).success).toBe(false)
+    expect(createMailBatchSchema.safeParse({ messages: [{ rawText: 'A valid body long enough to review.' }] }).success).toBe(true)
   })
 })

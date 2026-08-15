@@ -10,8 +10,8 @@ vi.mock('../server/services/opportunities', () => ({
 }))
 vi.mock('../server/services/tasks', () => ({ createTask: canonical.createTask }))
 
-import { convertMailToOpportunity, convertMailToTask, createMailIntake, dismissMailIntake, getMailIntake, retainMailAsNote } from '../server/services/mail-intakes.js'
-import { NTU_MAIL_FIXTURES } from './fixtures/ntu-mail.js'
+import { convertMailToOpportunity, convertMailToTask, createMailBatch, createMailIntake, dismissMailIntake, getMailIntake, previewMailPaste, retainMailAsNote } from '../server/services/mail-intakes.js'
+import { NTU_MAIL_FIXTURES, TWO_EMAIL_PASTE } from './fixtures/ntu-mail.js'
 
 const createdAt = new Date('2026-08-15T02:00:00.000Z')
 
@@ -58,6 +58,57 @@ describe('mail intake persistence and review', () => {
     expect(canonical.createOpportunity).not.toHaveBeenCalled()
     expect(canonical.createTask).not.toHaveBeenCalled()
     expect(database.assessment.create).not.toHaveBeenCalled()
+  })
+
+  it('previews multiple emails without writing and isolates extracted facts', async () => {
+    const { database } = databaseFixture()
+    const result = await previewMailPaste({ rawText: TWO_EMAIL_PASTE })
+    expect(result).toMatchObject({ requiresBoundaryReview: true, ambiguous: false })
+    expect(result.segments).toHaveLength(2)
+    expect(result.segments[0]).toMatchObject({ subject: 'Summer Analyst Internship', classification: { category: 'OPPORTUNITY' } })
+    expect(result.segments[0].extractedPayload.opportunity).toMatchObject({ organisation: 'Example Capital', category: 'INTERNSHIP', deadline: null })
+    expect(result.segments[1]).toMatchObject({ subject: 'CCA Recruitment 2026', classification: { category: 'OPPORTUNITY' } })
+    expect(result.segments[1].extractedPayload.opportunity).toMatchObject({ organisation: 'Adventure Club', category: 'CLUB', deadline: '2026-08-25T15:59:00.000Z' })
+    expect(result.segments[0].contentFingerprint).not.toBe(result.segments[1].contentFingerprint)
+    expect(database.mailIntake.create).not.toHaveBeenCalled()
+  })
+
+  it('refuses to persist a detected multi-email blob through the single endpoint', async () => {
+    const { database } = databaseFixture()
+    await expect(createMailIntake('user-1', { rawText: TWO_EMAIL_PASTE }, database)).rejects.toMatchObject({ statusCode: 409 })
+    expect(database.mailIntake.create).not.toHaveBeenCalled()
+  })
+
+  it('persists accepted segments independently and deduplicates each fingerprint', async () => {
+    const { database } = databaseFixture()
+    const messages = [{ rawText: NTU_MAIL_FIXTURES.internshipNoDeadline }, { rawText: NTU_MAIL_FIXTURES.ccaDeadline }]
+    const first = await createMailBatch('user-1', messages, database)
+    const second = await createMailBatch('user-1', messages, database)
+    expect(first).toHaveLength(2)
+    expect(first[0].contentFingerprint).not.toBe(first[1].contentFingerprint)
+    expect(second.map(item => item.duplicate)).toEqual([true, true])
+    expect(database.mailIntake.create).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps accepted segment conversion independent', async () => {
+    const { database, records } = databaseFixture()
+    const [internship, cca] = await createMailBatch('user-1', [
+      { rawText: NTU_MAIL_FIXTURES.internshipNoDeadline },
+      { rawText: NTU_MAIL_FIXTURES.ccaDeadline }
+    ], database)
+    await convertMailToOpportunity('user-1', internship.id, { expectedUpdatedAt: internship.updatedAt }, database)
+    expect(records.find(item => item.id === internship.id).status).toBe('CONVERTED')
+    expect(records.find(item => item.id === cca.id).status).toBe('NEW')
+  })
+
+  it('keeps every accepted batch segment owner-scoped', async () => {
+    const { database } = databaseFixture()
+    const [first, second] = await createMailBatch('user-1', [
+      { rawText: NTU_MAIL_FIXTURES.internshipNoDeadline },
+      { rawText: NTU_MAIL_FIXTURES.ccaDeadline }
+    ], database)
+    await expect(getMailIntake('user-2', first.id, database)).rejects.toMatchObject({ statusCode: 404 })
+    await expect(getMailIntake('user-2', second.id, database)).rejects.toMatchObject({ statusCode: 404 })
   })
 
   it('retains malformed evidence as uncertain when an interpreter fails', async () => {

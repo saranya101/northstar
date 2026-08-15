@@ -1,9 +1,11 @@
 <script setup>
 import { OPPORTUNITY_CATEGORIES } from '#shared/schemas/opportunities'
 
-const { records, loading, saving, error, fieldErrors, notice, load, create, decide } = useMailIntakes()
+const { records, loading, saving, error, fieldErrors, notice, load, create, preview, createBatch, decide } = useMailIntakes()
 const subject = ref('')
 const rawText = ref('')
+const batchPreview = ref(null)
+const segmentDrafts = ref([])
 const editingId = ref(null)
 const drafts = reactive({})
 const label = value => String(value || '').replaceAll('_', ' ').toLowerCase().replace(/\b\w/g, letter => letter.toUpperCase())
@@ -16,8 +18,49 @@ function draft(intake) {
   return drafts[intake.id]
 }
 async function submit() {
-  const result = await create({ subject: subject.value || undefined, rawText: rawText.value })
-  if (result) { subject.value = ''; rawText.value = '' }
+  const input = { subject: subject.value || undefined, rawText: rawText.value }
+  const result = await preview(input)
+  if (!result) return
+  if (!result.requiresBoundaryReview && result.segments.length === 1) {
+    const created = await create({ ...input, rawText: result.segments[0].rawText })
+    if (created) resetComposer()
+    return
+  }
+  batchPreview.value = result
+  segmentDrafts.value = result.segments.map(segment => ({ ...segment, rawText: segment.rawText }))
+}
+function resetComposer() {
+  subject.value = ''
+  rawText.value = ''
+  batchPreview.value = null
+  segmentDrafts.value = []
+}
+function removeSegment(index) {
+  segmentDrafts.value.splice(index, 1)
+  if (!segmentDrafts.value.length) resetComposer()
+}
+function mergePrevious(index) {
+  if (index < 1) return
+  segmentDrafts.value[index - 1] = {
+    ...segmentDrafts.value[index - 1],
+    rawText: `${segmentDrafts.value[index - 1].rawText}\n\n${segmentDrafts.value[index].rawText}`,
+    manuallyChanged: true
+  }
+  segmentDrafts.value.splice(index, 1)
+}
+function addSegment() {
+  segmentDrafts.value.push({ id: `manual-${Date.now()}`, rawText: '', subject: null, classification: { category: 'UNCERTAIN' }, manuallyChanged: true, boundarySignals: ['manual boundary'] })
+}
+function proceedAsOne() {
+  segmentDrafts.value = [{ id: 'manual-combined', rawText: segmentDrafts.value.map(item => item.rawText.trim()).filter(Boolean).join('\n\n'), subject: null, classification: { category: 'UNCERTAIN' }, manuallyChanged: true, boundarySignals: ['deliberate combined review'] }]
+}
+async function processSegments(indices = segmentDrafts.value.map((_, index) => index)) {
+  const chosen = indices.map(index => segmentDrafts.value[index]).filter(item => item?.rawText.trim().length >= 20)
+  if (!chosen.length) return
+  const result = await createBatch(chosen.map(item => ({ rawText: item.rawText })))
+  if (!result) return
+  if (indices.length === segmentDrafts.value.length) resetComposer()
+  else removeSegment(indices[0])
 }
 async function saveOpportunity(intake) {
   const values = draft(intake)
@@ -36,6 +79,15 @@ onMounted(load)
       <small v-if="fieldErrors.rawText">{{ fieldErrors.rawText }}</small>
       <div class="v2-inline-actions"><span>{{ rawText.length.toLocaleString() }} / 50,000</span><UButton :disabled="rawText.trim().length < 20" :loading="saving" icon="i-lucide-mail-plus" @click="submit">Structure for review</UButton></div>
     </div>
+    <section v-if="batchPreview" class="mail-boundary-review" aria-labelledby="mail-boundary-title">
+      <header><div><strong id="mail-boundary-title">{{ segmentDrafts.length }} {{ segmentDrafts.length === 1 ? 'email' : 'emails' }} detected</strong><span>Review the boundaries before any intake is created.</span></div><UBadge :color="batchPreview.ambiguous ? 'warning' : 'neutral'" variant="outline">{{ batchPreview.ambiguous ? 'Multiple emails may be present' : 'Boundary review' }}</UBadge></header>
+      <article v-for="(segment, index) in segmentDrafts" :key="segment.id" class="mail-segment">
+        <div class="mail-segment-summary"><div><small>Email {{ index + 1 }}</small><strong>{{ segment.subject || 'No detected subject' }}</strong><span>{{ segment.manuallyChanged ? 'Will be re-evaluated when processed' : label(segment.classification?.category) }}</span></div><div class="v2-inline-actions"><UButton v-if="index" size="xs" color="neutral" variant="ghost" @click="mergePrevious(index)">Merge with previous</UButton><UButton size="xs" color="neutral" variant="ghost" @click="removeSegment(index)">Dismiss</UButton></div></div>
+        <details><summary>Review or manually adjust this split</summary><textarea v-model="segment.rawText" rows="7" maxlength="50000" aria-label="Proposed email segment" @input="segment.manuallyChanged = true" /><small>Signals: {{ segment.boundarySignals?.join(', ') || 'manual boundary' }}</small></details>
+        <UButton size="xs" color="neutral" variant="outline" :disabled="segment.rawText.trim().length < 20" :loading="saving" @click="processSegments([index])">Process this email</UButton>
+      </article>
+      <div class="v2-inline-actions mail-boundary-actions"><UButton size="sm" :loading="saving" :disabled="!segmentDrafts.some(item => item.rawText.trim().length >= 20)" @click="processSegments()">Process all</UButton><UButton size="sm" color="neutral" variant="outline" @click="addSegment">Add manual split</UButton><UButton v-if="segmentDrafts.length > 1" size="sm" color="neutral" variant="ghost" @click="proceedAsOne">Deliberately proceed as one</UButton></div>
+    </section>
     <p v-if="error" class="module-alert" role="alert">{{ error }}</p>
     <p v-if="notice" class="mail-notice" role="status">{{ notice }}</p>
     <p v-if="loading" role="status">Loading pasted mail…</p>
@@ -71,5 +123,5 @@ onMounted(load)
 </template>
 
 <style scoped>
-.mail-intake{display:grid;gap:14px;margin-bottom:16px}.mail-composer{display:grid;gap:8px}.mail-composer input,.mail-composer textarea,.mail-extracted input,.mail-extracted select{width:100%;border:1px solid #d8d3ca;border-radius:8px;background:#fff;padding:9px 11px;font:inherit}.mail-composer textarea{resize:vertical}.mail-notice,.mail-linked{padding:9px 11px;border-radius:8px;background:#eef6ef;color:#285d35;font-size:.78rem}.mail-reviews{display:grid;gap:10px}.mail-review{display:grid;gap:10px;border-top:1px solid #ebe7df;padding-top:14px}.mail-review>header{display:flex;justify-content:space-between;gap:12px}.mail-review>header>div:first-child{display:grid}.mail-review header span,.mail-why small{font-size:.7rem;color:var(--v2-muted)}.mail-badges{display:flex;gap:6px;align-items:start}.mail-why{display:grid;gap:4px}.mail-why ul{margin:0;padding-left:18px;font-size:.78rem}.mail-extracted dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:0}.mail-extracted dl div,.mail-extracted label{display:grid;gap:3px}.mail-extracted dt,.mail-extracted label{font-size:.68rem;color:var(--v2-muted)}.mail-extracted dd{margin:0;font-size:.78rem}.mail-extracted{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:10px;border:1px solid #ebe7df;border-radius:8px}.mail-extracted dl{grid-column:1/-1}.mail-review details{font-size:.72rem}.mail-review pre{white-space:pre-wrap;max-height:180px;overflow:auto;padding:10px;background:#f7f5f1;border-radius:6px}.mail-unresolved{font-size:.72rem;color:var(--v2-muted)}.mail-actions{justify-content:flex-start}@media(max-width:700px){.mail-review>header{display:grid}.mail-extracted,.mail-extracted dl{grid-template-columns:1fr}}
+.mail-intake{display:grid;gap:14px;margin-bottom:16px}.mail-composer{display:grid;gap:8px}.mail-composer input,.mail-composer textarea,.mail-extracted input,.mail-extracted select,.mail-segment textarea{width:100%;border:1px solid #d8d3ca;border-radius:8px;background:#fff;padding:9px 11px;font:inherit}.mail-composer textarea,.mail-segment textarea{resize:vertical}.mail-notice,.mail-linked{padding:9px 11px;border-radius:8px;background:#eef6ef;color:#285d35;font-size:.78rem}.mail-boundary-review{display:grid;gap:10px;padding:12px;border:1px solid #dfc989;border-radius:9px;background:#fffaf0}.mail-boundary-review>header,.mail-segment-summary{display:flex;justify-content:space-between;gap:12px}.mail-boundary-review>header>div,.mail-segment-summary>div:first-child{display:grid;gap:2px}.mail-boundary-review header span,.mail-segment-summary small,.mail-segment-summary span,.mail-segment details small{font-size:.7rem;color:var(--v2-muted)}.mail-segment{display:grid;gap:8px;padding:10px;border:1px solid #ebe1c7;border-radius:8px;background:#fff}.mail-segment details{display:grid;gap:6px}.mail-segment details[open] summary{margin-bottom:6px}.mail-boundary-actions{justify-content:flex-start}.mail-reviews{display:grid;gap:10px}.mail-review{display:grid;gap:10px;border-top:1px solid #ebe7df;padding-top:14px}.mail-review>header{display:flex;justify-content:space-between;gap:12px}.mail-review>header>div:first-child{display:grid}.mail-review header span,.mail-why small{font-size:.7rem;color:var(--v2-muted)}.mail-badges{display:flex;gap:6px;align-items:start}.mail-why{display:grid;gap:4px}.mail-why ul{margin:0;padding-left:18px;font-size:.78rem}.mail-extracted dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:0}.mail-extracted dl div,.mail-extracted label{display:grid;gap:3px}.mail-extracted dt,.mail-extracted label{font-size:.68rem;color:var(--v2-muted)}.mail-extracted dd{margin:0;font-size:.78rem}.mail-extracted{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:10px;border:1px solid #ebe7df;border-radius:8px}.mail-extracted dl{grid-column:1/-1}.mail-review details{font-size:.72rem}.mail-review pre{white-space:pre-wrap;max-height:180px;overflow:auto;padding:10px;background:#f7f5f1;border-radius:6px}.mail-unresolved{font-size:.72rem;color:var(--v2-muted)}.mail-actions{justify-content:flex-start}@media(max-width:700px){.mail-review>header,.mail-boundary-review>header,.mail-segment-summary{display:grid}.mail-extracted,.mail-extracted dl{grid-template-columns:1fr}}
 </style>

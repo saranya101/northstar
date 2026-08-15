@@ -28,6 +28,19 @@ export function useMailIntakes() {
     }
     return result
   }
+  async function preview(body) {
+    return request('/api/mail-intake/preview', { method: 'POST', body })
+  }
+  async function createBatch(messages) {
+    const result = await request('/api/mail-intake/batch', { method: 'POST', body: { messages } })
+    if (result) {
+      const ids = new Set(result.map(item => item.id))
+      records.value = [...result, ...records.value.filter(item => !ids.has(item.id))]
+      const duplicates = result.filter(item => item.duplicate).length
+      notice.value = `${result.length} ${result.length === 1 ? 'email' : 'emails'} structured independently for review.${duplicates ? ` ${duplicates} existing ${duplicates === 1 ? 'intake was' : 'intakes were'} reused.` : ''}`
+    }
+    return result
+  }
   async function decide(intake, action, extra = {}) {
     const result = await request(`/api/mail-intake/${intake.id}/${action}`, { method: 'POST', body: { expectedUpdatedAt: intake.updatedAt, ...extra } })
     if (result) {
@@ -40,5 +53,5 @@ export function useMailIntakes() {
     }
     return result
   }
-  return { records, loading, saving, error, fieldErrors, notice, load, create, decide }
+  return { records, loading, saving, error, fieldErrors, notice, load, create, preview, createBatch, decide }
 }
